@@ -1314,6 +1314,20 @@ def get_dashboard_data(project_path: Path) -> dict:
                     "note": extra.get("note", ""),
                 })
 
+        # A scene's number is its position in its sequence, not its raw
+        # `order_key`. The key is a sort key and can hold a hole — a scene
+        # deleted and replaced, or one moved in by the agent — and a hole in the
+        # number column reads as a scene that went missing. The Reorder view
+        # numbers by position, so the Scenes tab and Reorder agree. The key is
+        # left in place: the number is derived on read, never written back.
+        scenes_by_sequence = {}
+        for s in scenes:
+            scenes_by_sequence.setdefault(s["parent_id"], []).append(s)
+        for group in scenes_by_sequence.values():
+            group.sort(key=lambda s: (s["order"], s["id"]))
+            for position, s in enumerate(group, 1):
+                s["number"] = position
+
         # Computed character relationship summary for dashboard (richer than load — includes strength)
         char_rel_summary = {}
         for rel in relationships:
@@ -1336,7 +1350,7 @@ def get_dashboard_data(project_path: Path) -> dict:
         for seq in sequences:
             scenes_in_seq = sorted(
                 [s for s in scenes if s.get("parent_id") == seq["id"]],
-                key=lambda s: s.get("order", 0)
+                key=lambda s: (s.get("order", 0), s["id"])
             )
             seq["scenes_list"] = [s["id"] for s in scenes_in_seq]
             seq["scene_count"] = len(seq["scenes_list"])
@@ -1365,7 +1379,7 @@ def get_dashboard_data(project_path: Path) -> dict:
         for act in acts:
             seqs_in_act = sorted(
                 [s for s in sequences if s.get("parent_id") == act["id"]],
-                key=lambda s: s.get("order", 0)
+                key=lambda s: (s.get("order", 0), s["id"])
             )
             act["sequences_list"] = [s["id"] for s in seqs_in_act]
             # Gather all scene IDs from child sequences, preserving sort order
@@ -1373,7 +1387,8 @@ def get_dashboard_data(project_path: Path) -> dict:
             act_scene_ids = []
             for seq in seqs_in_act:
                 act_scene_ids.extend(seq.get("scenes_list", []))
-            act["scenes_list"] = sorted(act_scene_ids, key=lambda sid: seq_order.get(sid, 0))
+            act["scenes_list"] = sorted(act_scene_ids,
+                                        key=lambda sid: (seq_order.get(sid, 0), sid))
             act["sequence_count"] = len(act["sequences_list"])
             act["scene_count"] = len(act["scenes_list"])
             # Aggregate plots from all scenes in child sequences
@@ -1469,15 +1484,7 @@ def get_dashboard_data(project_path: Path) -> dict:
             sections[entity_type][entity_id][heading] = body
 
         # 3. screenplay_text — each scene's composed heading + body, in order
-        scene_content_rows = conn.execute(
-            """SELECT s.body, e.id, e.extra, l.name
-               FROM sections s
-               JOIN entities e ON s.entity_id = e.id
-               LEFT JOIN entities l ON e.location_id = l.id
-               LEFT JOIN entities p ON e.parent_id = p.id
-               WHERE e.type='scene' AND e.is_deleted=0 AND s.heading='Content' AND s.body != ''
-               ORDER BY COALESCE(p.order_key, 0), e.order_key"""
-        ).fetchall()
+        scene_content_rows = _screenplay_rows(conn)
         screenplay_text, screenplay_scene_headings = _compose_screenplay(scene_content_rows)
 
         # 4. structural_stats
@@ -1633,16 +1640,31 @@ def get_screenplay_text(project_path: Path) -> str:
     """Compose each scene's heading + Content, ordered by act→sequence→scene."""
     conn = get_db(project_path)
     try:
-        rows = conn.execute(
-            """SELECT s.body, e.id, e.extra, l.name
-               FROM sections s
-               JOIN entities e ON s.entity_id = e.id
-               LEFT JOIN entities l ON e.location_id = l.id
-               LEFT JOIN entities p ON e.parent_id = p.id
-               LEFT JOIN entities pp ON p.parent_id = pp.id
-               WHERE e.type='scene' AND e.is_deleted=0 AND s.heading='Content' AND s.body != ''
-               ORDER BY COALESCE(pp.order_key, 0), COALESCE(p.order_key, 0), e.order_key"""
-        ).fetchall()
-        return _compose_screenplay(rows)[0]
+        return _compose_screenplay(_screenplay_rows(conn))[0]
     finally:
         conn.close()
+
+
+def _screenplay_rows(conn: sqlite3.Connection) -> list:
+    """Every scene's Content row in story order: act → sequence → scene.
+
+    The one query both assembly paths read, so the dashboard's script and
+    `get_screenplay_text` cannot drift apart again.
+
+    Sequence order keys restart in every act, so the act has to be part of the
+    key. Ordering by sequence order alone — which the dashboard did — sorts two
+    sequences that share the number 1 by their scenes' keys and interleaves Act
+    One with Act Two (1, 1, 2, 2 across the acts). The scene id is the last
+    tiebreak, so the order is total and stable across calls.
+    """
+    return conn.execute(
+        """SELECT s.body, e.id, e.extra, l.name
+           FROM sections s
+           JOIN entities e ON s.entity_id = e.id
+           LEFT JOIN entities l ON e.location_id = l.id
+           LEFT JOIN entities p ON e.parent_id = p.id
+           LEFT JOIN entities pp ON p.parent_id = pp.id
+           WHERE e.type='scene' AND e.is_deleted=0 AND s.heading='Content' AND s.body != ''
+           ORDER BY COALESCE(pp.order_key, 0), COALESCE(p.order_key, 0),
+                    e.order_key, e.id"""
+    ).fetchall()

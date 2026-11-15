@@ -605,6 +605,15 @@ check('the scene list shows the composed heading under its title', function () {
   assert.ok(item.includes('INT. THE CENTRAL ROOM - DAY'), item);
   assert.ok(item.indexOf('Central Room - Day') < item.indexOf('INT. THE CENTRAL ROOM - DAY'), item);
 });
+// The number is the scene's position in its sequence, derived server-side. The
+// raw `order` is a sort key and can hold a hole (a delete-and-recreate leaves
+// 1, 2, 4), which must not read as a scene that went missing.
+check('a scene is numbered by its position, not its raw order key', function () {
+  const base = V.story.scenes.find(s => s.id === 'central-room-day');
+  const item = V.renderSceneItem({ ...base, order: 4, number: 3 });
+  assert.ok(item.includes('>03<'), item);
+  assert.ok(!item.includes('>04<'), item);
+});
 check('the scene search matches the composed heading', function () {
   V.buildScenesView();              // filterScenes reads DASH.allScenes and renders
   V.filterScenes('garden');

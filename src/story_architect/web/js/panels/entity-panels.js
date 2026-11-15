@@ -263,7 +263,10 @@ DASH.showPlotPanel = function(plotId) {
       }
       // Backend normalizes to {scene_id, description}
       const sceneObj = (DASH.story.scenes || []).find(s => String(s.id) === String(item.scene_id));
-      const displayNum = sceneObj && sceneObj.order != null ? String(sceneObj.order) : '';
+      // The scene's number is its position in its sequence (see core/db.py);
+      // `order` is the raw sort key and can hold a hole.
+      const num = sceneObj ? (sceneObj.number != null ? sceneObj.number : sceneObj.order) : null;
+      const displayNum = num != null ? String(num) : '';
       const sceneName = sceneObj ? (sceneObj.title || sceneObj.id) : (item.scene_id || '');
       if (!sceneName) return '';
       const sceneLink = sceneObj

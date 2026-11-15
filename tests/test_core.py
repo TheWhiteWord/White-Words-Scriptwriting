@@ -870,6 +870,119 @@ class TestScreenplayStatsFromSceneContent:
             assert "INT. THE CENTRAL ROOM - DAY" in get_screenplay_text(dest)
 
 
+class TestStoryOrder:
+    """The order a reader sees: act → sequence → scene.
+
+    Sequence order keys restart in every act, so a scene's position is only
+    meaningful with its act and sequence beside it. Every reader that lays out
+    the story — the Scenes tab, the assembled script, the value graph — has to
+    build the key the same way, or two sequences that share the number 1
+    interleave and Act One's scenes alternate with Act Two's.
+    """
+
+    @staticmethod
+    def _two_acts(tmp_path):
+        """Act One and Act Two, each with one sequence numbered 1.
+
+        The shape that exposed the bug: `seq-a` and `seq-b` both carry
+        order_key 1, because sequence order restarts per act.
+        """
+        project_path = tmp_path / "test-project"
+        project_path.mkdir()
+        (project_path / ".story").mkdir()
+        create_entity(project_path, "project", "test", {"name": "Test"})
+        create_entity(project_path, "location", "the-garden",
+                      {"name": "The Garden", "one_sentence": "G"})
+        create_entity(project_path, "act", "act-1", {"title": "Act One", "order": 1})
+        create_entity(project_path, "act", "act-2", {"title": "Act Two", "order": 2})
+        create_entity(project_path, "sequence", "seq-a",
+                      {"title": "Seq A", "act_id": "act-1", "order": 1})
+        create_entity(project_path, "sequence", "seq-b",
+                      {"title": "Seq B", "act_id": "act-2", "order": 1})
+        for sid, seq, act, order in (("a1", "seq-a", "act-1", 1),
+                                     ("a2", "seq-a", "act-1", 2),
+                                     ("b1", "seq-b", "act-2", 1),
+                                     ("b2", "seq-b", "act-2", 2)):
+            create_entity(project_path, "scene", sid,
+                          {"title": f"Scene {sid}", "sequence_id": seq, "act_id": act,
+                           "order": order, "int_ext": "EXT.", "location": "the-garden",
+                           "time_of_day": "DAY"},
+                          sections={"Content": f"Body {sid}.\n"})
+        return project_path
+
+    def test_the_assembled_script_reads_act_by_act(self, tmp_path):
+        """The dashboard's script must not interleave two acts.
+
+        Ordered by sequence order alone, the four scenes sort as
+        a1 (seq 1, scene 1), b1 (seq 1, scene 1), a2, b2 — Act One and Act Two
+        alternating. The act is part of the story order.
+        """
+        from story_architect.core.db import get_dashboard_data
+
+        data = get_dashboard_data(self._two_acts(tmp_path))
+        assert [h["id"] for h in data["screenplay_scene_headings"]] == [
+            "a1", "a2", "b1", "b2"]
+
+    def test_both_assembly_paths_agree(self, tmp_path):
+        """`get_screenplay_text` and the dashboard assemble the same script."""
+        from story_architect.core.db import get_dashboard_data, get_screenplay_text
+
+        project_path = self._two_acts(tmp_path)
+        dashboard_ids = [h["id"] for h in
+                         get_dashboard_data(project_path)["screenplay_scene_headings"]]
+        text = get_screenplay_text(project_path)
+        positions = [text.find(f"Body {sid}.") for sid in ("a1", "a2", "b1", "b2")]
+        assert all(p >= 0 for p in positions), text
+        assert positions == sorted(positions), text
+        assert dashboard_ids == ["a1", "a2", "b1", "b2"]
+
+    def test_a_scene_is_numbered_by_its_position(self, tmp_path):
+        """A gap in `order_key` must not show as a gap in the scene numbers.
+
+        `order_key` is a sort key, not a number: a scene deleted and replaced
+        leaves a hole (1, 2, 4). The Scenes tab numbers by position — the same
+        numbering the Reorder view shows — so the reader sees 1, 2, 3.
+        """
+        from story_architect.core.db import get_dashboard_data
+
+        project_path = self._two_acts(tmp_path)
+        # A hole after the second scene, the shape a delete-and-recreate leaves.
+        create_entity(project_path, "scene", "a3",
+                      {"title": "Scene a3", "sequence_id": "seq-a", "act_id": "act-1",
+                       "order": 4, "int_ext": "EXT.", "location": "the-garden",
+                       "time_of_day": "DAY"},
+                      sections={"Content": "Body a3.\n"})
+        scenes = {s["id"]: s for s in
+                  get_dashboard_data(project_path)["story_data"]["scenes"]}
+        assert [scenes[sid]["number"] for sid in ("a1", "a2", "a3")] == [1, 2, 3]
+        # The stored key is untouched: the number is derived, not written back.
+        from story_architect.core.db import get_db
+        conn = get_db(project_path)
+        try:
+            assert conn.execute(
+                "SELECT order_key FROM entities WHERE id='a3'").fetchone()[0] == 4
+        finally:
+            conn.close()
+
+    def test_a_new_scene_after_a_deleted_one_takes_the_next_number(self, tmp_path):
+        """Auto-order counts live scenes only, so a delete leaves no hole."""
+        project_path = self._two_acts(tmp_path)
+        create_entity(project_path, "scene", "a3",
+                      {"title": "Scene a3", "sequence_id": "seq-a", "act_id": "act-1",
+                       "int_ext": "EXT.", "location": "the-garden", "time_of_day": "DAY"})
+        delete_entity(project_path, "scene", "a3", "test", confirm=True)
+        create_entity(project_path, "scene", "a4",
+                      {"title": "Scene a4", "sequence_id": "seq-a", "act_id": "act-1",
+                       "int_ext": "EXT.", "location": "the-garden", "time_of_day": "DAY"})
+        from story_architect.core.db import get_db
+        conn = get_db(project_path)
+        try:
+            assert conn.execute(
+                "SELECT order_key FROM entities WHERE id='a4'").fetchone()[0] == 3
+        finally:
+            conn.close()
+
+
 # ---- Unfilled Fields Tests ----
 
 class TestUnfilledFields:
