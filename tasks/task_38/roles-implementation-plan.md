@@ -38,14 +38,14 @@ comment.
 changes behaviour.
 
 Checklist:
-- [ ] `core/constants.py:27` — add `UNIQUE_PLOT_ROLES = ("inciting_incident",
+- [x] `core/constants.py:27` — add `UNIQUE_PLOT_ROLES = ("inciting_incident",
       "crisis", "climax")` directly after `PLOT_ROLES`.
-- [ ] `core/constants.py:241-247` — rewrite the comment above `plot_roles`
+- [x] `core/constants.py:241-247` — rewrite the comment above `plot_roles`
       (it says "the plot's five fields"; there are six) so it states that a
       scene may hold several roles in one plot, and rewrite the field
       `description` to state R1 and R2: one entry per plot *and* role;
       `inciting_incident`, `crisis` and `climax` belong to one scene per plot.
-- [ ] `core/entity.py:951-973` — rewrite `validate_scene_plot_roles` as
+- [x] `core/entity.py:951-973` — rewrite `validate_scene_plot_roles` as
       `(project_path, entries, scene_id=None, conn=None)`. Keep the role-enum
       and plot-present checks. Add:
       - **R1** — a `seen` set of `(plot, role)`; a repeat raises
@@ -59,13 +59,13 @@ Checklist:
         `Plot '{plot}' already has its {role} on scene '{other}' — one scene per plot.`
       - Import `get_db` inside the function; open a connection only when
         `conn` is `None`, and close only the one it opened.
-- [ ] `core/writes.py:241` — pass `slug` and `conn` (create). `core/writes.py:690`
+- [x] `core/writes.py:241` — pass `slug` and `conn` (create). `core/writes.py:690`
       — pass `entity_id` and `conn` (edit). Both are already in scope.
-- [ ] `tools/story_import.py` (`_import_folder`, scene branch) — before
+- [x] `tools/story_import.py` (`_import_folder`, scene branch) — before
       `_insert_entity`, call
       `validate_scene_plot_roles(project_path, fm.get("plot_roles", []), conn=conn)`.
       Local import, matching `_extra_for`.
-- [ ] `tests/test_scene_plot_roles.py` (`TestValidation`) — R1: same plot, same
+- [x] `tests/test_scene_plot_roles.py` (`TestValidation`) — R1: same plot, same
       role twice → `ValueError`, not `IntegrityError`. R2: a second scene taking
       another scene's `climax` (and one each for `crisis` /
       `inciting_incident`) → `ValueError`; the same role in a different plot,
@@ -79,6 +79,62 @@ Checklist:
 Plus the probe: agent write of one plot with two roles → two rows; exact
 duplicate → `ValueError`; a second scene taking the plot's `climax` →
 `ValueError`; a second `setup` → allowed.
+
+## Phase 1 brief — the rule
+
+**Summary.** R1 and R2 now live in `validate_scene_plot_roles`
+(`src/story_architect/core/entity.py:951`) and are reached from all three write
+paths: `writes.create_entity`, `writes.edit_entity` (both pass `scene_id` and
+the `conn` already in scope) and `tools/story_import.py:_import_folder` (passes
+the transaction's `conn`). `UNIQUE_PLOT_ROLES` sits beside `PLOT_ROLES` in
+`constants.py:30`. The `plot_roles` description — the agent-facing contract via
+`story_describe` — now states both rules.
+
+**Deviations.**
+
+- **The spec's "no fixture breaks" claim was wrong.** It measured
+  `tests/fixtures/save-the-children` (one scene, no multi-scene role) but
+  `tests/test_response_budget.py::_grow` clones that fixture scene 48 times, so
+  the grown vault had 48 scenes holding `the-resistance / inciting_incident`.
+  The new import check refused it: **31 errors** in `test_response_budget.py`.
+  Fixed in the test, not the rule — the clones are filler for a response-size
+  test and their roles are noise. `_grow` now emits `plot_roles: []` for the
+  clones (`tests/test_response_budget.py:53`). Errors → 0.
+- **One test added beyond the checklist** — `TestImport`: two scene notes in one
+  folder, the second taking the first's `climax`, import refused. The plan's
+  `conn` requirement is a branch no write-path test covers: a validator on its
+  own connection sees no uncommitted rows and would pass silently.
+- **`test_one_plot_two_roles_writes_two_rows` added** — the split's core shape
+  (one plot, two roles → two rows), which the checklist's R1/R2 items did not
+  name but the gate probe does.
+
+**Contract changes.** None beyond the spec. `plot_roles.description` changed
+(agent-facing, via `story_describe`); the form's help line is untouched, as the
+spec predicts.
+
+**Verification.**
+
+- Gate: `pytest tests/test_scene_plot_roles.py -q` → **35 passed** (26 at HEAD
+  + 9 collected: 7 new methods, one of them parametrised over the three singular
+  roles).
+- Spec set: `pytest tests/test_manual_structure.py tests/test_scene_plot_roles.py
+  tests/test_write_shape.py -q` → **133 passed**.
+- Probe (agent path, `story_draft` stage → commit, scratch project):
+  one plot two roles → `Committed`, rows `('main','sc1','plot_setup')` +
+  `('main','sc1','plot_complication')`; exact duplicate →
+  `ValueError: Duplicate plot role: main / climax appears twice in this scene's plot_roles.`
+  under `⚠️ Partly saved`, draft kept; second scene taking `main`'s `climax` →
+  `ValueError: Plot 'main' already has its climax on scene 'sc2' — one scene per plot.`;
+  same role in another plot → committed; second `setup` → committed; re-saving
+  a scene's own `climax` → committed.
+- Full suite: **1310 passed, 2 failed, 0 errors** (baseline before the change:
+  1279 passed, 31 errors, same 2 failures). Both failures reproduce at HEAD
+  `625beac` in a clean worktree — `test_no_hermes_imports` (`app/server.py`
+  already names `hermes`; my diff does not touch it) and
+  `tasks/task_30/test_skill_references.py` (SKILL.md names `success: false`).
+  Neither is this phase's.
+
+Phase 1 → Phase 2 is ready to proceed.
 
 ## Phase 2 — The form
 

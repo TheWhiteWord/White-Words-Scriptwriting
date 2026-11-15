@@ -29,7 +29,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 
 
-from story_architect.core.constants import PLOT_ROLES
+from story_architect.core.constants import PLOT_ROLES, UNIQUE_PLOT_ROLES
 from story_architect.core.writes import create_entity, create_project, delete_entity, edit_entity
 
 
@@ -170,6 +170,59 @@ class TestValidation:
                                        "description": "d"}])
         for role in PLOT_ROLES:
             assert role in str(e.value)
+
+    def test_one_plot_two_roles_writes_two_rows(self, vault):
+        """The shape the manual form used to refuse: a scene can be a setup and
+        a complication in the SAME plot, and both rows land."""
+        write_roles(vault, "s1", [
+            {"plot": "the-resistance", "role": "setup", "description": "a"},
+            {"plot": "the-resistance", "role": "complication", "description": "b"},
+        ])
+        assert [r for r in rows(vault) if r[1] == "s1"] == [
+            ("the-resistance", "s1", "plot_setup", "a", 1),
+            ("the-resistance", "s1", "plot_complication", "b", 2),
+        ]
+
+    def test_the_same_pair_twice_is_refused(self, vault):
+        """The `relations` primary key would raise a bare IntegrityError; the
+        author gets a message naming the pair instead."""
+        with pytest.raises(ValueError, match="Duplicate plot role: the-resistance / climax"):
+            write_roles(vault, "s1", [
+                {"plot": "the-resistance", "role": "climax", "description": "a"},
+                {"plot": "the-resistance", "role": "climax", "description": "b"}])
+
+    @pytest.mark.parametrize("role", UNIQUE_PLOT_ROLES)
+    def test_a_singular_role_belongs_to_one_scene_per_plot(self, vault, role):
+        write_roles(vault, "s1", [{"plot": "the-resistance", "role": role,
+                                   "description": "d"}])
+        with pytest.raises(ValueError, match=f"already has its {role} on scene 's1'"):
+            write_roles(vault, "s2", [{"plot": "the-resistance", "role": role,
+                                       "description": "d"}])
+
+    def test_the_same_singular_role_in_another_plot_is_allowed(self, vault):
+        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "climax",
+                                   "description": "a"}])
+        write_roles(vault, "s2", [{"plot": "the-betrayal", "role": "climax",
+                                   "description": "b"}])
+        got = {(r[0], r[1], r[2]) for r in rows(vault) if r[2] == "plot_climax"}
+        assert got == {("the-resistance", "s1", "plot_climax"),
+                       ("the-betrayal", "s2", "plot_climax")}
+
+    def test_a_second_setup_on_another_scene_is_allowed(self, vault):
+        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
+                                   "description": "a"}])
+        write_roles(vault, "s2", [{"plot": "the-resistance", "role": "setup",
+                                   "description": "b"}])
+        assert len([r for r in rows(vault) if r[2] == "plot_setup"]) == 2
+
+    def test_resaving_a_scene_with_its_own_roles_is_allowed(self, vault):
+        """The singular check excludes the scene being edited, or every edit
+        of a climax scene would refuse its own row."""
+        entries = [{"plot": "the-resistance", "role": "climax", "description": "a"}]
+        write_roles(vault, "s1", entries)
+        write_roles(vault, "s1", entries)
+        assert [r for r in rows(vault) if r[2] == "plot_climax"] == [
+            ("the-resistance", "s1", "plot_climax", "a", 1)]
 
     def test_a_refused_edit_writes_nothing(self, vault):
         write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
@@ -341,3 +394,29 @@ class TestSchema:
         warnings = validate_entity("scene", {
             "plot_roles": [{"plot": "p", "role": "transition", "description": "d"}]})
         assert any("role" in w and "one of" in w for w in warnings), warnings
+
+
+class TestImport:
+    """The importer is a third write path, and it runs one transaction for the
+    whole pass — so the validator must read the connection it is given, or a
+    role taken by a scene imported earlier in the same pass goes unnoticed."""
+
+    def test_a_second_scene_taking_the_first_ones_climax_is_refused(
+            self, tmp_path, monkeypatch):
+        root = tmp_path / "root"
+        project = root / "projects" / "stc"
+        (project / "plots").mkdir(parents=True)
+        (project / "scenes").mkdir(parents=True)
+        (project / "project.md").write_text("---\nname: STC\nlogline: L\n---\n")
+        (project / "plots" / "The Resistance.md").write_text(
+            "---\nid: the-resistance\nname: The Resistance\n---\n")
+        for i in (1, 2):
+            (project / "scenes" / f"S{i}.md").write_text(
+                f"---\nid: s{i}\ntitle: S{i}\nplot_roles:\n"
+                "  - plot: the-resistance\n    role: climax\n    description: d\n---\n")
+        import story_architect.core.config
+        monkeypatch.setattr(story_architect.core.config, "load_plugin_config",
+                            lambda: {"root_path": str(root)})
+        from story_architect.tools.story_import import handler
+        out = json.loads(handler({"project": "stc", "confirm": True}, root_path=str(root)))
+        assert "already has its climax on scene 's1'" in out["error"], out

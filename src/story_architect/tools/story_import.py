@@ -358,6 +358,12 @@ def _import_folder(conn, project_path: Path, folder_name: str, entity_type: str)
         # stem is only the fallback, for a note written before ids were written
         # out — or by hand.
         entity_id = str(fm.get("id") or note.stem)
+        # Same rule the write paths enforce, on the same connection: the
+        # importer runs one transaction for the whole pass, so a validator
+        # opening its own connection would not see the scenes already imported.
+        if entity_type == "scene":
+            from story_architect.core.entity import validate_scene_plot_roles
+            validate_scene_plot_roles(project_path, fm.get("plot_roles", []), conn=conn)
         fm = _insert_entity(conn, entity_type, entity_id, fm, body, locations=locations)
         _insert_relations(conn, entity_type, entity_id, fm)
 

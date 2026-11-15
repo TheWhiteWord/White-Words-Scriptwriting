@@ -238,7 +238,8 @@ def create_entity(project_path: Path, entity_type: str, slug: str,
                 if act_id:
                     validate_scene_act_id(project_path, sequence_id, act_id)
             validate_scene_location(project_path, merged.get("location", ""))
-            validate_scene_plot_roles(project_path, merged.get("plot_roles", []))
+            validate_scene_plot_roles(project_path, merged.get("plot_roles", []),
+                                      scene_id=slug, conn=conn)
             validate_scene_dramatic_role(merged.get("dramatic_role", ""),
                                          merged.get("plot_roles", []))
             check_references(project_path, entity_type, merged)
@@ -687,7 +688,8 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
         if entity_type == "scene" and "plot_roles" in data:
             from .entity import (check_references, plot_role_relations,
                                  validate_scene_plot_roles)
-            validate_scene_plot_roles(project_path, data["plot_roles"])
+            validate_scene_plot_roles(project_path, data["plot_roles"],
+                                      scene_id=entity_id, conn=conn)
             check_references(project_path, entity_type,
                              {"plot_roles": data["plot_roles"]})
             conn.execute(

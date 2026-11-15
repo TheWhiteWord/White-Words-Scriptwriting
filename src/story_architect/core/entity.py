@@ -7,7 +7,7 @@ from .constants import (
     SCENE_STATUSES, SEQUENCE_STATUSES, ACT_STATUSES,
     SCENE_TIMES_OF_DAY, SCENE_DRAMATIC_ROLES, INT_EXT_CHOICES,
     STRUCTURE_TYPES, PLOT_TYPES,
-    PLOT_SCOPES, VALUE_ARCS, PLOT_ROLES,
+    PLOT_SCOPES, VALUE_ARCS, PLOT_ROLES, UNIQUE_PLOT_ROLES,
     CONFLICT_LEVELS, VALUE_LADDER,
 )
 from .section_parser import list_sections
@@ -948,18 +948,29 @@ def _validate_beat_content(beats) -> None:
                 f"Beat {i} has no content: no surface, subtext, or gap.")
 
 
-def validate_scene_plot_roles(project_path, entries) -> None:
-    """Raise ValueError if a scene's `plot_roles` holds an invalid role or
-    names no plot.
+def validate_scene_plot_roles(project_path, entries, scene_id=None, conn=None) -> None:
+    """Raise ValueError if a scene's `plot_roles` breaks the pair rules.
 
-    The plot existence check is the generic reference check (`ref: "plot"` on
-    `plot_roles.plot`); what remains here is the rule the schema cannot say:
-    the role must be one of the six dramatic plot roles, and an entry must
-    name a plot at all — `check_references` skips an absent key, and an entry
-    with no plot is not a row, it is a reference that resolves to nothing.
+    Both rules are about the `(plot, role)` pair:
+
+    - one entry per pair. The `relations` primary key is
+      `(from_id, to_id, kind)`, so a repeat is an `IntegrityError` at the
+      storage layer; here it is an authoring error with a message.
+    - a singular role (`UNIQUE_PLOT_ROLES`) sits on ONE scene per plot, so a
+      plot cannot hold two climaxes.
+
+    The role-enum and plot-present checks stay: `check_references` skips an
+    absent key, and an entry with no plot is not a row, it is a reference that
+    resolves to nothing.
+
+    `scene_id` excludes a scene from its own singular check — an edit re-saves
+    the rows it already holds. `conn` lets the importer read the scenes it has
+    already inserted in the same transaction; without one this opens its own.
     """
     if not isinstance(entries, list):
         return
+    seen = set()
+    singular = []
     for entry in entries:
         if not isinstance(entry, dict):
             continue
@@ -968,9 +979,40 @@ def validate_scene_plot_roles(project_path, entries) -> None:
             raise ValueError(
                 f"Invalid plot role: {role or '(empty)'}. "
                 f"One of: {', '.join(PLOT_ROLES)}")
-        if not entry.get("plot"):
+        plot = str(entry.get("plot") or "")
+        if not plot:
             raise ValueError(
                 f"plot_roles entry needs a plot slug: {entry!r}")
+        pair = (plot, role)
+        if pair in seen:
+            raise ValueError(
+                f"Duplicate plot role: {plot} / {role} appears twice in "
+                f"this scene's plot_roles.")
+        seen.add(pair)
+        if role in UNIQUE_PLOT_ROLES:
+            singular.append(pair)
+    if not singular:
+        return
+    from story_architect.core.db import get_db
+    own = conn is None
+    if own:
+        conn = get_db(project_path)
+    try:
+        for plot, role in singular:
+            sql = ("SELECT e.id FROM relations r JOIN entities e ON e.id = r.to_id "
+                   "WHERE r.from_id=? AND r.kind=? AND e.is_deleted=0")
+            params = [plot, f"plot_{role}"]
+            if scene_id:
+                sql += " AND r.to_id<>?"
+                params.append(scene_id)
+            row = conn.execute(sql, params).fetchone()
+            if row:
+                raise ValueError(
+                    f"Plot '{plot}' already has its {role} on scene "
+                    f"'{row[0]}' — one scene per plot.")
+    finally:
+        if own:
+            conn.close()
 
 
 def validate_scene_dramatic_role(dramatic_role, plot_roles) -> None:
