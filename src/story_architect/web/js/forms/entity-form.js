@@ -321,13 +321,12 @@ window.DASH = window.DASH || {};
 
   function repeaterHtml(f) {
     const items = S.values[f.key] || [];
-    const chosen = (sf) => items.map((r) => r[sf.key]).filter(Boolean);
     return `<div class="ef-list">${items.map((it, i) => `<div class="ef-sub-card">
         <div class="ef-sub-card-h">${h(f.label.replace(/s$/, ''))} ${i + 1}
           <button class="ef-rm ef-rm-card" data-act="rep-del" data-key="${h(f.key)}" data-i="${i}" aria-label="Remove" title="Remove">×</button></div>
         <div class="ef-grid">${f.fields.map((sf) => {
           const path = `${f.key}.${i}.${sf.key}`, at = `data-rk="${h(f.key)}" data-ri="${i}" data-rf="${h(sf.key)}" data-path="${h(path)}" id="ef-r-${h(f.key)}-${i}-${h(sf.key)}"`;
-          const w = sf.kind === 'ref' ? `<select class="ef-input" ${at}>${entityOptions(sf.ref, chosen(sf).filter((x) => x !== it[sf.key]), it[sf.key])}</select>`
+          const w = sf.kind === 'ref' ? `<select class="ef-input" ${at}>${entityOptions(sf.ref, [], it[sf.key])}</select>`
             : sf.kind === 'select' ? selectHtml(sf, at, it[sf.key])
             : `<input class="ef-input" ${at} value="${h(it[sf.key])}" autocomplete="off">`;
           return `<div class="ef-field${sf.key === 'description' ? ' ef-wide' : ''}"><label class="ef-label" for="ef-r-${h(f.key)}-${i}-${h(sf.key)}">${h(sf.label)}</label>${w}

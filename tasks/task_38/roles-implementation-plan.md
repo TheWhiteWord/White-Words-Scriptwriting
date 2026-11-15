@@ -142,15 +142,15 @@ Phase 1 → Phase 2 is ready to proceed.
 the plot dropdown.
 
 Checklist:
-- [ ] `core/manual_entities.py:959-970` — delete the `seen` set and its
+- [x] `core/manual_entities.py:959-970` — delete the `seen` set and its
       duplicate-plot branch. Keep plot-required, plot-exists and role-valid.
       Remove `seen` entirely if nothing else in the function uses it.
-- [ ] `web/js/forms/entity-form.js:322-337` — delete the `chosen` const and
+- [x] `web/js/forms/entity-form.js:322-337` — delete the `chosen` const and
       pass `[]` to `entityOptions` in the `sf.kind === 'ref'` branch, so a plot
       used in another card is offered again.
-- [ ] `core/entity.py:979-981` — reword the `validate_scene_dramatic_role`
+- [x] `core/entity.py:979-981` — reword the `validate_scene_dramatic_role`
       docstring ("one entry per plot") to match R1/R2. Docstring only.
-- [ ] `tests/test_manual_structure.py:139-146` — `plot_roles.1.plot`
+- [x] `tests/test_manual_structure.py:139-146` — `plot_roles.1.plot`
       (main/crisis after main/climax) must be **absent** from the errors;
       `ghost` and the role-less card still error. Add a round-trip: one plot,
       two roles saves and reads back as two entries.
@@ -161,6 +161,40 @@ Checklist:
 ```
 Plus the probe: `create_form_entity` with one plot and two roles saves and
 returns both entries.
+
+## Phase 2 brief — the form
+
+**Summary.** The form no longer restates the pair rules.
+`_validate_kind_specific` (`core/manual_entities.py:951`) keeps only
+plot-required, plot-exists and role-valid; the `seen` set and its
+"one role per plot" branch are gone. `repeaterHtml`
+(`src/story_architect/web/js/forms/entity-form.js:322`) passes `[]` to
+`entityOptions`, so a plot picked in one card is offered again in the next.
+`validate_scene_dramatic_role`'s docstring now states the pair rules instead
+of "one entry per plot". A refusal from the shared validator still reaches the
+user through the existing `_form` banner, unchanged.
+
+**Deviations.** None. The spec's `web/js/forms/entity-form.js` path is the
+repo-relative form; the file lives at
+`src/story_architect/web/js/forms/entity-form.js`. `chosen` in
+`refListWidget` (`:289`) is a different widget and was left alone.
+
+**Contract changes.** None. The form's help line is untouched, as the spec
+predicts; the only agent-facing contract remains the `plot_roles` description.
+
+**Verification.**
+
+- Gate: `pytest tests/test_manual_structure.py -q` → **40 passed**.
+- Spec set: `pytest tests/test_manual_structure.py tests/test_scene_plot_roles.py
+  tests/test_write_shape.py -q` → **134 passed**.
+- Probe (`create_form_entity`, scratch project): one plot, two roles
+  (`main/crisis`, `main/climax`) → saved and read back as
+  `[('main', 'crisis'), ('main', 'climax')]`; `relations` holds
+  `('main', 'dinner', 'plot_climax')` and `('main', 'dinner', 'plot_crisis')`.
+- Grep: `one role per plot`, `already has a role`, `chosen(sf)` → no hits in
+  `src/`; no test asserts the old refusal.
+
+Phase 2 → Phase 3 is ready to proceed.
 
 ## Phase 3 — Cleanup
 

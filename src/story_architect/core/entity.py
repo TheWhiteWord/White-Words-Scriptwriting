@@ -1019,11 +1019,13 @@ def validate_scene_dramatic_role(dramatic_role, plot_roles) -> None:
     """Raise ValueError when `dramatic_role` and `plot_roles` contradict each other.
 
     A scene's role belongs to a plot, so it lives in `plot_roles` — one entry
-    per plot, because one scene can be a climax for one plot and a
-    complication for another. `dramatic_role` therefore carries no role at
-    all; it only distinguishes the scenes that serve NO plot from those that
-    do. There are exactly two ways to serve no plot, and they are mutually
-    exclusive with carrying roles:
+    per `(plot, role)` pair. A scene may hold several roles in one plot, and
+    one plot can be served by several scenes; only the singular roles
+    (`inciting_incident`, `crisis`, `climax`) sit on one scene per plot, which
+    `validate_scene_plot_roles` enforces. `dramatic_role` therefore carries no
+    role at all; it only distinguishes the scenes that serve NO plot from
+    those that do. There are exactly two ways to serve no plot, and they are
+    mutually exclusive with carrying roles:
 
         transition / non-event  ->  plot_roles must be empty
         plot_role / empty        ->  plot_roles may be set

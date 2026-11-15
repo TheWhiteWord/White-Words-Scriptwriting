@@ -957,17 +957,12 @@ def _validate_kind_specific(conn, entity_type, entity_id, values, errors, warnin
         if baseline is None or values.get(SHEET_KEY) != baseline.get(SHEET_KEY):
             _validate_sheet(conn, values.get(SHEET_KEY) or BLANK_SHEET, errors)
         roles = values.get("plot_roles") or []
-        seen = set()
         for i, r in enumerate(roles):
             at = f"plot_roles.{i}"
             if not r.get("plot"):
                 errors[f"{at}.plot"] = "Choose the plot."
             elif not _exists(conn, "plot", r["plot"]):
                 errors[f"{at}.plot"] = f"There is no plot “{r['plot']}” — pick one from the list."
-            elif r["plot"] in seen:
-                errors[f"{at}.plot"] = "This scene already has a role in that plot — one role per plot."
-            else:
-                seen.add(r["plot"])
             if r.get("role") not in PLOT_ROLES:
                 errors[f"{at}.role"] = "Choose a role."
         if values.get("dramatic_role") in ("transition", "non-event") and roles and "dramatic_role" not in errors:

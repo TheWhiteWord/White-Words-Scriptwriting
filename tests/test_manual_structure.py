@@ -141,9 +141,17 @@ class TestScene:
             {"plot": "main", "role": "crisis"}, {"plot": "main", "role": "climax"},
             {"plot": "ghost", "role": "setup"}, {"plot": "main"}]}})
         e = chk["errors"]
-        assert "one role per plot" in e["plot_roles.1.plot"]
+        assert "plot_roles.1.plot" not in e          # one plot may hold several roles
         assert "ghost" in e["plot_roles.2.plot"]
         assert e["plot_roles.3.role"] == "Choose a role."
+
+    def test_one_plot_two_roles_saves_and_reads_back(self, project):
+        out = me.create_form_entity(project, "scene", {"values": {
+            "title": "Dinner", "sequence_id": "s1",
+            "plot_roles": [{"plot": "main", "role": "crisis", "description": "Boom"},
+                           {"plot": "main", "role": "climax", "description": "Bigger boom"}]}})
+        assert [(r["plot"], r["role"]) for r in out["values"]["plot_roles"]] == [
+            ("main", "crisis"), ("main", "climax")]
 
     def test_transition_scene_cannot_have_plot_roles(self, project):
         chk = me.check_entity(project, "scene", {"values": {
