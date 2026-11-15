@@ -202,22 +202,81 @@ Phase 2 → Phase 3 is ready to proceed.
 green.
 
 Checklist:
-- [ ] Grep for leftovers of the old rule and remove every hit:
+- [x] Grep for leftovers of the old rule and remove every hit:
       `one role per plot`, `One entry per plot`, `already has a role`,
       `chosen(sf)`, `seen` in `_validate_kind_specific`.
-- [ ] Confirm `UNIQUE_PLOT_ROLES` is imported where used and used once; confirm
+- [x] Confirm `UNIQUE_PLOT_ROLES` is imported where used and used once; confirm
       `PLOT_ROLES` is still imported/used in `entity.py`.
-- [ ] Confirm no new import is unused (`get_db` is used; `conn`/`scene_id`
+- [x] Confirm no new import is unused (`get_db` is used; `conn`/`scene_id`
       parameters are both read).
-- [ ] Confirm the `plot_roles` comment at `constants.py:241-244` and the
+- [x] Confirm the `plot_roles` comment at `constants.py:241-244` and the
       `validate_scene_dramatic_role` docstring no longer contradict the rules.
-- [ ] Confirm no test asserts the old refusal
+- [x] Confirm no test asserts the old refusal
       (`grep -rn "one role per plot" tests/` → no hits).
-- [ ] Full suite:
+- [x] Full suite:
       ```
       .venv/bin/python -m pytest -q
       ```
-- [ ] Re-run the four probes from Phase 1 and Phase 2 against a scratch project
+- [x] Re-run the four probes from Phase 1 and Phase 2 against a scratch project
       and confirm the outputs named in the gates.
 
 **Gate:** the full suite is green and every grep above returns nothing.
+
+## Phase 3 brief — cleanup
+
+**Summary.** No leftovers found: nothing needed removing. The old rule's only
+remaining strings are the two plan files' own briefs (history, not code) and
+`tasks/to_do/NOTES.md:39-42`, which records the gap this change closed. Every
+live copy is gone:
+
+- `grep "one role per plot|One entry per plot|already has a role"` over `src/`
+  → one hit, `constants.py:251`, which is the new description ("One entry per
+  plot AND role"); zero hits in `tests/`.
+- `chosen(sf)` → no hits; the `repeaterHtml` `chosen` const is deleted and
+  `entityOptions` gets `[]`. `refListWidget`'s separate `chosen` is untouched.
+- `seen` inside `_validate_kind_specific` (range 937–980) → no hits. The other
+  `seen`s in `manual_entities.py` (value rungs, perspectives) belong to other
+  branches and were already there.
+
+`UNIQUE_PLOT_ROLES` is imported at `entity.py:10` and used once (`:992`);
+`PLOT_ROLES` is still imported and used at `:631`, `:978`, `:981`. The local
+`get_db` import at `:996` is reached on every singular check, and both new
+parameters are read (`scene_id` at `:1005`, `conn` at `:997`). The
+`plot_roles` comment (`constants.py:244-248`) now says "six fields" and states
+the pair rules; `validate_scene_dramatic_role`'s docstring matches.
+
+**Deviations.** None in code. Two things worth recording:
+
+- **Full-suite count is 1311 passed / 2 failed**, not the 1310/2 in the Phase 1
+  brief. `--collect-only` reports 1313 tests; the difference from 1310 is three
+  extra collected tests, i.e. a test file changed outside this branch after the
+  Phase 1 run. Same two failures as before, same cause (below), so not a
+  regression from this phase.
+- **Both failures are pre-existing and reproduce at `625beac`** (verified in a
+  clean worktree): `test_no_hermes_imports` — `app/server.py:77` imports
+  `adapters.hermes.chat_backend`, and the task_38 diff does not touch that
+  file; `tasks/task_30/test_skill_references.py` — `SKILL.md` names
+  `success: false`, which is not a schema parameter. Neither is this change's.
+  The plan's gate ("full suite is green") is therefore met as far as this
+  change can reach it: 0 failures attributable to task_38.
+
+**Contract changes.** None.
+
+**Verification.**
+
+- Greps: every checklist pattern returns nothing in `src/` and `tests/` (see
+  Summary).
+- `pytest tests/test_manual_structure.py tests/test_scene_plot_roles.py
+  tests/test_write_shape.py -q` → **134 passed**.
+- Probe (scratch project, direct write + form + draft/commit):
+  one plot two roles → committed, rows `(main, sc1, plot_setup)` +
+  `(main, sc1, plot_complication)`; exact duplicate →
+  `ValueError: Duplicate plot role: main / climax appears twice in this scene's plot_roles.`
+  under `⚠️ Partly saved`; second scene taking `main`'s `climax` →
+  `ValueError: Plot 'main' already has its climax on scene 'sc2' — one scene per plot.`;
+  Same role in another plot → committed; second `setup` → committed; re-saving
+  a scene's own `climax` → committed; form save of one plot with two roles →
+  read back `[('main','crisis'), ('main','resolution')]`.
+- Full suite: `.venv/bin/python -m pytest -q` → **1311 passed, 2 failed**
+  (both reproduced at `625beac`).
+
