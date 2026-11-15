@@ -25,6 +25,9 @@ PLOT_SCOPES = ["main", "sub"]
 # field↔kind map is `_RELATION_FIELDS["plot"]`, and tests/test_plot_roles.py
 # pins the two together so they cannot drift.
 PLOT_ROLES = ["setup", "inciting_incident", "complication", "crisis", "climax", "resolution"]
+# The roles a plot holds on ONE scene at most. The other three are spans-many:
+# a plot is established, complicated and resolved across several scenes.
+UNIQUE_PLOT_ROLES = ("inciting_incident", "crisis", "climax")
 # The value ladder — four rungs of opposition (design §3.1).
 # The rung is looked up from the word and never stored. The codes are the
 # field names on a `value` entity; the meanings are what the skill teaches.
@@ -142,10 +145,10 @@ ENTITY_SCHEMAS = {
         # two so they cannot drift, because the field names are not the role
         # names.
         "setups": {"type": "list", "default": [], "optional": True, "computed": True, "description": "Scenes where plot is established (read-only — set it on the scene as plot_roles)", "sub_fields": {"scene_id": {"type": "string", "description": "Scene slug"}, "description": {"type": "string", "description": "What happens at this scene"}}},
-        "inciting_incident": {"type": "list", "default": [], "optional": True, "computed": True, "description": "Scenes where plot is incited (read-only — set it on the scene as plot_roles)", "sub_fields": {"scene_id": {"type": "string", "description": "Scene slug"}, "description": {"type": "string", "description": "What happens at this scene"}}},
+        "inciting_incident": {"type": "list", "default": [], "optional": True, "computed": True, "description": "The scene where plot is incited (read-only — set it on the scene as plot_roles)", "sub_fields": {"scene_id": {"type": "string", "description": "Scene slug"}, "description": {"type": "string", "description": "What happens at this scene"}}},
         "complications": {"type": "list", "default": [], "optional": True, "computed": True, "description": "Scenes where plot is complicated or obstructed (read-only — set it on the scene as plot_roles)", "sub_fields": {"scene_id": {"type": "string", "description": "Scene slug"}, "description": {"type": "string", "description": "What happens at this scene"}}},
-        "crisis": {"type": "list", "default": [], "optional": True, "computed": True, "description": "Scenes where plot reaches crisis point (read-only — set it on the scene as plot_roles)", "sub_fields": {"scene_id": {"type": "string", "description": "Scene slug"}, "description": {"type": "string", "description": "What happens at this scene"}}},
-        "climax": {"type": "list", "default": [], "optional": True, "computed": True, "description": "Scenes where plot reaches climax (read-only — set it on the scene as plot_roles)", "sub_fields": {"scene_id": {"type": "string", "description": "Scene slug"}, "description": {"type": "string", "description": "What happens at this scene"}}},
+        "crisis": {"type": "list", "default": [], "optional": True, "computed": True, "description": "The scene where plot reaches crisis point (read-only — set it on the scene as plot_roles)", "sub_fields": {"scene_id": {"type": "string", "description": "Scene slug"}, "description": {"type": "string", "description": "What happens at this scene"}}},
+        "climax": {"type": "list", "default": [], "optional": True, "computed": True, "description": "The scene where plot reaches climax (read-only — set it on the scene as plot_roles)", "sub_fields": {"scene_id": {"type": "string", "description": "Scene slug"}, "description": {"type": "string", "description": "What happens at this scene"}}},
         "resolutions": {"type": "list", "default": [], "optional": True, "computed": True, "description": "Scenes where plot resolves (read-only — set it on the scene as plot_roles)", "sub_fields": {"scene_id": {"type": "string", "description": "Scene slug"}, "description": {"type": "string", "description": "What happens at this scene"}}},
         "value_focus": {"type": "object", "keyed": False, "default": {"major": [], "minor": []}, "optional": True, "computed": True,
                         "description": "Computed: the values that shift in this plot's scenes, as {major: [{value, scenes}], minor: [{value, scenes}]}. Major is the most frequent, ties at the cut all major (VALUE_MAJOR_COUNT); scenes counts the scenes in which the value shifts. Read-only — derived from the scenes' value_turns.",
@@ -240,11 +243,12 @@ ENTITY_SCHEMAS = {
         "dramatic_role": {"type": "string", "default": "", "optional": True, "description": "How this scene functions dramatically. One of: plot_role, transition, non-event. 'plot_role' (or empty) means the role is defined per plot in plot_roles — do NOT repeat it here. 'transition' and 'non-event' are the only values that serve no plot, and they are mutually exclusive with plot_roles: setting one requires plot_roles to be empty."},
         # The write side of a plot role. Every entry names its own plot, so one
         # scene can hold different roles in different plots — which is why the
-        # role cannot live on the scene alone. Stored as `plot_<role>` rows
-        # pointing AT this scene; the plot's five fields read them back.
+        # role cannot live on the scene alone. A scene may also hold several
+        # roles in the SAME plot. Stored as `plot_<role>` rows pointing AT this
+        # scene; the plot's six fields read them back.
         "plot_roles": {
             "type": "list", "default": [], "optional": True,
-            "description": "Which plots run through this scene, and in what role. One entry per plot. This is where a plot role is written — never on the plot itself.",
+            "description": "Which plots run through this scene, and in what role. One entry per plot AND role. `inciting_incident`, `crisis` and `climax` belong to one scene per plot; a scene may hold several roles in one plot. This is where a plot role is written — never on the plot itself.",
             "sub_fields": {
                 "plot": {"type": "string", "description": "Slug of an existing plot", "required": True, "ref": "plot"},
                 "role": {"type": "string", "description": "One of: setup, inciting_incident, complication, crisis, climax, resolution", "required": True, "enum": PLOT_ROLES},

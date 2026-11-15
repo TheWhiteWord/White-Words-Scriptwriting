@@ -32,7 +32,8 @@ from .constants import (ACT_STATUSES, CONFLICT_LEVELS, ENTITY_LABELS, ENTITY_SCH
                         STRUCTURE_TYPES, VALID_ROLES, VALID_STATUSES, VALUE_ARCS, VALUE_LADDER)
 from .db import get_db
 from .entity import (ENTITY_COLUMN_MAP, REVERSED_RELATION_KINDS, _RELATION_FIELDS,
-                     coerce_number, standard_sections)
+                     PlotRoleError, coerce_number, standard_sections,
+                     validate_scene_plot_roles)
 from .scene_script import scene_heading
 
 # What the form can edit today. The spec builder is generic; this is the gate,
@@ -957,19 +958,24 @@ def _validate_kind_specific(conn, entity_type, entity_id, values, errors, warnin
         if baseline is None or values.get(SHEET_KEY) != baseline.get(SHEET_KEY):
             _validate_sheet(conn, values.get(SHEET_KEY) or BLANK_SHEET, errors)
         roles = values.get("plot_roles") or []
-        seen = set()
         for i, r in enumerate(roles):
             at = f"plot_roles.{i}"
             if not r.get("plot"):
                 errors[f"{at}.plot"] = "Choose the plot."
             elif not _exists(conn, "plot", r["plot"]):
                 errors[f"{at}.plot"] = f"There is no plot “{r['plot']}” — pick one from the list."
-            elif r["plot"] in seen:
-                errors[f"{at}.plot"] = "This scene already has a role in that plot — one role per plot."
-            else:
-                seen.add(r["plot"])
             if r.get("role") not in PLOT_ROLES:
                 errors[f"{at}.role"] = "Choose a role."
+        # Only once every card names a real plot and a real role: the pair rules
+        # need that to mean anything. The exception carries the offending pair,
+        # so the message lands on the card that caused it.
+        if not any(k.startswith("plot_roles.") for k in errors):
+            try:
+                validate_scene_plot_roles(None, roles, scene_id=entity_id, conn=conn)
+            except PlotRoleError as e:
+                i = max(j for j, r in enumerate(roles)
+                        if (r.get("plot"), r.get("role")) == (e.plot, e.role))
+                errors[f"plot_roles.{i}.role"] = str(e)
         if values.get("dramatic_role") in ("transition", "non-event") and roles and "dramatic_role" not in errors:
             errors["dramatic_role"] = (f"A {values['dramatic_role']} scene serves no plot, but it has plot roles. "
                                        f"Remove them, or leave the dramatic role empty.")

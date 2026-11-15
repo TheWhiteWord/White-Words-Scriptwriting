@@ -50,6 +50,9 @@ def _grow(project_dir: Path):
     fixture's own files so every field and relation is shaped like real data."""
     seq_tpl = (project_dir / "sequences" / "The Discovery.md").read_text()
     scene_tpl = (project_dir / "scenes" / "Central Room - Day.md").read_text()
+    # The clones are filler for a size test, and a plot's inciting_incident
+    # belongs to ONE scene — so they carry no plot roles at all.
+    scene_tpl = re.sub(r"(?m)^plot_roles:\n(?:- .*\n|  .*\n)*", "plot_roles: []\n", scene_tpl)
     beats_tpl = (project_dir / "scene_beats" / "Central Room - Day.md").read_text()
     # A larger cast: ten copies of each of the fixture's three relationships,
     # so which characters they involve is real, not invented.

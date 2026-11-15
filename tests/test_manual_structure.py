@@ -141,9 +141,60 @@ class TestScene:
             {"plot": "main", "role": "crisis"}, {"plot": "main", "role": "climax"},
             {"plot": "ghost", "role": "setup"}, {"plot": "main"}]}})
         e = chk["errors"]
-        assert "one role per plot" in e["plot_roles.1.plot"]
+        assert "plot_roles.1.plot" not in e          # one plot may hold several roles
         assert "ghost" in e["plot_roles.2.plot"]
         assert e["plot_roles.3.role"] == "Choose a role."
+
+    def test_one_plot_two_roles_saves_and_reads_back(self, project):
+        out = me.create_form_entity(project, "scene", {"values": {
+            "title": "Dinner", "sequence_id": "s1",
+            "plot_roles": [{"plot": "main", "role": "crisis", "description": "Boom"},
+                           {"plot": "main", "role": "climax", "description": "Bigger boom"}]}})
+        assert [(r["plot"], r["role"]) for r in out["values"]["plot_roles"]] == [
+            ("main", "crisis"), ("main", "climax")]
+
+    def _scene_with_role(self, project, title, plot, role):
+        return me.create_form_entity(project, "scene", {"values": {
+            "title": title, "sequence_id": "s1",
+            "plot_roles": [{"plot": plot, "role": role}]}})
+
+    def test_dry_run_names_the_scene_holding_a_singular_role(self, project):
+        self._scene_with_role(project, "First", "main", "climax")
+        chk = me.check_entity(project, "scene", {"values": {
+            "title": "Second", "sequence_id": "s1",
+            "plot_roles": [{"plot": "main", "role": "climax"}]}})
+        assert chk["errors"]["plot_roles.0.role"] == (
+            "Plot 'main' already has its climax on scene 'first' — one scene per plot.")
+
+    def test_dry_run_excludes_the_scene_being_edited(self, project):
+        out = self._scene_with_role(project, "First", "main", "climax")
+        chk = me.check_entity(project, "scene", {"values": {
+            "title": "First", "sequence_id": "s1",
+            "plot_roles": [{"plot": "main", "role": "climax"}]}}, out["id"])
+        assert not any(k.startswith("plot_roles.") for k in chk["errors"])
+
+    def test_dry_run_allows_a_second_setup(self, project):
+        self._scene_with_role(project, "First", "main", "setup")
+        chk = me.check_entity(project, "scene", {"values": {
+            "title": "Second", "sequence_id": "s1",
+            "plot_roles": [{"plot": "main", "role": "setup"}]}})
+        assert not any(k.startswith("plot_roles.") for k in chk["errors"])
+
+    def test_dry_run_allows_the_same_role_in_another_plot(self, project):
+        create_entity(project, "plot", "sub", {"name": "Sub"})
+        self._scene_with_role(project, "First", "main", "climax")
+        chk = me.check_entity(project, "scene", {"values": {
+            "title": "Second", "sequence_id": "s1",
+            "plot_roles": [{"plot": "sub", "role": "climax"}]}})
+        assert not any(k.startswith("plot_roles.") for k in chk["errors"])
+
+    def test_dry_run_flags_a_duplicated_pair_on_the_second_card(self, project):
+        chk = me.check_entity(project, "scene", {"values": {
+            "title": "Second", "sequence_id": "s1",
+            "plot_roles": [{"plot": "main", "role": "crisis"},
+                           {"plot": "main", "role": "crisis"}]}})
+        assert chk["errors"]["plot_roles.1.role"] == (
+            "Duplicate plot role: main / crisis appears twice in this scene's plot_roles.")
 
     def test_transition_scene_cannot_have_plot_roles(self, project):
         chk = me.check_entity(project, "scene", {"values": {
