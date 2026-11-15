@@ -1,5 +1,7 @@
 # Draft dry run — spec
 
+Paths below are relative to `src/story_architect/`.
+
 ## Problem
 
 A draft is staged, the user approves a card, and only then does the write path
@@ -11,23 +13,24 @@ agent: story_draft(action="stage", ops=[...scene takes main/climax...])
 user:  approves the card
 agent: story_draft(action="commit", draft_id=...)
        → {success: False, committed: [...], failed: {op, error}, draft_kept: True}
-         "Plot 'main' already has its climax on scene 'first' — one scene per plot."
+         "PlotRoleError: Plot 'main' already has its climax on scene 'first' — one scene per plot."
 ```
 
 Staging is structural by design. `validate_ops` checks shape only
 (`core/drafts.py:61-68`); `validate_shape` checks fields with no DB
-(`:130-139`). Cross-entity rules are deliberately excluded from both, because
-they read committed state and a staged create is not there yet. Every such
-rule — `validate_scene_plot_roles`, `validate_scene_location`,
-`check_references`, `validate_scene_dramatic_role` — therefore fires at
-commit, and the commit funnel turns it into `⚠️ Partly saved`
-(`core/drafts.py:389-404`, `:423-439`).
+(`:130-139`). Cross-entity rules are deliberately excluded from both: they
+read committed state, and at *stage* time a staged create is not there yet.
+(At commit, creates land before edits — which is why the replay below is
+faithful.) Every such rule — `validate_scene_plot_roles`,
+`validate_scene_location`, `check_references`, `validate_scene_dramatic_role`
+— therefore fires at commit, and the commit funnel turns it into `⚠️ Partly
+saved` (`core/drafts.py:389-404`, `:423-439`).
 
 Three consequences:
 
 1. **The card the user approves can be wrong.** The card is rendered
    automatically from a server snapshot (`app/mcp_server.py:80-107` →
-   `web/js/chat-app.js:213` → `web/js/chat-render.js:195`), so the decision UI
+   `web/js/chat-app.js:213` → `web/js/chat-render.js:186`), so the decision UI
    offers no warning the agent could have supplied.
 2. **A batch partly lands before stopping**, then waits for the agent to
    re-stage the remainder. Correct and resumable by design, but it reaches the
@@ -51,19 +54,18 @@ Two properties make it cheap:
 
 - The draft row lives in the database, so copying *after* staging carries it
   along — `commit(temp_path, draft_id)` finds the ops with no extra plumbing.
-- The write path is DB-only today: the only file write under `core/` is
-  `entity.update_sections` (`core/entity.py:283-288`), which has no callers in
-  `src/`. A copied directory containing `.story/story.db` is therefore a whole
-  project.
+- The write path is DB-only: no file under `core/` is written at all. A copied
+  directory containing `.story/story.db` is therefore a whole project.
+  (`get_db` may create `.story/`, but it writes no files.)
 
 ## Changes
 
 | # | File | Change |
 |---|---|---|
-| 1 | `core/drafts.py` | New `dry_run(project_path, draft_id)`: copy `.story/story.db` into a temp dir **outside the project** using SQLite's backup API (WAL-safe — see `db.backup_database`, `:138-171`), call the existing `commit(temp_path, draft_id)`, return its result, remove the temp dir in a `finally`. |
-| 2 | `core/drafts.py:195-253` | `stage()`: after the draft row is written, run `dry_run` and add the verdict to the response — `{"dry_run": {"status": "clean"}}`, `{"status": "refused", "failed_op": str, "error": str}`, or `{"status": "unavailable", "error": str}` when the copy could not be made. Reuse `commit`'s own `failed`/`message`; do not restate them. |
+| 1 | `core/drafts.py` | New `dry_run(project_path, draft_id)`: copy `.story/story.db` into a temp dir **outside the project** using SQLite's backup API (WAL-safe — see `db.backup_database`, `:138-171`), call the existing `commit(temp_path, draft_id)`, return its result, and remove the temp dir in a `finally` on every path — the copy is gone before `stage` returns, on `refused` and on an exception alike. A failure to make the copy **or** a `commit` exception maps to `{"status": "unavailable", "error": str}`; the function does not raise. |
+| 2 | `core/drafts.py:195-253` | `stage()`: after the draft row is written, run `dry_run` and add the verdict to the response — `{"dry_run": {"status": "clean"}}`, `{"status": "refused", "failed_op": str, "error": str}`, or `{"status": "unavailable", "error": str}`. Reuse `commit`'s own `failed`/`message`; do not restate them. |
 | 3 | `tools/story_draft.py:118-121` | SCHEMA description: report `validation` **and** `dry_run`; if `dry_run.status` is `"refused"`, re-stage a corrected op list instead of presenting the draft. |
-| 4 | `app/mcp_server.py:99-106` | Fold the dry-run verdict into the card snapshot's `warnings` array, so the card shows it with no UI change (`chat-render.js:205` already renders `warnings`). The mapping from stage result to snapshot gets its own pure helper, so it can be tested without driving the MCP handler. |
+| 4 | `app/mcp_server.py:80-107` | Publish the approval card only when the stage's dry run is `clean`. A `refused` or `unavailable` stage publishes nothing; the agent acts on the verdict and re-stages. The card carries no verdict — it is the user-facing proposal, not the check. |
 | 5 | `tests/test_draft_dry_run.py` | New: conflict caught, freeing-op batch passes, real project untouched, temp cleaned up, commit still refuses. |
 
 ## Isolation rules
@@ -73,15 +75,18 @@ This is the trust boundary. `stage` promises "writes nothing to the story"
 ever written"; a dry run must not break either.
 
 - The temp dir lives outside the project, and is removed on **every** path,
-  including a dry-run exception.
+  including a dry-run exception — before `stage` returns, so a refused batch
+  leaves nothing behind to retry against.
 - Copy with `Connection.backup()`, never `shutil.copy`: the DB is in WAL mode,
   so a plain copy can miss recent commits.
 - Do **not** reuse `db.backup_database` directly — it writes into
   `<project>/.story/`, i.e. the footprint this feature promises does not exist.
 - The precondition is that the write path stays DB-only. If a future change
   makes a write touch files, the sandbox is no longer a whole project and the
-  dry run must be revisited. A test asserts the real project's file set is
-  unchanged, so the break is loud.
+  dry run must be revisited. The test asserts the **copy's** file set is
+  unchanged by the replay (still only `.story/story.db` and its WAL/SHM
+  sidecars), not the real project's: a write the replay makes lands in the
+  copy, so a real-tree assertion passes over exactly the break this guards.
 
 ## What must not change
 
@@ -98,16 +103,22 @@ ever written"; a dry run must not break either.
 
 ## Agent-facing contract
 
-- `dry_run.status == "refused"` → **do not present the draft.** Fix the offending ops
-  and re-stage.
-- Report the verdict in the message alongside `validation`.
-- `"unavailable"` means the replay could not run (a sandbox problem, not a verdict
-  about the batch); say so rather than treating it as a refusal.
-- A clean dry run is stated, not left silent — otherwise "no news" is ambiguous
-  with "the check did not run".
+- `dry_run.status == "clean"` → present the draft. The card appears
+  automatically; say nothing about the check.
+- `"refused"` → **do not present the draft.** Either fix the offending ops and
+  re-stage silently (a technical inconsistency), or relay the conflict to the
+  user when it is a story decision they should make.
+- `"unavailable"` → the replay could not run: a sandbox problem, not a verdict
+  about the batch. Relay the `error` to the user rather than presenting or
+  silently re-staging. Most common causes: no usable temp directory
+  (`FileNotFoundError: … No usable temporary directory`), a full disk
+  (`OSError: [Errno 28]`), an unreadable source (`OperationalError: unable to
+  open database file`, `DatabaseError: file is not a database`), a project with
+  no built database yet (`OperationalError: no such table: drafts`).
+- Report the verdict in the message alongside `validation` when it is not clean.
 
-The card is unaffected structurally: it appears automatically, and a failed dry
-run arrives as an extra warning line above the Approve button.
+The card carries no verdict: it is presented only for a clean stage, so a card
+on screen means the batch was checked and will commit.
 
 ## Rejected alternatives
 
@@ -133,7 +144,7 @@ run arrives as an extra warning line above the Approve button.
 Plus the probe, on a scratch project with two scenes:
 
 - Stage a batch giving scene B the `climax` scene A already holds →
-  `dry_run == {"status": "refused", "failed_op": ..., "error": "ValueError: Plot 'main' already has its climax on scene 'a' — one scene per plot."}`
+  `dry_run == {"status": "refused", "failed_op": ..., "error": "PlotRoleError: Plot 'main' already has its climax on scene 'a' — one scene per plot."}`
   and the real project unchanged (same entity/relation counts, no new files in
   the project tree).
 - Stage a batch where one edit clears the `climax` and a later edit gives it to

@@ -3,7 +3,7 @@ import pytest
 import json
 from pathlib import Path
 from story_architect.core.section_parser import list_sections, get_section, replace_section
-from story_architect.core.entity import extract_entity, validate_entity, update_sections
+from story_architect.core.entity import extract_entity, validate_entity
 from story_architect.core.screenplay import extract_scenes, match_character, match_location, extract_location
 from story_architect.core.constants import ENTITY_SCHEMAS
 from story_architect.core.writes import (create_entity, create_project, delete_entity,
