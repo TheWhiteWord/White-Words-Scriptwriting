@@ -149,3 +149,136 @@ Checklist:
 
 **Gate:** the full suite shows no new failures and every grep above returns
 nothing attributable to this change.
+
+## Phase 2 brief — the verdict reaches the agent
+
+**Summary.** The verdict now reaches the agent through two channels and the
+card is gated on it. `story_draft`'s SCHEMA description names `dry_run.status`
+and what each of the three values means (`src/story_architect/tools/story_draft.py:120-123`).
+`on_call_tool` publishes an approval card only when the result carries a
+`dry_run` whose status is `clean`; a `refused` or `unavailable` stage, and any
+result without a `dry_run`, returns the tool text without touching the bus
+(`src/story_architect/app/mcp_server.py:89-91`). No verdict was added to
+`warnings`: the card still renders exactly `validation`, as before.
+
+**Deviations.**
+
+- **A pre-existing bug was suppressed, not preserved.** The plan's third item
+  said "a result with no `dry_run` (a `commit` call) keeps the existing
+  behaviour" — but that behaviour was wrong. The gate was
+  `isinstance(obj, dict) and "draft_id" in obj`, and a commit response carries
+  `draft_id`, so **every commit published an empty card**: `status: "open"`,
+  no summary, no changes. Confirmed by probe before editing. With the strict
+  `dry_run`-clean gate, that path is unreachable, so nothing is lost; the
+  "existing behaviour" clause is satisfied vacuously. A test pins it.
+- **`tests/test_story_describe.py::test_no_description_promises_a_missing_parameter`
+  conflicted with the checklist.** It asserts the string `dry_run` appears in
+  no tool description. It was written for a real bug — `story_import`
+  advertised a flag its schema lacked — but it cannot distinguish an input
+  parameter from a response field, and Phase 2 requires `story_draft` to name
+  its own response field. Scoped the guard with a named exemption for
+  `story_draft`/`dry_run`, stating why in the comment, rather than rewording
+  the agent contract around a guard. The other three claims are untouched.
+  (Clarification asked; no answer, so the narrower fix was taken.)
+- **`props` deleted at `tests/test_story_describe.py:44`** — already unused
+  before this change.
+- **The card gate is tested by driving `on_call_tool` directly**, via
+  `server.get_request_handler("tools/call").handler`, patching
+  `mcp_server._publish_bus`. No repo test drove this handler before, and the
+  surrounding MCP transport is not part of the decision under test.
+- **Loop hygiene in that test.** `asyncio.run` closes the loop it creates, and
+  every other chat test calls `get_event_loop()` afterwards — the first cut
+  broke all five `test_chat_core.py` tests whenever the full suite ran. The
+  test now reuses the ambient loop, creating one only if none exists, and never
+  closes it.
+
+**Contract changes.** Two, both intended:
+
+- `story_draft`'s agent-facing description gains the `dry_run.status` contract
+  (spec change #3).
+- A `commit` call no longer emits a phantom `status: "open"` card on the bus.
+  This is a user-visible fix, not a spec change: previously the agent's commit
+  put an empty, unapprovable proposal card on screen alongside the real
+  `✅ Committed` report.
+
+**Verification.**
+
+- Gate: `pytest tests/test_draft_dry_run.py tests/test_story_draft_tool.py -q`
+  → **30 passed**.
+- Neighbours: `test_task5_assets`, `test_dashboard_link`, `test_chat_routes`,
+  `test_chat_core`, `test_hermes_chat_backend`, `test_story_describe`,
+  `test_draft_preview`, `test_manual_structure` → **all pass** with the gate
+  files (145 passed in the combined run; the 5 `test_chat_core` failures in
+  that run were the loop bug above, fixed before the full-suite run).
+- Probe (`on_call_tool` driven directly, scratch project built from the
+  fixture): clean stage → **1 card** (`status=open`, id and summary carried);
+  refused stage → **0 cards**; unavailable stage (patched `drafts.dry_run`)
+  → **0 cards**; commit of a staged draft → **0 cards**. Before the change the
+  same four calls produced 1/1/1/1.
+- Full suite: **1328 passed, 2 failed** — the same two pre-existing failures
+  recorded in the Phase 1 brief (`test_no_hermes_imports`,
+  `tasks/task_30/test_skill_references`), both reproduced earlier at `625beac`.
+  1328 = the 1323 baseline + 5 new tests.
+
+Phase 2 → Phase 3 is ready to proceed.
+
+## Phase 3 brief — cleanup
+
+**Summary.** Nothing the change made unused is left behind, and the whole
+suite is green. `dry_run` in `src/` appears only in the three files the plan
+names; `commit()` is byte-for-byte unchanged; every new import is used. The one
+gap the confirmation surfaced — the sandbox **copy**-failure branch had no
+test — is closed. Both probe sets reproduce the outputs the gates name.
+
+**Deviations.**
+
+- **One test added beyond the checklist** — `test_a_copy_failure_is_a_verdict_not_an_exception`
+  (`tests/test_draft_dry_run.py:145`). Phase 3 asks that every new branch be
+  covered, and `dry_run` has two `except` arms: the inner one (a `commit`
+  exception) was covered by the Phase 1 test, the outer one (the temp dir or
+  backup failing) was not. The new test patches `tempfile.TemporaryDirectory`
+  to raise on `__enter__` and asserts `stage` still returns
+  `{"status": "unavailable", "error": "OSError: …"}` rather than propagating.
+- **The grep list is broader than the plan's wording, legitimately.** The plan
+  says `dry_run` appears in `core/drafts.py`, `tools/story_draft.py`,
+  `app/mcp_server.py` and "the new test". Phase 2's own checklist required the
+  `story_draft` description to name `dry_run`, so it also appears in
+  `tests/test_story_draft_tool.py` and in the `test_story_describe.py`
+  exemption. Those are test files, not leftovers; no `src/` file outside the
+  three carries the name beyond the pre-existing `writes.py`,
+  `story_import.py` and `adapters/hermes/setup.py` uses.
+- **`app/mcp_server.py:83` still writes `/tmp/draft_debug.txt`.** The plan
+  scopes it out ("worth its own ticket"); left alone, as directed.
+- **`commit()` was verified by AST source-segment equality** against the
+  task_39 branch point `3d9cb08` — 89 lines, identical at HEAD and in the
+  worktree. A textual `sed` range was not reliable here because `dry_run` was
+  inserted between `commit` and `_commit_report`.
+
+**Contract changes.** None.
+
+**Verification.**
+
+- Greps: `dry_run` in `src/` → only `core/drafts.py`, `tools/story_draft.py`,
+  `app/mcp_server.py` plus the three pre-existing files; no stray `print`, no
+  `pdb`/`breakpoint`, no leftover temp paths in the repo.
+- Imports: an AST pass over the five touched files reports no unused import
+  (`mcp_server`'s `annotations` / `StreamableHTTPSessionManager` / `_tools_pkg`
+  are `__future__`, an `__all__` re-export and an import side-effect).
+- Backstop: `pytest tests/test_draft_dry_run.py -q` → **8 passed** (7 + the
+  new branch test).
+- Full suite: `.venv/bin/python -m pytest -q` → **1329 passed, 2 failed** —
+  the same two pre-existing failures (`tests/test_no_hermes_imports.py`,
+  `tasks/task_30/test_skill_references.py`). 1329 = the 1328 Phase 2 result
+  + 1 new test.
+- Phase 1 probe (scratch project from the fixture markdown): refused batch →
+  `{"status": "refused", "failed_op": "edit scene/the-core-day", "error":
+  "PlotRoleError: Plot 'the-resistance' already has its climax on scene
+  'central-room-night' — one scene per plot."}`; entity/section/relation
+  counts and the project file tree unchanged; freeing batch →
+  `{"status": "clean"}`; committing the refused draft → `success: False` with
+  the identical `failed.error`.
+- Phase 2 probe (same scratch project, `on_call_tool` driven directly): clean
+  stage → 1 card (`status=open`, summary carried); refused, unavailable
+  (patched `drafts.dry_run`) and commit → 0 cards.
+
+Phase 3 complete; the task_39 plan has no remaining phase.
