@@ -117,6 +117,10 @@ def _op_schemas() -> list[dict]:
 SCHEMA = {
     "description": "Propose a batch of entity changes; writes nothing until the user confirms. "
                    "RELAY preview_md VERBATIM. Report `validation` findings and fix before asking. "
+                   "`dry_run.status` 'clean' means the batch will commit — present the draft. "
+                   "'refused' means it will not: re-stage a corrected op list silently for a technical "
+                   "inconsistency, or relay the conflict when it is a story decision for the user. "
+                   "'unavailable' means the replay could not run — relay the `error`. "
                    "Call action=list for open drafts. Soft delete. "
                    "Projects can't be drafted — story_admin(action=\"create_project\").",
     "type": "object",

@@ -142,6 +142,25 @@ def test_the_temp_dir_is_removed_on_every_path(fixture_path, temp_dirs,
     assert not any(path.exists() for path, _ in temp_dirs)
 
 
+def test_a_copy_failure_is_a_verdict_not_an_exception(fixture_path, monkeypatch):
+    """The sandbox step failing must not propagate out of `stage` either."""
+
+    class _NoSandbox:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            raise OSError("no usable temporary directory")
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", _NoSandbox)
+    result = drafts.stage(fixture_path, _free_climax(), "no sandbox")
+    assert result["dry_run"] == {
+        "status": "unavailable", "error": "OSError: no usable temporary directory"}
+
+
 # ─── the backstop ───
 
 def test_commit_still_refuses_the_draft_the_dry_run_refused(fixture_path):

@@ -86,6 +86,9 @@ def create_mcp_server(config: Config) -> Server:
             except Exception:
                 obj = None
             if isinstance(obj, dict) and "draft_id" in obj:
+                dry = obj.get("dry_run")
+                if not (isinstance(dry, dict) and dry.get("status") == "clean"):
+                    return types.CallToolResult(content=[types.TextContent(type="text", text=result)])
                 from pathlib import Path
                 from datetime import datetime
                 from story_architect.tools.story_resolve import resolve_project

@@ -108,15 +108,15 @@ the `dry_run` verdict matches the message `commit` produces for the same draft.
 a clean stage, so the user never sees a verdict.
 
 Checklist:
-- [ ] `tools/story_draft.py:118-121` — SCHEMA description: report `validation`
+- [x] `tools/story_draft.py:118-121` — SCHEMA description: report `validation`
       **and** `dry_run`; `"refused"` means fix and re-stage, or relay the
       conflict when it is a story decision; `"unavailable"` means the replay
       could not run — relay the `error`.
-- [ ] `app/mcp_server.py:80-107` — publish the card only when the stage result
+- [x] `app/mcp_server.py:80-107` — publish the card only when the stage result
       carries a `dry_run` with `status == "clean"`. A `refused` or `unavailable`
       stage publishes nothing. A result with no `dry_run` (a `commit` call)
       keeps the existing behaviour. No verdict is added to `warnings`.
-- [ ] Tests: a clean stage publishes, a refused stage publishes nothing, an
+- [x] Tests: a clean stage publishes, a refused stage publishes nothing, an
       unavailable stage publishes nothing; the `story_draft` description
       mentions `dry_run`.
 
@@ -131,20 +131,20 @@ Checklist:
 green.
 
 Checklist:
-- [ ] Grep for leftovers: `dry_run` appears only in `core/drafts.py`,
+- [x] Grep for leftovers: `dry_run` appears only in `core/drafts.py`,
       `tools/story_draft.py`, `app/mcp_server.py` and the new test — ignoring
       the pre-existing uses in `core/writes.py:794` and `tools/story_import.py`
       (`current_values` and the import flag); no debug writes, no stray
       `print`, no leftover temp paths in the repo.
-- [ ] Confirm `commit()` is byte-for-byte unchanged and still the enforcer
+- [x] Confirm `commit()` is byte-for-byte unchanged and still the enforcer
       (the Phase 1 backstop test pins this).
-- [ ] Confirm every new import is used and every new branch is covered.
-- [ ] Full suite (two failures pre-date this change and are not theirs to fix:
+- [x] Confirm every new import is used and every new branch is covered.
+- [x] Full suite (two failures pre-date this change and are not theirs to fix:
       `tests/test_no_hermes_imports.py`, `tasks/task_30/test_skill_references.py`):
       ```
       .venv/bin/python -m pytest -q
       ```
-- [ ] Re-run the probes from Phase 1 and Phase 2 against a scratch project and
+- [x] Re-run the probes from Phase 1 and Phase 2 against a scratch project and
       confirm the outputs named in the gates.
 
 **Gate:** the full suite shows no new failures and every grep above returns
