@@ -688,7 +688,6 @@ window.DASH = window.DASH || {};
       syncPersp(); autoName(); rerender = true;              // the other slot's choices and the cards depend on this
     } else if (d.rk != null) {
       S.values[d.rk][+d.ri][d.rf] = el.value; S.touched.add(d.path);
-      rerender = d.rf === 'plot';                              // the other cards' choices exclude this one
     } else if (d.pc != null) {
       const f = persField(), cards = S.values[f.key] = S.values[f.key] || {};
       (cards[d.pc] = cards[d.pc] || blankPersp())[d.pf] = el.type === 'checkbox' ? el.checked : el.value;

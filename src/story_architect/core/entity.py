@@ -948,8 +948,22 @@ def _validate_beat_content(beats) -> None:
                 f"Beat {i} has no content: no surface, subtext, or gap.")
 
 
+class PlotRoleError(ValueError):
+    """A refused `plot_roles` entry. Carries the pair, so a dry run can put the
+    message on the card that caused it rather than on the form as a whole."""
+
+    def __init__(self, message: str, plot: str, role: str) -> None:
+        super().__init__(message)
+        self.plot = plot
+        self.role = role
+
+
 def validate_scene_plot_roles(project_path, entries, scene_id=None, conn=None) -> None:
-    """Raise ValueError if a scene's `plot_roles` breaks the pair rules.
+    """Raise ValueError if a scene's `plot_roles` breaks the rules below.
+
+    A pair violation raises `PlotRoleError`, which carries the offending
+    `plot` and `role` so a dry run can put the message on the card that
+    caused it.
 
     Both rules are about the `(plot, role)` pair:
 
@@ -964,8 +978,10 @@ def validate_scene_plot_roles(project_path, entries, scene_id=None, conn=None) -
     resolves to nothing.
 
     `scene_id` excludes a scene from its own singular check — an edit re-saves
-    the rows it already holds. `conn` lets the importer read the scenes it has
-    already inserted in the same transaction; without one this opens its own.
+    the rows it already holds. `conn` lets a caller read rows its own
+    transaction has written but not committed (the importer), and lets the
+    form's dry run report the conflict next to the card; `project_path` is
+    read only when `conn` is None, so such a caller passes `None`.
     """
     if not isinstance(entries, list):
         return
@@ -985,9 +1001,9 @@ def validate_scene_plot_roles(project_path, entries, scene_id=None, conn=None) -
                 f"plot_roles entry needs a plot slug: {entry!r}")
         pair = (plot, role)
         if pair in seen:
-            raise ValueError(
+            raise PlotRoleError(
                 f"Duplicate plot role: {plot} / {role} appears twice in "
-                f"this scene's plot_roles.")
+                f"this scene's plot_roles.", plot, role)
         seen.add(pair)
         if role in UNIQUE_PLOT_ROLES:
             singular.append(pair)
@@ -1007,9 +1023,9 @@ def validate_scene_plot_roles(project_path, entries, scene_id=None, conn=None) -
                 params.append(scene_id)
             row = conn.execute(sql, params).fetchone()
             if row:
-                raise ValueError(
+                raise PlotRoleError(
                     f"Plot '{plot}' already has its {role} on scene "
-                    f"'{row[0]}' — one scene per plot.")
+                    f"'{row[0]}' — one scene per plot.", plot, role)
     finally:
         if own:
             conn.close()

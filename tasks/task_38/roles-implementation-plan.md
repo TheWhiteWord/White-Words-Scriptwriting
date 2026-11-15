@@ -280,3 +280,74 @@ the pair rules; `validate_scene_dramatic_role`'s docstring matches.
 - Full suite: `.venv/bin/python -m pytest -q` → **1311 passed, 2 failed**
   (both reproduced at `625beac`).
 
+## Phase 2.B — the form's live check
+
+**Goal:** a singular-role conflict is reported while the person is still
+choosing the role, instead of at save.
+
+Checklist:
+- [x] `core/entity.py` — `validate_scene_plot_roles` raises `PlotRoleError`, a
+      `ValueError` carrying the offending `plot`/`role`, for R1 and R2.
+- [x] `core/manual_entities.py:_validate_kind_specific` — once every card names
+      a real plot and a real role, call the shared validator with the `conn` and
+      `entity_id` already in scope; key the message to the offending card.
+- [x] Tests: a taken `climax` names the other scene and lands on the card; the
+      scene being edited excludes itself; a second `setup` and the same role in
+      another plot pass; a duplicated pair lands on the second card.
+
+**Gate:**
+```
+.venv/bin/python -m pytest tests/test_manual_structure.py -q
+```
+Plus the probe: `check_entity` with a taken `climax` returns the conflict under
+`plot_roles.0.role`.
+
+## Phase 2.B brief — the form's live check
+
+**Summary.** The dry run now reaches the same rule the write path does.
+`_validate_kind_specific` (`core/manual_entities.py:968-977`) calls
+`validate_scene_plot_roles` with the connection and `entity_id` it already has,
+after the per-card plot/role checks have passed, and keys the resulting message
+to `plot_roles.{i}.role`. The JS already debounces `/check` and paints any error
+keyed that way under the card, and its save button blocks review when
+`check` returns `ok: false` — so no JS change was needed. The validator's pair
+violations now raise `PlotRoleError`, which carries the pair so the caller can
+find the card without parsing the message.
+
+**Deviations.**
+
+- **`PlotRoleError` is new.** The first cut attached `plot`/`role` to a plain
+  `ValueError`; Pyright rejects attribute assignment on a built-in type. A
+  small typed subclass states the contract instead of dodging the checker.
+- **`project_path` may be `None`** when the caller supplies `conn` (only read
+  to open one otherwise). Documented in the validator docstring.
+- **One stale line removed:** `entity-form.js` re-rendered the body when a
+  repeater's plot changed, because the other cards' choices used to exclude it.
+  With the filtering gone nothing depends on that (`SHOW_IF` has no entry for
+  `plot_roles`; the derived block reads the original values), so the re-render
+  and its comment are deleted rather than reworded.
+
+**Contract changes.** None. The agent path never used the dry-run channel; the
+write path's behaviour and messages are unchanged, and `PlotRoleError` is a
+`ValueError`, so every existing `except ValueError` still catches it.
+
+**Verification.**
+
+- Gate: `pytest tests/test_manual_structure.py -q` → **45 passed**.
+- Spec set + neighbours (`test_manual_structure`, `test_scene_plot_roles`,
+  `test_write_shape`, `test_core`, `test_story_load_views`, `test_plot_roles`,
+  `test_draft_preview`, `test_import_enum_validation`, `test_response_budget`,
+  `test_story_describe`) → **400 passed**.
+- Full suite: `pytest -q` → **1316 passed, 2 failed** — the same two
+  pre-existing failures recorded in the Phase 1 and Phase 3 briefs
+  (`test_no_hermes_imports`, `tasks/task_30/test_skill_references`), both
+  reproduced at `625beac`.
+- Probe (`check_entity`, the endpoint the form calls on every keystroke):
+  a second scene taking `main`'s `climax` →
+  `errors["plot_roles.0.role"] == "Plot 'main' already has its climax on scene 'first' — one scene per plot."`;
+  the scene that owns the `climax` re-checked against itself → no `plot_roles.*`
+  errors; a second `setup` → clean; `sub`/`climax` while `main`/`climax` exists →
+  clean; `main`/`crisis` twice in one scene →
+  `errors["plot_roles.1.role"] == "Duplicate plot role: main / crisis appears twice in this scene's plot_roles."`
+
+
