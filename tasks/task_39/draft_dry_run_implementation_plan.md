@@ -58,7 +58,7 @@ write, unrelated to this change — leave it alone (worth its own ticket).
 **Goal:** staging reports whether the batch would commit, and touches nothing.
 
 Checklist:
-- [ ] `core/drafts.py` — add `dry_run(project_path, draft_id)`. Open a throwaway
+- [x] `core/drafts.py` — add `dry_run(project_path, draft_id)`. Open a throwaway
       dir with `tempfile.TemporaryDirectory(ignore_cleanup_errors=True)` and
       create `<tmp>/.story/` inside it (a raw `sqlite3.connect` does not make
       parents), copy `<project>/.story/story.db` to `<tmp>/.story/story.db`
@@ -70,14 +70,14 @@ Checklist:
       `{"status": "refused", "failed_op": result["failed"]["op"], "error": result["failed"]["error"]}`,
       or `{"status": "unavailable", "error": ...}` when the copy or the replay
       failed. The function does not raise.
-- [ ] `core/drafts.py:195-253` — `stage()`: after the draft row is written, set
+- [x] `core/drafts.py:195-253` — `stage()`: after the draft row is written, set
       `result["dry_run"] = dry_run(project_path, new_id)`. Nothing else in the
       response changes.
-- [ ] `core/drafts.py` — bring the module docstring and `stage`'s in line with
+- [x] `core/drafts.py` — bring the module docstring and `stage`'s in line with
       the replay: `commit_draft` is `commit`, and the dry run dispatches into
       `core.writes` on the copy, so it is the project's tables that go
       untouched.
-- [ ] `tests/test_draft_dry_run.py` — new file, using the `fixture_path`
+- [x] `tests/test_draft_dry_run.py` — new file, using the `fixture_path`
       fixture and `test_drafts._counts`:
       - a batch whose scene takes a `climax` another scene holds →
         `status == "refused"`, and the error names the plot, the role and the
