@@ -4,6 +4,80 @@ import asyncio
 from pathlib import Path
 
 
+class DbChangeWatcher:
+    """Reports whether another connection has committed to a SQLite database.
+
+    Built on ``PRAGMA data_version``. SQLite defines that value per
+    *connection*: it changes between two reads on the same connection only if a
+    different connection committed in the interim. Reading it from a fresh
+    connection each time therefore tells you nothing (every new connection sees
+    the same number), so this keeps one connection open and polls on it.
+
+    If the database file is replaced (a backup restored over it), the old
+    connection still points at the old file, so the file's identity is checked
+    and the connection reopened when it changes.
+    """
+
+    def __init__(self, db_path: Path):
+        self._path = Path(db_path)
+        self._conn = None
+        self._ident = None
+        self._last = None
+
+    def _open(self):
+        import sqlite3
+        # mode=ro: never create an empty database file just by watching one.
+        conn = sqlite3.connect(f"file:{self._path}?mode=ro", uri=True,
+                               isolation_level=None)
+        st = self._path.stat()
+        self._ident = (st.st_dev, st.st_ino)
+        return conn
+
+    def close(self) -> None:
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+        self._conn = None
+        self._ident = None
+
+    def changed(self) -> bool:
+        """True if the database changed since the previous call.
+
+        The first successful call only records a baseline and returns False.
+        Any error (file missing, locked) reads as "no news" and the connection
+        is rebuilt on the next call.
+        """
+        try:
+            st = self._path.stat()
+            if self._conn is not None and self._ident != (st.st_dev, st.st_ino):
+                self.close()
+                self._last = None
+            if self._conn is None:
+                self._conn = self._open()
+            version = self._conn.execute("PRAGMA data_version").fetchone()[0]
+        except Exception:
+            self.close()
+            return False
+        changed = self._last is not None and version != self._last
+        self._last = version
+        return changed
+
+
+async def event_stream(watcher: DbChangeWatcher, request, interval: float = 1.0):
+    """Server-sent events: one ``update`` frame each time the database changes."""
+    try:
+        while not await request.is_disconnected():
+            if watcher.changed():
+                yield 'event: update\ndata: {"type": "update"}\n\n'
+            await asyncio.sleep(interval)
+    except asyncio.CancelledError:
+        return
+    finally:
+        watcher.close()
+
+
 def make_router(config, app):
     router = APIRouter()
 
@@ -25,30 +99,9 @@ def make_router(config, app):
 
     @router.get("/api/projects/{slug}/events")
     async def project_events(slug: str, request: Request):
-        root = Path(config.root)
-        db_path = root / "projects" / slug / ".story" / "story.db"
-
-        async def gen():
-            import sqlite3
-            last_version = None
-            try:
-                while True:
-                    if await request.is_disconnected():
-                        break
-                    try:
-                        conn = sqlite3.connect(str(db_path))
-                        cur = conn.execute("PRAGMA data_version")
-                        version = cur.fetchone()[0]
-                        conn.close()
-                    except Exception:
-                        version = None
-                    if last_version is not None and version != last_version:
-                        yield "event: update\ndata: {\"type\": \"update\"}\n\n"
-                    last_version = version
-                    await asyncio.sleep(1)
-            except asyncio.CancelledError:
-                return
-
-        return StreamingResponse(gen(), media_type="text/event-stream")
+        db_path = Path(config.root) / "projects" / slug / ".story" / "story.db"
+        return StreamingResponse(
+            event_stream(DbChangeWatcher(db_path), request),
+            media_type="text/event-stream")
 
     return router
