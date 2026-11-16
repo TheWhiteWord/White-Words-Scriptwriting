@@ -234,7 +234,7 @@ def _purge_deleted(args: dict, project_path: Path) -> dict:
     """
     from datetime import datetime, timedelta
 
-    from story_architect.core.db import backup_database, get_db
+    from story_architect.core.db import backup_database, get_db, transaction
 
     required = f"DELETE {project_path.name}"
     given = args.get("purge_confirm", "")
@@ -250,28 +250,32 @@ def _purge_deleted(args: dict, project_path: Path) -> dict:
 
     conn = get_db(project_path)
     try:
-        rows = conn.execute(
-            "SELECT id, type, deleted_at FROM entities "
-            "WHERE is_deleted=1 AND deleted_at IS NOT NULL AND deleted_at <= ? "
-            "ORDER BY type, id", (cutoff,)).fetchall()
-        if not rows:
-            younger = conn.execute(
-                "SELECT count(*) FROM entities WHERE is_deleted=1").fetchone()[0]
-            return {
-                "success": True,
-                "purged": [],
-                "message": (
-                    f"Nothing is old enough to purge ({younger} deleted entities are "
-                    f"younger than {days} days). They stay restorable."),
-            }
+        # Selecting what to purge and deleting it are one transaction: the three
+        # DELETEs below must land together, or a stop part-way leaves entities
+        # with no sections, or sections with no entity.
+        with transaction(conn):
+            rows = conn.execute(
+                "SELECT id, type, deleted_at FROM entities "
+                "WHERE is_deleted=1 AND deleted_at IS NOT NULL AND deleted_at <= ? "
+                "ORDER BY type, id", (cutoff,)).fetchall()
+            if not rows:
+                younger = conn.execute(
+                    "SELECT count(*) FROM entities WHERE is_deleted=1").fetchone()[0]
+                return {
+                    "success": True,
+                    "purged": [],
+                    "message": (
+                        f"Nothing is old enough to purge ({younger} deleted entities are "
+                        f"younger than {days} days). They stay restorable."),
+                }
 
-        ids = [r[0] for r in rows]
-        marks = ",".join("?" * len(ids))
-        backup = backup_database(project_path)
-        conn.execute(f"DELETE FROM sections WHERE entity_id IN ({marks})", ids)
-        conn.execute(f"DELETE FROM relations WHERE from_id IN ({marks}) "
-                     f"OR to_id IN ({marks})", ids + ids)
-        conn.execute(f"DELETE FROM entities WHERE id IN ({marks})", ids)
+            ids = [r[0] for r in rows]
+            marks = ",".join("?" * len(ids))
+            backup = backup_database(project_path)
+            conn.execute(f"DELETE FROM sections WHERE entity_id IN ({marks})", ids)
+            conn.execute(f"DELETE FROM relations WHERE from_id IN ({marks}) "
+                         f"OR to_id IN ({marks})", ids + ids)
+            conn.execute(f"DELETE FROM entities WHERE id IN ({marks})", ids)
     finally:
         conn.close()
 
@@ -297,7 +301,7 @@ def _restore_entity(args: dict, project_path: Path) -> dict:
     alternative is a dead plot's rows silently reattaching, which is worse.
     See the delete sweep in core/writes.py.
     """
-    from story_architect.core.db import get_db
+    from story_architect.core.db import get_db, transaction
 
     target = args.get("target") or {}
     entity_type = target.get("entity_type") or ""
@@ -305,36 +309,38 @@ def _restore_entity(args: dict, project_path: Path) -> dict:
     summary = args.get("summary", "")
     conn = get_db(project_path)
     try:
-        # Deliberately NOT filtered on is_deleted — that is the point.
-        row = conn.execute(
-            "SELECT id, is_deleted, deleted_at FROM entities WHERE id=?",
-            (entity_id,),
-        ).fetchone()
-        if not row:
-            return {"error": f"Entity not found: {entity_type}/{entity_id}"}
-        entity_id, is_deleted, deleted_at = row
-        if not is_deleted:
-            return {
-                "error": f"{entity_id} is not deleted — nothing to restore.",
-                "entity_id": entity_id,
-            }
-        conn.execute(
-            "UPDATE entities SET is_deleted=0, deleted_at=NULL WHERE id=?", (entity_id,))
-        # Children come back with their parent. The restore is meant to be the
-        # exact inverse of the delete, and the delete cascades on `parent_id` —
-        # so leaving a child deleted would restore a scene with no scene_beats,
-        # silently.
-        #
-        # Keyed on `parent_id` for every type rather than a per-type branch: the
-        # cascade is one fact (this row owned that row), and the list is what the
-        # delete already soft-deleted.
-        restored_children = [r[0] for r in conn.execute(
-            "SELECT id FROM entities WHERE parent_id=? AND is_deleted=1 "
-            "ORDER BY id", (entity_id,)).fetchall()]
-        if restored_children:
+        # The parent and its children come back together or not at all.
+        with transaction(conn):
+            # Deliberately NOT filtered on is_deleted — that is the point.
+            row = conn.execute(
+                "SELECT id, is_deleted, deleted_at FROM entities WHERE id=?",
+                (entity_id,),
+            ).fetchone()
+            if not row:
+                return {"error": f"Entity not found: {entity_type}/{entity_id}"}
+            entity_id, is_deleted, deleted_at = row
+            if not is_deleted:
+                return {
+                    "error": f"{entity_id} is not deleted — nothing to restore.",
+                    "entity_id": entity_id,
+                }
             conn.execute(
-                "UPDATE entities SET is_deleted=0, deleted_at=NULL "
-                "WHERE parent_id=? AND is_deleted=1", (entity_id,))
+                "UPDATE entities SET is_deleted=0, deleted_at=NULL WHERE id=?", (entity_id,))
+            # Children come back with their parent. The restore is meant to be the
+            # exact inverse of the delete, and the delete cascades on `parent_id` —
+            # so leaving a child deleted would restore a scene with no scene_beats,
+            # silently.
+            #
+            # Keyed on `parent_id` for every type rather than a per-type branch: the
+            # cascade is one fact (this row owned that row), and the list is what the
+            # delete already soft-deleted.
+            restored_children = [r[0] for r in conn.execute(
+                "SELECT id FROM entities WHERE parent_id=? AND is_deleted=1 "
+                "ORDER BY id", (entity_id,)).fetchall()]
+            if restored_children:
+                conn.execute(
+                    "UPDATE entities SET is_deleted=0, deleted_at=NULL "
+                    "WHERE parent_id=? AND is_deleted=1", (entity_id,))
     finally:
         conn.close()
 

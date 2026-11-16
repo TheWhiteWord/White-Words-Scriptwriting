@@ -102,7 +102,7 @@ def handler(args, **kwargs) -> str:
         return json.dumps({"error": str(e)})
 
     from story_architect.core.db import (
-        get_db, create_schema, has_schema, get_project_memory,
+        get_db, create_schema, has_schema, get_project_memory, transaction,
         empty_memory, validate_memory,
     )
 
@@ -172,7 +172,6 @@ def handler(args, **kwargs) -> str:
         ).fetchone()
         if not (project_path / "project.md").exists():
             if not project_exists:
-                conn.close()
                 return json.dumps({"error": "Project markdown not found and no project DB exists"})
             if imported_memory is not None:
                 extra = json.loads(project_exists[1]) if project_exists[1] else {}
@@ -181,34 +180,31 @@ def handler(args, **kwargs) -> str:
                     "UPDATE entities SET extra=? WHERE id=?",
                     (json.dumps(extra, ensure_ascii=False), project_exists[0]),
                 )
-            conn.close()
             return json.dumps({"success": True, "message": f"Imported memory for {project_path.name}"})
 
         # Last line of defence: the wipe below is irreversible from here.
         backup_path = _backup(project_path)
 
-        conn.execute("BEGIN")
-        _clear_all(conn)
-        _import_all(conn, project_path)
-        if imported_memory is not None:
-            row = conn.execute("SELECT id, extra FROM entities WHERE type='project' LIMIT 1").fetchone()
-            if row:
-                extra = json.loads(row[1]) if row[1] else {}
-                extra["memory"] = imported_memory
-                conn.execute("UPDATE entities SET extra=? WHERE id=?", (json.dumps(extra, ensure_ascii=False), row[0]))
-        elif existing_memory is not None:
-            row = conn.execute("SELECT id, extra FROM entities WHERE type='project' LIMIT 1").fetchone()
-            if row:
-                extra = json.loads(row[1]) if row[1] else {}
-                extra["memory"] = existing_memory
-                conn.execute("UPDATE entities SET extra=? WHERE id=?", (json.dumps(extra, ensure_ascii=False), row[0]))
-        conn.execute("COMMIT")
+        with transaction(conn):
+            _clear_all(conn)
+            _import_all(conn, project_path)
+            if imported_memory is not None:
+                row = conn.execute("SELECT id, extra FROM entities WHERE type='project' LIMIT 1").fetchone()
+                if row:
+                    extra = json.loads(row[1]) if row[1] else {}
+                    extra["memory"] = imported_memory
+                    conn.execute("UPDATE entities SET extra=? WHERE id=?", (json.dumps(extra, ensure_ascii=False), row[0]))
+            elif existing_memory is not None:
+                row = conn.execute("SELECT id, extra FROM entities WHERE type='project' LIMIT 1").fetchone()
+                if row:
+                    extra = json.loads(row[1]) if row[1] else {}
+                    extra["memory"] = existing_memory
+                    conn.execute("UPDATE entities SET extra=? WHERE id=?", (json.dumps(extra, ensure_ascii=False), row[0]))
     except Exception as e:
-        conn.execute("ROLLBACK")
-        conn.close()
         return json.dumps({"error": str(e)})
+    finally:
+        conn.close()
 
-    conn.close()
     return json.dumps({
         "success": True,
         "message": f"Imported {project_path.name}",

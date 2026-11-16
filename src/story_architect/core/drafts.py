@@ -343,10 +343,10 @@ def commit(project_path: Path, draft_id: str) -> dict:
     function that means what a create means, so there is one place where that
     meaning lives.
 
-    The guarantee is **atomic per op, resumable per batch**. `create_entity`
-    runs in autocommit and the rest wrap each call in their own
-    BEGIN/COMMIT, so a multi-op draft cannot be one transaction without
-    threading a shared connection through every write path in the plugin. On
+    The guarantee is **atomic per op, resumable per batch**. Each write
+    function opens its own connection and runs in its own transaction
+    (`core.db.transaction`), so a multi-op draft cannot be one transaction
+    without threading a shared connection through every write path. On
     failure the draft row is KEPT and the response names exactly what landed:
     the agent re-stages the remainder and commits again, and an op that
     already landed refuses correctly (a create whose id now exists fails on

@@ -38,41 +38,31 @@ def create_project(slug: str, frontmatter_data: dict, root_path: Path) -> dict:
     # Merge frontmatter over schema defaults
     merged = {field: frontmatter_data.get(field, meta["default"])
               for field, meta in schema.items()}
-    from .db import create_schema, empty_memory, get_db
+    from .db import create_schema, empty_memory, get_db, transaction
     from .entity import columns_for_insert, standard_sections
 
     conn = get_db(project_path)
     try:
         create_schema(conn)
-        conn.execute("BEGIN")
-        if conn.execute("SELECT id FROM entities WHERE type='project' LIMIT 1").fetchone():
-            conn.execute("ROLLBACK")
-            raise ValueError(f"Project already exists: {slug}")
+        with transaction(conn):
+            if conn.execute("SELECT id FROM entities WHERE type='project' LIMIT 1").fetchone():
+                raise ValueError(f"Project already exists: {slug}")
 
-        memory = empty_memory()
-        sections = standard_sections("project")
-        columns = columns_for_insert("project", slug, {**merged, "memory": memory})
-        conn.execute(
-            "INSERT INTO entities (id, type, name, one_sentence, order_key, status, parent_id, location_id, extra) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (columns["id"], columns["type"], columns["name"], columns["one_sentence"],
-             columns["order_key"], columns["status"], columns["parent_id"],
-             columns["location_id"], columns["extra"]),
-        )
-        if sections:
-            conn.executemany(
-                "INSERT INTO sections (entity_id, heading, body) VALUES (?, ?, ?)",
-                [(slug, heading, "") for heading in sections],
+            memory = empty_memory()
+            sections = standard_sections("project")
+            columns = columns_for_insert("project", slug, {**merged, "memory": memory})
+            conn.execute(
+                "INSERT INTO entities (id, type, name, one_sentence, order_key, status, parent_id, location_id, extra) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (columns["id"], columns["type"], columns["name"], columns["one_sentence"],
+                 columns["order_key"], columns["status"], columns["parent_id"],
+                 columns["location_id"], columns["extra"]),
             )
-        conn.execute("COMMIT")
-    except Exception:
-        # Autocommit is off for this block (explicit BEGIN), so a real ROLLBACK
-        # is the right cleanup — but never let it replace the cause.
-        try:
-            conn.execute("ROLLBACK")
-        except Exception:
-            pass
-        raise
+            if sections:
+                conn.executemany(
+                    "INSERT INTO sections (entity_id, heading, body) VALUES (?, ?, ?)",
+                    [(slug, heading, "") for heading in sections],
+                )
     finally:
         conn.close()
 
@@ -151,7 +141,7 @@ def create_entity(project_path: Path, entity_type: str, slug: str,
         raise ValueError("'sections' must be an object of {heading: text}")
     sections = {str(k): str(v) for k, v in sections.items()}
 
-    from .db import create_schema, get_db, has_schema
+    from .db import create_schema, get_db, has_schema, transaction
     from .entity import (columns_for_insert, relations_for_insert,
                          standard_sections)
 
@@ -274,66 +264,52 @@ def create_entity(project_path: Path, entity_type: str, slug: str,
         standard = standard_sections(entity_type)
         relations = relations_for_insert(entity_type, slug, merged)
 
-        conn.execute("BEGIN")
-        try:
-            conn.execute(
-                "INSERT INTO entities (id, type, name, one_sentence, order_key, status, parent_id, location_id, extra) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (columns["id"], columns["type"], columns["name"], columns["one_sentence"],
-                 columns["order_key"], columns["status"], columns["parent_id"],
-                 columns["location_id"], columns["extra"]),
-            )
-        except sqlite3.IntegrityError:
-            # The duplicate check above is a SELECT and this INSERT is a separate
-            # statement, so a second writer can land the same id in between. The
-            # primary key is the real guarantee — this only translates its error
-            # into the message the check would have produced, so a lost race
-            # reads the same as a caught duplicate instead of leaking
-            # "UNIQUE constraint failed: entities.id" to the user.
+        with transaction(conn):
             try:
-                conn.execute("ROLLBACK")
-            except Exception:
-                pass
-            raise ValueError(
-                f"Entity already exists: {entity_type}/{slug}. "
-                f"Edit it instead of creating it.") from None
+                conn.execute(
+                    "INSERT INTO entities (id, type, name, one_sentence, order_key, status, parent_id, location_id, extra) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (columns["id"], columns["type"], columns["name"], columns["one_sentence"],
+                     columns["order_key"], columns["status"], columns["parent_id"],
+                     columns["location_id"], columns["extra"]),
+                )
+            except sqlite3.IntegrityError:
+                # The duplicate check above is a SELECT and this INSERT is a separate
+                # statement, so a second writer can land the same id in between. The
+                # primary key is the real guarantee — this only translates its error
+                # into the message the check would have produced, so a lost race
+                # reads the same as a caught duplicate instead of leaking
+                # "UNIQUE constraint failed: entities.id" to the user.
+                raise ValueError(
+                    f"Entity already exists: {entity_type}/{slug}. "
+                    f"Edit it instead of creating it.") from None
 
-        # Every standard section is created; the caller's prose fills the ones
-        # given. Headings outside the set were rejected above, so these rows
-        # and `sections` are the same closed set.
-        section_rows = [(entity_id, heading, str(sections.get(heading, "")))
-                        for heading in standard]
-        if section_rows:
-            conn.executemany(
-                "INSERT INTO sections (entity_id, heading, body) VALUES (?, ?, ?)",
-                section_rows,
-            )
+            # Every standard section is created; the caller's prose fills the ones
+            # given. Headings outside the set were rejected above, so these rows
+            # and `sections` are the same closed set.
+            section_rows = [(entity_id, heading, str(sections.get(heading, "")))
+                            for heading in standard]
+            if section_rows:
+                conn.executemany(
+                    "INSERT INTO sections (entity_id, heading, body) VALUES (?, ?, ?)",
+                    section_rows,
+                )
 
-        for rel in relations:
-            conn.execute(
-                "INSERT INTO relations (from_id, to_id, kind, note, \"order\") VALUES (?, ?, ?, ?, ?)",
-                (rel["from_id"], rel["to_id"], rel["kind"], rel["note"], rel["order"]),
-            )
+            for rel in relations:
+                conn.execute(
+                    "INSERT INTO relations (from_id, to_id, kind, note, \"order\") VALUES (?, ?, ?, ?, ?)",
+                    (rel["from_id"], rel["to_id"], rel["kind"], rel["note"], rel["order"]),
+                )
 
-        # A scene's value turns resolve against the plots and value entities
-        # in the database: a turn names a value, and the words are that
-        # entity's. Validated inside this transaction, so scene and plot land
-        # together.
-        if entity_type == "scene":
-            from .entity import validate_scene_value_turns
-            validate_scene_value_turns(project_path,
-                                       merged.get("value_turns", []))
+            # A scene's value turns resolve against the plots and value entities
+            # in the database: a turn names a value, and the words are that
+            # entity's. Validated inside this transaction, so scene and plot land
+            # together.
+            if entity_type == "scene":
+                from .entity import validate_scene_value_turns
+                validate_scene_value_turns(project_path,
+                                           merged.get("value_turns", []))
 
-        conn.execute("COMMIT")
-    except Exception:
-        # Autocommit mode: there is no open transaction, so ROLLBACK itself
-        # raises and would replace the real error with "cannot rollback - no
-        # transaction is active". Never let cleanup hide the cause.
-        try:
-            conn.execute("ROLLBACK")
-        except Exception:
-            pass
-        raise
     finally:
         conn.close()
 
@@ -353,7 +329,7 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
     Schema fields route to entity columns or `extra`, section names to the
     sections table, and a relation field rewrites that kind's relation rows.
     """
-    from .db import get_db
+    from .db import get_db, transaction
 
     conn = get_db(project_path)
     try:
@@ -596,131 +572,124 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
         applied_sections = []
         applied_relations = []
 
-        conn.execute("BEGIN")
+        with transaction(conn):
 
-        # Update entity columns
-        if column_updates:
-            set_clause = ", ".join(f"{col}=?" for col in column_updates)
-            values = list(column_updates.values()) + [entity_id]
-            conn.execute(f"UPDATE entities SET {set_clause} WHERE id=?", values)
-            applied_fields.extend(column_updates)
+            # Update entity columns
+            if column_updates:
+                set_clause = ", ".join(f"{col}=?" for col in column_updates)
+                values = list(column_updates.values()) + [entity_id]
+                conn.execute(f"UPDATE entities SET {set_clause} WHERE id=?", values)
+                applied_fields.extend(column_updates)
 
-        # Update extra JSON
-        if extra_updates:
-            row = conn.execute(
-                "SELECT extra FROM entities WHERE id=?", (entity_id,)
-            ).fetchone()
-            extra = json.loads(row[0]) if row and row[0] else {}
-            extra.update(extra_updates)
-            conn.execute(
-                "UPDATE entities SET extra=? WHERE id=?",
-                (json.dumps(extra), entity_id)
-            )
-            applied_fields.extend(extra_updates)
+            # Update extra JSON
+            if extra_updates:
+                row = conn.execute(
+                    "SELECT extra FROM entities WHERE id=?", (entity_id,)
+                ).fetchone()
+                extra = json.loads(row[0]) if row and row[0] else {}
+                extra.update(extra_updates)
+                conn.execute(
+                    "UPDATE entities SET extra=? WHERE id=?",
+                    (json.dumps(extra), entity_id)
+                )
+                applied_fields.extend(extra_updates)
 
-        # A scene's value turns resolve against the plots and value entities
-        # in the database: a turn names a value, and the words are that
-        # entity's. Validated inside THIS transaction, so the scene and its
-        # turns land together or not at all. Validated before BEGIN above.
-        if entity_type == "scene" and value_turns:
-            from .entity import validate_scene_value_turns
-            validate_scene_value_turns(project_path, value_turns)
+            # A scene's value turns resolve against the plots and value entities
+            # in the database: a turn names a value, and the words are that
+            # entity's. Validated inside THIS transaction, so the scene and its
+            # turns land together or not at all. Validated before BEGIN above.
+            if entity_type == "scene" and value_turns:
+                from .entity import validate_scene_value_turns
+                validate_scene_value_turns(project_path, value_turns)
 
-        # Create/update relation rows for all _RELATION_FIELDS of this entity type
-        for field, (kind, is_list) in rel_fields.items():
-            if field not in data:
-                continue
-            # Delete old relations of this kind for this entity. The key column
-            # follows the stored direction — a reversed kind (a scene's cast) is
-            # keyed on to_id, not from_id. See entity.relation_endpoints.
-            own_col = "to_id" if kind in REVERSED_RELATION_KINDS else "from_id"
-            conn.execute(
-                f"DELETE FROM relations WHERE {own_col}=? AND kind=?", (entity_id, kind)
-            )
-            value = data[field]
-            if is_list:
-                if not isinstance(value, list):
+            # Create/update relation rows for all _RELATION_FIELDS of this entity type
+            for field, (kind, is_list) in rel_fields.items():
+                if field not in data:
                     continue
-                for i, beat in enumerate(value):
-                    target, note = relation_entry(beat)
-                    if target:
-                        from_id, to_id = relation_endpoints(entity_id, kind, target)
+                # Delete old relations of this kind for this entity. The key column
+                # follows the stored direction — a reversed kind (a scene's cast) is
+                # keyed on to_id, not from_id. See entity.relation_endpoints.
+                own_col = "to_id" if kind in REVERSED_RELATION_KINDS else "from_id"
+                conn.execute(
+                    f"DELETE FROM relations WHERE {own_col}=? AND kind=?", (entity_id, kind)
+                )
+                value = data[field]
+                if is_list:
+                    if not isinstance(value, list):
+                        continue
+                    for i, beat in enumerate(value):
+                        target, note = relation_entry(beat)
+                        if target:
+                            from_id, to_id = relation_endpoints(entity_id, kind, target)
+                            conn.execute(
+                                "INSERT INTO relations (from_id, to_id, kind, note, \"order\") VALUES (?, ?, ?, ?, ?)",
+                                (from_id, to_id, kind, note, i + 1)
+                            )
+                else:
+                    # Non-list: single string value
+                    if value:
+                        from_id, to_id = relation_endpoints(entity_id, kind, str(value))
                         conn.execute(
-                            "INSERT INTO relations (from_id, to_id, kind, note, \"order\") VALUES (?, ?, ?, ?, ?)",
-                            (from_id, to_id, kind, note, i + 1)
+                            "INSERT INTO relations (from_id, to_id, kind) VALUES (?, ?, ?)",
+                            (from_id, to_id, kind)
                         )
-            else:
-                # Non-list: single string value
-                if value:
-                    from_id, to_id = relation_endpoints(entity_id, kind, str(value))
+                applied_relations.append(field)
+
+            # A scene's location lives in the column AND in a reverse-index
+            # relation. Re-derive the relation whenever the column is touched, and
+            # delete the old one first — a scene that moved must not keep claiming
+            # its previous location, which is what makes a location look used when
+            # no scene is there any more. See entity.location_scene_relations.
+            # Keyed by COLUMN name, because column_updates is.
+            if entity_type == "scene" and "location_id" in column_updates:
+                conn.execute(
+                    "DELETE FROM relations WHERE to_id=? AND kind='location_scene'",
+                    (entity_id,),
+                )
+                new_location = column_updates["location_id"]
+                if new_location:
                     conn.execute(
-                        "INSERT INTO relations (from_id, to_id, kind) VALUES (?, ?, ?)",
-                        (from_id, to_id, kind)
+                        "INSERT INTO relations (from_id, to_id, kind, note, \"order\") "
+                        "VALUES (?, ?, 'location_scene', '', 1)",
+                        (str(new_location), entity_id),
                     )
-            applied_relations.append(field)
+                applied_relations.append("location")
 
-        # A scene's location lives in the column AND in a reverse-index
-        # relation. Re-derive the relation whenever the column is touched, and
-        # delete the old one first — a scene that moved must not keep claiming
-        # its previous location, which is what makes a location look used when
-        # no scene is there any more. See entity.location_scene_relations.
-        # Keyed by COLUMN name, because column_updates is.
-        if entity_type == "scene" and "location_id" in column_updates:
-            conn.execute(
-                "DELETE FROM relations WHERE to_id=? AND kind='location_scene'",
-                (entity_id,),
-            )
-            new_location = column_updates["location_id"]
-            if new_location:
+            # A scene's plot roles are one field to FIVE kinds (the entry's role
+            # picks the kind), so the generic loop above cannot express them —
+            # and keyed on `from_id` it would not fire at all, since the PLOT owns
+            # the row. Delete-then-reinsert on `to_id`, which is the
+            # delete-then-reinsert contract: an entry removed from `plot_roles`
+            # leaves no row behind. See entity.plot_role_relations.
+            if entity_type == "scene" and "plot_roles" in data:
+                from .entity import (check_references, plot_role_relations,
+                                     validate_scene_plot_roles)
+                validate_scene_plot_roles(project_path, data["plot_roles"],
+                                          scene_id=entity_id, conn=conn)
+                check_references(project_path, entity_type,
+                                 {"plot_roles": data["plot_roles"]})
                 conn.execute(
-                    "INSERT INTO relations (from_id, to_id, kind, note, \"order\") "
-                    "VALUES (?, ?, 'location_scene', '', 1)",
-                    (str(new_location), entity_id),
+                    "DELETE FROM relations WHERE to_id=? AND kind LIKE 'plot_%'",
+                    (entity_id,),
                 )
-            applied_relations.append("location")
+                for rel in plot_role_relations(entity_id, data["plot_roles"]):
+                    conn.execute(
+                        "INSERT INTO relations (from_id, to_id, kind, note, \"order\") "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (rel["from_id"], rel["to_id"], rel["kind"], rel["note"],
+                         rel["order"]),
+                    )
+                applied_relations.append("plot_roles")
 
-        # A scene's plot roles are one field to FIVE kinds (the entry's role
-        # picks the kind), so the generic loop above cannot express them —
-        # and keyed on `from_id` it would not fire at all, since the PLOT owns
-        # the row. Delete-then-reinsert on `to_id`, which is the
-        # delete-then-reinsert contract: an entry removed from `plot_roles`
-        # leaves no row behind. See entity.plot_role_relations.
-        if entity_type == "scene" and "plot_roles" in data:
-            from .entity import (check_references, plot_role_relations,
-                                 validate_scene_plot_roles)
-            validate_scene_plot_roles(project_path, data["plot_roles"],
-                                      scene_id=entity_id, conn=conn)
-            check_references(project_path, entity_type,
-                             {"plot_roles": data["plot_roles"]})
-            conn.execute(
-                "DELETE FROM relations WHERE to_id=? AND kind LIKE 'plot_%'",
-                (entity_id,),
-            )
-            for rel in plot_role_relations(entity_id, data["plot_roles"]):
+            # Upsert sections
+            for heading, body in section_updates.items():
                 conn.execute(
-                    "INSERT INTO relations (from_id, to_id, kind, note, \"order\") "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (rel["from_id"], rel["to_id"], rel["kind"], rel["note"],
-                     rel["order"]),
+                    "INSERT INTO sections (entity_id, heading, body) VALUES (?, ?, ?) "
+                    "ON CONFLICT(entity_id, heading) DO UPDATE SET body=excluded.body",
+                    (entity_id, heading, body)
                 )
-            applied_relations.append("plot_roles")
+                applied_sections.append(heading)
 
-        # Upsert sections
-        for heading, body in section_updates.items():
-            conn.execute(
-                "INSERT INTO sections (entity_id, heading, body) VALUES (?, ?, ?) "
-                "ON CONFLICT(entity_id, heading) DO UPDATE SET body=excluded.body",
-                (entity_id, heading, body)
-            )
-            applied_sections.append(heading)
-
-        conn.execute("COMMIT")
-    except Exception:
-        try:
-            conn.execute("ROLLBACK")
-        except Exception:
-            pass
-        raise
     finally:
         conn.close()
 
@@ -813,115 +782,121 @@ def delete_entity(project_path: Path, entity_type: str, slug: str,
     """
     from datetime import datetime
 
-    from .db import get_db
+    from .db import get_db, transaction
 
     conn = get_db(project_path)
     try:
-        entity_id = _find_entity_id_db(conn, entity_type, slug)
-        if not entity_id:
-            raise ValueError(f"Entity not found: {entity_type}/{slug}")
+        # One transaction around the checks *and* the writes. The checks (does it
+        # have structural children?) must still hold when the flags are written,
+        # and a delete that stops half-way would leave an entity flagged with its
+        # inbound relations gone, or children flagged under a live parent. The
+        # refusal returns below commit an empty transaction, which is harmless.
+        with transaction(conn):
+            entity_id = _find_entity_id_db(conn, entity_type, slug)
+            if not entity_id:
+                raise ValueError(f"Entity not found: {entity_type}/{slug}")
 
-        # Cascade block: structural types (containment hierarchy)
-        # Derived from DB: any entity whose parent_id points to this one is a child
-        children = conn.execute(
-            "SELECT id, type FROM entities WHERE parent_id=?", (entity_id,)
-        ).fetchall()
-        structural = [c for c in children if c[1] in ("scene", "sequence")]
+            # Cascade block: structural types (containment hierarchy)
+            # Derived from DB: any entity whose parent_id points to this one is a child
+            children = conn.execute(
+                "SELECT id, type FROM entities WHERE parent_id=?", (entity_id,)
+            ).fetchall()
+            structural = [c for c in children if c[1] in ("scene", "sequence")]
 
-        affected_rels = []
-        for r in conn.execute(
-                "SELECT id, extra FROM entities WHERE type='relationship' AND is_deleted=0"
-        ).fetchall():
-            try:
-                ex = json.loads(r[1]) if r[1] else {}
-            except Exception:
-                ex = {}
-            if entity_id in (ex.get("characters") or []):
-                affected_rels.append(r[0])
+            affected_rels = []
+            for r in conn.execute(
+                    "SELECT id, extra FROM entities WHERE type='relationship' AND is_deleted=0"
+            ).fetchall():
+                try:
+                    ex = json.loads(r[1]) if r[1] else {}
+                except Exception:
+                    ex = {}
+                if entity_id in (ex.get("characters") or []):
+                    affected_rels.append(r[0])
 
-        if not confirm:
-            # What goes, and why it is being held back.
-            sections = conn.execute(
-                "SELECT COUNT(*) FROM sections WHERE entity_id=?", (entity_id,)
-            ).fetchone()[0]
-            relations = conn.execute(
-                "SELECT COUNT(*) FROM relations WHERE from_id=? OR to_id=?",
-                (entity_id, entity_id)).fetchone()[0]
-            return {
-                "error": "Delete refused without confirm. Nothing has changed yet.",
-                "entity_id": entity_id,
-                "entity_type": entity_type,
-                "would_delete": [entity_id] + [c[0] for c in children],
-                "cascade_children": [{"id": c[0], "type": c[1]} for c in children],
-                "affected_relationships": affected_rels,
-                "sections_deleted": sections,
-                "relations_deleted": relations,
-                # The report above IS the preview, so dry_run has nothing left
-                # to add here: it would return this same payload. See the test
-                # that asserts dry_run == the refusal.
-                "action_required": (
-                    "Review would_delete / cascade_children / sections_deleted above, "
-                    "then re-run with confirm=true to flag them deleted. This is "
-                    "reversible: restore undoes it."
-                ),
-            }
+            if not confirm:
+                # What goes, and why it is being held back.
+                sections = conn.execute(
+                    "SELECT COUNT(*) FROM sections WHERE entity_id=?", (entity_id,)
+                ).fetchone()[0]
+                relations = conn.execute(
+                    "SELECT COUNT(*) FROM relations WHERE from_id=? OR to_id=?",
+                    (entity_id, entity_id)).fetchone()[0]
+                return {
+                    "error": "Delete refused without confirm. Nothing has changed yet.",
+                    "entity_id": entity_id,
+                    "entity_type": entity_type,
+                    "would_delete": [entity_id] + [c[0] for c in children],
+                    "cascade_children": [{"id": c[0], "type": c[1]} for c in children],
+                    "affected_relationships": affected_rels,
+                    "sections_deleted": sections,
+                    "relations_deleted": relations,
+                    # The report above IS the preview, so dry_run has nothing left
+                    # to add here: it would return this same payload. See the test
+                    # that asserts dry_run == the refusal.
+                    "action_required": (
+                        "Review would_delete / cascade_children / sections_deleted above, "
+                        "then re-run with confirm=true to flag them deleted. This is "
+                        "reversible: restore undoes it."
+                    ),
+                }
 
-        # Checked after the consent gate and never gated by it: a structural child
-        # means the delete is refused outright, confirm or not.
-        if structural:
-            return {
-                "error": (
-                    f"Cannot delete: {len(structural)} structural child(ren) reference this: "
-                    f"{', '.join(c[0] for c in structural[:5])}. Delete or move them first."
-                ),
-                "entity_id": entity_id,
-                "blocking_children": [{"id": c[0], "type": c[1]} for c in structural],
-                "hint": "Reorder or re-parent them instead, or delete them first.",
-            }
+            # Checked after the consent gate and never gated by it: a structural child
+            # means the delete is refused outright, confirm or not.
+            if structural:
+                return {
+                    "error": (
+                        f"Cannot delete: {len(structural)} structural child(ren) reference this: "
+                        f"{', '.join(c[0] for c in structural[:5])}. Delete or move them first."
+                    ),
+                    "entity_id": entity_id,
+                    "blocking_children": [{"id": c[0], "type": c[1]} for c in structural],
+                    "hint": "Reorder or re-parent them instead, or delete them first.",
+                }
 
-        # Soft delete: flag the row instead of removing it. Sections and
-        # relations are left intact, so `restore` is an exact inverse — a hard
-        # delete would have to reconstruct all of it, and could not do it
-        # faithfully.
-        stamp = datetime.now().isoformat(timespec="seconds")
-        for child_id, child_type in children:
+            # Soft delete: flag the row instead of removing it. Sections and
+            # relations are left intact, so `restore` is an exact inverse — a hard
+            # delete would have to reconstruct all of it, and could not do it
+            # faithfully.
+            stamp = datetime.now().isoformat(timespec="seconds")
+            for child_id, child_type in children:
+                conn.execute(
+                    "UPDATE entities SET is_deleted=1, deleted_at=? WHERE id=?",
+                    (stamp, child_id))
             conn.execute(
                 "UPDATE entities SET is_deleted=1, deleted_at=? WHERE id=?",
-                (stamp, child_id))
-        conn.execute(
-            "UPDATE entities SET is_deleted=1, deleted_at=? WHERE id=?",
-            (stamp, entity_id))
+                (stamp, entity_id))
 
-        deleted_ids = {entity_id} | {c[0] for c in children}
+            deleted_ids = {entity_id} | {c[0] for c in children}
 
-        # Relations *owned by* a deleted entity survive, so restore can put
-        # them back. Relations *pointing at* one must go: a live character
-        # pointing at a dead scene is the dangling state this whole function
-        # exists to prevent.
-        for dead_id in deleted_ids:
-            conn.execute(
-                "DELETE FROM relations WHERE from_id NOT IN "
-                "(SELECT id FROM entities WHERE is_deleted=1) AND to_id=?",
-                (dead_id,))
+            # Relations *owned by* a deleted entity survive, so restore can put
+            # them back. Relations *pointing at* one must go: a live character
+            # pointing at a dead scene is the dangling state this whole function
+            # exists to prevent.
+            for dead_id in deleted_ids:
+                conn.execute(
+                    "DELETE FROM relations WHERE from_id NOT IN "
+                    "(SELECT id FROM entities WHERE is_deleted=1) AND to_id=?",
+                    (dead_id,))
 
-        # Plot roles are the one case the sweep above cannot reach: the PLOT
-        # owns the row, so deleting a plot leaves it behind. Every reader
-        # filters on `to_id` only, so the row becomes unreachable while the
-        # plot is dead — and silently reattaches if a plot is recreated with
-        # the same slug.
-        #
-        # Cost, accepted: restore puts the plot entity back but not its role
-        # rows, so restore is no longer an exact inverse for these. A lost role
-        # row is recoverable by rewriting the scene; a role that reattaches to
-        # the wrong plot is not, and nothing reports it.
-        for dead_id in deleted_ids:
-            conn.execute(
-                "DELETE FROM relations WHERE from_id=? AND kind LIKE 'plot_%'",
-                (dead_id,))
+            # Plot roles are the one case the sweep above cannot reach: the PLOT
+            # owns the row, so deleting a plot leaves it behind. Every reader
+            # filters on `to_id` only, so the row becomes unreachable while the
+            # plot is dead — and silently reattaches if a plot is recreated with
+            # the same slug.
+            #
+            # Cost, accepted: restore puts the plot entity back but not its role
+            # rows, so restore is no longer an exact inverse for these. A lost role
+            # row is recoverable by rewriting the scene; a role that reattaches to
+            # the wrong plot is not, and nothing reports it.
+            for dead_id in deleted_ids:
+                conn.execute(
+                    "DELETE FROM relations WHERE from_id=? AND kind LIKE 'plot_%'",
+                    (dead_id,))
 
-        # References held in other entities' extra must still be scrubbed, or a
-        # deleted id would be handed out as a valid target by story_load.
-        depurged, detached = _purge_references(conn, deleted_ids)
+            # References held in other entities' extra must still be scrubbed, or a
+            # deleted id would be handed out as a valid target by story_load.
+            depurged, detached = _purge_references(conn, deleted_ids)
     finally:
         conn.close()
 
@@ -953,7 +928,7 @@ def reorder(project_path: Path, entity_type: str, ordered_ids: list,
     belong to the same parent; order is renumbered 1, 2, 3, ... from the list.
     Single DB transaction: BEGIN → UPDATE order_key for each item → COMMIT.
     """
-    from .db import get_db
+    from .db import get_db, transaction
 
     if entity_type not in REORDERABLE_TYPES:
         raise ValueError(f"Reorder not supported for {entity_type}")
@@ -980,19 +955,12 @@ def reorder(project_path: Path, entity_type: str, ordered_ids: list,
             raise ValueError(f"{entity_type} {ordered_ids[0]} has no parent")
 
         # Renumber: 1, 2, 3, ... in a single transaction
-        conn.execute("BEGIN")
-        for i, item_id in enumerate(ordered_ids, 1):
-            conn.execute(
-                "UPDATE entities SET order_key=? WHERE id=?",
-                (i, item_id),
-            )
-        conn.execute("COMMIT")
-    except Exception:
-        try:
-            conn.execute("ROLLBACK")
-        except Exception:
-            pass
-        raise
+        with transaction(conn):
+            for i, item_id in enumerate(ordered_ids, 1):
+                conn.execute(
+                    "UPDATE entities SET order_key=? WHERE id=?",
+                    (i, item_id),
+                )
     finally:
         conn.close()
 

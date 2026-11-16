@@ -1,6 +1,8 @@
 """Database connection, schema creation, and table existence checks."""
+import itertools
 import json
 import sqlite3
+from contextlib import contextmanager
 
 import yaml
 from pathlib import Path
@@ -109,9 +111,10 @@ def ensure_soft_delete_columns(conn: sqlite3.Connection) -> None:
 def get_db(project_path: Path) -> sqlite3.Connection:
     """Open a short-lived connection with WAL mode and busy_timeout.
 
-    Uses autocommit mode (isolation_level=None) — callers explicitly
-    BEGIN/COMMIT/ROLLBACK for transactions. Avoids nested-transaction errors
-    from SQLite's implicit transaction behavior.
+    Uses autocommit mode (isolation_level=None): nothing is transactional
+    unless the caller says so. Wrap every write that spans more than one
+    statement in ``with transaction(conn):`` (below) — never issue BEGIN /
+    COMMIT / ROLLBACK by hand.
 
     Also repairs a database this build did not create: a project made by an
     earlier build has no ``drafts`` table and no soft-delete columns, and a
@@ -133,6 +136,63 @@ def get_db(project_path: Path) -> sqlite3.Connection:
     ).fetchone():
         ensure_draft_status_column(conn)
     return conn
+
+
+_savepoint_ids = itertools.count(1)
+
+
+def _quietly(conn: sqlite3.Connection, sql: str) -> None:
+    """Run cleanup SQL, ignoring its failure so it cannot mask the real error."""
+    try:
+        conn.execute(sql)
+    except sqlite3.Error:
+        pass
+
+
+@contextmanager
+def transaction(conn: sqlite3.Connection):
+    """All-or-nothing block for a connection from :func:`get_db`.
+
+        with transaction(conn):
+            conn.execute("UPDATE ...")
+            conn.execute("DELETE ...")
+
+    Commits when the block ends (a ``return`` inside it also commits) and rolls
+    everything back if the block raises, re-raising the original error.
+
+    It starts with ``BEGIN IMMEDIATE``, which takes the write lock up front. A
+    plain ``BEGIN`` waits until the first write, and a block that reads first
+    and writes second (check-then-write) then fails at once with "database is
+    locked" if another writer committed in between — ``busy_timeout`` does not
+    apply to that case. With the lock held from the start, a second writer
+    waits its turn instead. The reads inside the block also see a state no one
+    else can change until it ends.
+
+    Used inside a transaction that is already open, it becomes a SAVEPOINT: an
+    error undoes only the inner block, and the outer transaction decides what
+    happens next.
+    """
+    if conn.in_transaction:
+        name = f"sp_{next(_savepoint_ids)}"
+        conn.execute(f"SAVEPOINT {name}")
+        try:
+            yield conn
+        except BaseException:
+            _quietly(conn, f"ROLLBACK TO {name}")
+            _quietly(conn, f"RELEASE {name}")
+            raise
+        else:
+            conn.execute(f"RELEASE {name}")
+        return
+
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        yield conn
+        conn.execute("COMMIT")
+    except BaseException:
+        if conn.in_transaction:
+            _quietly(conn, "ROLLBACK")
+        raise
 
 
 def backup_database(project_path: Path) -> str:
