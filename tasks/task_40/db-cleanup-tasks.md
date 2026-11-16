@@ -62,7 +62,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 
 ### Phase A — Bugs (do first)
 
-- [ ] **A1. Live-update stream never fires.**
+- [x] **A1. Live-update stream never fires.** *(patch 01 — done 2026-11-16)*
   `app/routes/projects.py` `/events` opens a *new* SQLite connection every
   second and reads `PRAGMA data_version`. That value only changes for commits
   made by *other* connections while *this* one stays open. Verified with a
@@ -70,6 +70,13 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   Fix: open one connection before the loop and poll on it. Also check the
   frontend for a fallback that hides the problem.
   Test: write from a second connection, assert an `update` event is emitted.
+  *Result:* new `DbChangeWatcher` + `event_stream()` in `app/routes/projects.py`
+  (one persistent read-only connection; reopens if the db file is replaced, so
+  it will survive the backup-restore in C4; never creates an empty db). Verified
+  end to end against a real uvicorn server: original code sends the client
+  nothing after an external write, patched code sends the `update` event.
+  The frontend (`web/js/core.js` `watchUpdates`) had no fallback, so the
+  "Project updated" banner never appeared before this fix. Frontend unchanged.
 
 - [ ] **A2. Transaction helper; stop running multi-statement writes in
   autocommit.** `delete_entity`, `create_entity` (and the `manual_*` write
@@ -188,7 +195,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 
 | Patch file | Task | Base | Applied by user? | Notes |
 |---|---|---|---|---|
-| — | — | — | — | none yet |
+| `01-A1-live-update-stream.patch` | A1 | dev @ 4e15cc2 | pending | +7 tests (1336 pass, same 1 baseline failure). Touches `app/routes/projects.py`, adds `tests/test_db_change_watcher.py` |
 
 ## 6. Session notes
 
@@ -196,6 +203,15 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   delete_entity, drafts.commit, story_import, version tokens, SSE route, chat
   store), baseline recorded, this file created. No patches produced yet.
   Suggested start: A1, then A2.
+- 2026-11-16 — Session 1 (cont.): A1 done → patch 01. Base used: dev @ 4e15cc2
+  (includes this task folder). Suite is now 1336 passed + 1 baseline failure.
+  Next: A2 (transaction helper).
+  Practical notes for the next instance: (a) background servers die when the
+  tool call's shell ends — start the server, run the client and kill it all in
+  one bash call; (b) never `pkill -f` a pattern that appears in your own
+  command line; (c) `get_db()` takes the *project folder*, not the db path;
+  (d) tests create SQLite connections per thread — a connection can't be used
+  from another thread.
 
 ## 7. Things that are fine, leave alone
 
