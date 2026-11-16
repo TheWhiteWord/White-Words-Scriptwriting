@@ -8,6 +8,7 @@ from pathlib import Path
 from .constants import (MEMORY_CATEGORIES, MEMORY_CHAR_LIMIT, MEMORY_ENTRY_LIMIT,
                         ENTITY_SCHEMAS, PLOT_ROLES)
 from .entity import PLOT_BEAT_FIELDS
+from .scene_script import scene_heading
 
 # The plot beat vocabulary read the other way, for the two lookups that key on
 # the relation kind. Field names are not role names pluralised (`crisis` stays
@@ -83,9 +84,9 @@ def ensure_draft_status_column(conn: sqlite3.Connection) -> None:
     table that already exists.
 
     The *table* itself needs no such repair — create_schema makes it, and
-    create_project is the only way a real database comes into being. That
-    reasoning is recorded in tests/test_legacy_db_migration.py and still holds;
-    only the column is new.
+    create_project is the only way a real database comes into being; that
+    reasoning is recorded in tests/test_legacy_db_migration.py, which covers the
+    table only.
     """
     if "status" not in {r[1] for r in conn.execute("PRAGMA table_info(drafts)")}:
         conn.execute("ALTER TABLE drafts ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
@@ -1016,7 +1017,8 @@ def get_dashboard_data(project_path: Path) -> dict:
     Returns dict with keys:
       story_data: column-oriented entities (for __STORY_DATA__)
       sections: {entity_id: {heading: body}} (for __SECTIONS__)
-      screenplay_text: concatenated scene ## Content (for __SCREENPLAY_STATS__)
+      screenplay_text: each scene's composed heading + Content (for __SCREENPLAY_STATS__)
+      screenplay_scene_headings: {text, id} per composed heading, in order (for __SCREENPLAY_STATS__)
       structural_stats: status/role counts (for __STRUCTURAL_STATS__)
       title_page: project frontmatter fields (for title page)
     """
@@ -1099,6 +1101,41 @@ def get_dashboard_data(project_path: Path) -> dict:
             elif kind in ("location_variant", "world_variant"):
                 variant_map[from_id] = to_id
 
+        # Computed places: distinct non-empty `place` of each location's scenes,
+        # derived on read so a scene written with a new place appears here next
+        # time without maintenance.
+        places_by_location: dict[str, list[str]] = {}
+        for sid, loc_ids in scene_locs.items():
+            scene = entity_by_id.get(sid)
+            if not scene or scene.get("type") != "scene":
+                continue
+            place = (scene.get("extra", {}).get("place") or "").strip()
+            if not place:
+                continue
+            for lid in loc_ids:
+                bucket = places_by_location.setdefault(lid, [])
+                if place not in bucket:
+                    bucket.append(place)
+        for bucket in places_by_location.values():
+            bucket.sort()
+
+        # A scene's heading line, composed from its fields by the same composer
+        # the assembled screenplay uses, so the dashboard and the script agree.
+        # Keyed by scene id: the scene list and the character / location scene
+        # refs all read it.
+        scene_headings = {}
+        for eid, e in entity_by_id.items():
+            if e["type"] != "scene":
+                continue
+            loc = entity_by_id.get(e["location_id"], {}) if e["location_id"] else {}
+            scene_headings[eid] = scene_heading(
+                e["extra"].get("int_ext", ""),
+                loc.get("name", ""),
+                e["extra"].get("place", ""),
+                e["extra"].get("time_of_day", ""),
+                e["extra"].get("forced_heading", ""),
+            )
+
         # Plot scopes for milestone derivation (main plot's roles are milestones)
         plot_scopes = {}
         for e in ent_rows:
@@ -1146,11 +1183,10 @@ def get_dashboard_data(project_path: Path) -> dict:
                 for sid in char_scenes.get(eid, []):
                     if sid in entity_by_id:
                         s = entity_by_id[sid]
-                        s_extra = s.get("extra", {})
                         scene_objs.append({
                             "id": sid,
                             "title": s.get("name", ""),
-                            "heading": s_extra.get("heading", ""),
+                            "heading": scene_headings.get(sid, ""),
                         })
                 d["scenes"] = scene_objs
                 characters.append(d)
@@ -1180,6 +1216,7 @@ def get_dashboard_data(project_path: Path) -> dict:
                 d["scene_objective"] = (
                     extra.get("scene_objective", "")
                     or scene_beats_by_scene.get(eid, {}).get("scene_objective", ""))
+                d["heading"] = scene_headings.get(eid, "")
                 scenes.append(d)
 
             elif etype == "location":
@@ -1195,13 +1232,13 @@ def get_dashboard_data(project_path: Path) -> dict:
                     sid = rel.get("to_id", "") if isinstance(rel, dict) else rel
                     if sid in entity_by_id:
                         s = entity_by_id[sid]
-                        s_extra = s.get("extra", {})
                         scene_objs.append({
                             "id": sid,
                             "title": s.get("name", ""),
-                            "heading": s_extra.get("heading", ""),
+                            "heading": scene_headings.get(sid, ""),
                         })
                 d["scenes"] = scene_objs
+                d["places"] = places_by_location.get(eid, [])
                 locations.append(d)
 
             elif etype == "plot":
@@ -1277,6 +1314,20 @@ def get_dashboard_data(project_path: Path) -> dict:
                     "note": extra.get("note", ""),
                 })
 
+        # A scene's number is its position in its sequence, not its raw
+        # `order_key`. The key is a sort key and can hold a hole — a scene
+        # deleted and replaced, or one moved in by the agent — and a hole in the
+        # number column reads as a scene that went missing. The Reorder view
+        # numbers by position, so the Scenes tab and Reorder agree. The key is
+        # left in place: the number is derived on read, never written back.
+        scenes_by_sequence = {}
+        for s in scenes:
+            scenes_by_sequence.setdefault(s["parent_id"], []).append(s)
+        for group in scenes_by_sequence.values():
+            group.sort(key=lambda s: (s["order"], s["id"]))
+            for position, s in enumerate(group, 1):
+                s["number"] = position
+
         # Computed character relationship summary for dashboard (richer than load — includes strength)
         char_rel_summary = {}
         for rel in relationships:
@@ -1299,7 +1350,7 @@ def get_dashboard_data(project_path: Path) -> dict:
         for seq in sequences:
             scenes_in_seq = sorted(
                 [s for s in scenes if s.get("parent_id") == seq["id"]],
-                key=lambda s: s.get("order", 0)
+                key=lambda s: (s.get("order", 0), s["id"])
             )
             seq["scenes_list"] = [s["id"] for s in scenes_in_seq]
             seq["scene_count"] = len(seq["scenes_list"])
@@ -1328,7 +1379,7 @@ def get_dashboard_data(project_path: Path) -> dict:
         for act in acts:
             seqs_in_act = sorted(
                 [s for s in sequences if s.get("parent_id") == act["id"]],
-                key=lambda s: s.get("order", 0)
+                key=lambda s: (s.get("order", 0), s["id"])
             )
             act["sequences_list"] = [s["id"] for s in seqs_in_act]
             # Gather all scene IDs from child sequences, preserving sort order
@@ -1336,7 +1387,8 @@ def get_dashboard_data(project_path: Path) -> dict:
             act_scene_ids = []
             for seq in seqs_in_act:
                 act_scene_ids.extend(seq.get("scenes_list", []))
-            act["scenes_list"] = sorted(act_scene_ids, key=lambda sid: seq_order.get(sid, 0))
+            act["scenes_list"] = sorted(act_scene_ids,
+                                        key=lambda sid: (seq_order.get(sid, 0), sid))
             act["sequence_count"] = len(act["sequences_list"])
             act["scene_count"] = len(act["scenes_list"])
             # Aggregate plots from all scenes in child sequences
@@ -1431,17 +1483,9 @@ def get_dashboard_data(project_path: Path) -> dict:
                 sections[entity_type][entity_id] = {}
             sections[entity_type][entity_id][heading] = body
 
-        # 3. screenplay_text — scene ## Content concatenated in order
-        scene_content_rows = conn.execute(
-            """SELECT s.body, e.id, e.order_key, p.order_key as parent_order
-               FROM sections s
-               JOIN entities e ON s.entity_id = e.id
-               LEFT JOIN entities p ON e.parent_id = p.id
-               WHERE e.type='scene' AND e.is_deleted=0 AND s.heading='Content' AND s.body != ''
-               ORDER BY COALESCE(p.order_key, 0), e.order_key"""
-        ).fetchall()
-        screenplay_text = "\n\n".join(r[0] for r in scene_content_rows)
-        screenplay_scene_ids = [r[1] for r in scene_content_rows]
+        # 3. screenplay_text — each scene's composed heading + body, in order
+        scene_content_rows = _screenplay_rows(conn)
+        screenplay_text, screenplay_scene_headings = _compose_screenplay(scene_content_rows)
 
         # 4. structural_stats
         status_rows = conn.execute(
@@ -1556,7 +1600,7 @@ def get_dashboard_data(project_path: Path) -> dict:
             "story_data": story_data,
             "sections": sections,
             "screenplay_text": screenplay_text,
-            "screenplay_scene_ids": screenplay_scene_ids,
+            "screenplay_scene_headings": screenplay_scene_headings,
             "structural_stats": structural_stats,
             "title_page": title_page_data,
         }
@@ -1564,18 +1608,63 @@ def get_dashboard_data(project_path: Path) -> dict:
         conn.close()
 
 
+def _compose_screenplay(rows) -> tuple[str, list[dict]]:
+    """Compose each scene's heading line from its fields and join the entries.
+
+    `rows` are `(body, entity_id, extra_json, location_name)`. Returns the
+    assembled text and, for each scene whose entry carries a heading, the
+    `{text, id}` pair of the line composed for it — so a reader matches a
+    rendered heading to its scene by text, never by position. A scene with
+    Content but no heading fields contributes its body alone.
+    """
+    parts: list[str] = []
+    scene_headings: list[dict] = []
+    for body, entity_id, extra_json, location_name in rows:
+        extra = json.loads(extra_json) if extra_json else {}
+        heading = scene_heading(
+            extra.get("int_ext", ""),
+            location_name or "",
+            extra.get("place", ""),
+            extra.get("time_of_day", ""),
+            extra.get("forced_heading", ""),
+        )
+        if heading:
+            parts.append(f"{heading}\n\n{body}")
+            scene_headings.append({"text": heading, "id": entity_id})
+        else:
+            parts.append(body)
+    return "\n\n".join(parts), scene_headings
+
+
 def get_screenplay_text(project_path: Path) -> str:
-    """Concatenate scene ## Content sections from DB, ordered by act→sequence→scene."""
+    """Compose each scene's heading + Content, ordered by act→sequence→scene."""
     conn = get_db(project_path)
     try:
-        rows = conn.execute(
-            """SELECT s.body FROM sections s
-               JOIN entities e ON s.entity_id = e.id
-               LEFT JOIN entities p ON e.parent_id = p.id
-               LEFT JOIN entities pp ON p.parent_id = pp.id
-               WHERE e.type='scene' AND e.is_deleted=0 AND s.heading='Content' AND s.body != ''
-               ORDER BY COALESCE(pp.order_key, 0), COALESCE(p.order_key, 0), e.order_key"""
-        ).fetchall()
-        return "\n\n".join(r[0] for r in rows)
+        return _compose_screenplay(_screenplay_rows(conn))[0]
     finally:
         conn.close()
+
+
+def _screenplay_rows(conn: sqlite3.Connection) -> list:
+    """Every scene's Content row in story order: act → sequence → scene.
+
+    The one query both assembly paths read, so the dashboard's script and
+    `get_screenplay_text` cannot drift apart again.
+
+    Sequence order keys restart in every act, so the act has to be part of the
+    key. Ordering by sequence order alone — which the dashboard did — sorts two
+    sequences that share the number 1 by their scenes' keys and interleaves Act
+    One with Act Two (1, 1, 2, 2 across the acts). The scene id is the last
+    tiebreak, so the order is total and stable across calls.
+    """
+    return conn.execute(
+        """SELECT s.body, e.id, e.extra, l.name
+           FROM sections s
+           JOIN entities e ON s.entity_id = e.id
+           LEFT JOIN entities l ON e.location_id = l.id
+           LEFT JOIN entities p ON e.parent_id = p.id
+           LEFT JOIN entities pp ON p.parent_id = pp.id
+           WHERE e.type='scene' AND e.is_deleted=0 AND s.heading='Content' AND s.body != ''
+           ORDER BY COALESCE(pp.order_key, 0), COALESCE(p.order_key, 0),
+                    e.order_key, e.id"""
+    ).fetchall()

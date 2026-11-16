@@ -64,11 +64,19 @@ class TestSpec:
         by = {f["key"]: f for f in sp["fields"]}
         assert "order" not in by and "act_id" not in by            # Reorder's, not the form's
         assert by["sequence_id"]["required"] and by["sequence_id"]["ref"] == "sequence"
-        assert all(by[k]["kind"] == "linked" for k in ("heading", "location", "time_of_day", "characters"))
+        # Cast and where it happens are set here as well as in the script editor.
+        assert by["characters"]["kind"] == "reflist" and by["characters"]["ref"] == "character"
+        assert by["location"]["kind"] == "ref" and by["location"]["ref"] == "location"
+        assert by["place"]["kind"] == "text" and "group" not in by["place"]
+        # The rest of the heading belongs to the script editor.
+        assert all(by[k]["kind"] == "linked" for k in ("int_ext", "time_of_day", "forced_heading"))
         assert by["plot_roles"]["kind"] == "repeater" and by["value_turns"]["kind"] == "valueturns"
         assert "turning_point" not in by and "scene_beats" not in by          # they live in the Beats tab
-        assert "Content" not in sp["sections"] and sp["script_link"]
-        assert [f["key"] for f in sp["fields"]][:3] == ["title", "sequence_id", "status"]
+        assert "Content" not in sp["sections"] and not sp.get("script_link")
+        keys = [f["key"] for f in sp["fields"]]
+        assert keys[:3] == ["title", "sequence_id", "status"]
+        assert keys.index("characters") < keys.index("no_cast") \
+            < keys.index("location") < keys.index("place")
 
     def test_sequence_and_act(self):
         assert {f["key"] for f in me.form_spec("sequence")["fields"]} >= {"title", "act_id", "primary_plot", "purpose"}
@@ -133,9 +141,60 @@ class TestScene:
             {"plot": "main", "role": "crisis"}, {"plot": "main", "role": "climax"},
             {"plot": "ghost", "role": "setup"}, {"plot": "main"}]}})
         e = chk["errors"]
-        assert "one role per plot" in e["plot_roles.1.plot"]
+        assert "plot_roles.1.plot" not in e          # one plot may hold several roles
         assert "ghost" in e["plot_roles.2.plot"]
         assert e["plot_roles.3.role"] == "Choose a role."
+
+    def test_one_plot_two_roles_saves_and_reads_back(self, project):
+        out = me.create_form_entity(project, "scene", {"values": {
+            "title": "Dinner", "sequence_id": "s1",
+            "plot_roles": [{"plot": "main", "role": "crisis", "description": "Boom"},
+                           {"plot": "main", "role": "climax", "description": "Bigger boom"}]}})
+        assert [(r["plot"], r["role"]) for r in out["values"]["plot_roles"]] == [
+            ("main", "crisis"), ("main", "climax")]
+
+    def _scene_with_role(self, project, title, plot, role):
+        return me.create_form_entity(project, "scene", {"values": {
+            "title": title, "sequence_id": "s1",
+            "plot_roles": [{"plot": plot, "role": role}]}})
+
+    def test_dry_run_names_the_scene_holding_a_singular_role(self, project):
+        self._scene_with_role(project, "First", "main", "climax")
+        chk = me.check_entity(project, "scene", {"values": {
+            "title": "Second", "sequence_id": "s1",
+            "plot_roles": [{"plot": "main", "role": "climax"}]}})
+        assert chk["errors"]["plot_roles.0.role"] == (
+            "Plot 'main' already has its climax on scene 'first' — one scene per plot.")
+
+    def test_dry_run_excludes_the_scene_being_edited(self, project):
+        out = self._scene_with_role(project, "First", "main", "climax")
+        chk = me.check_entity(project, "scene", {"values": {
+            "title": "First", "sequence_id": "s1",
+            "plot_roles": [{"plot": "main", "role": "climax"}]}}, out["id"])
+        assert not any(k.startswith("plot_roles.") for k in chk["errors"])
+
+    def test_dry_run_allows_a_second_setup(self, project):
+        self._scene_with_role(project, "First", "main", "setup")
+        chk = me.check_entity(project, "scene", {"values": {
+            "title": "Second", "sequence_id": "s1",
+            "plot_roles": [{"plot": "main", "role": "setup"}]}})
+        assert not any(k.startswith("plot_roles.") for k in chk["errors"])
+
+    def test_dry_run_allows_the_same_role_in_another_plot(self, project):
+        create_entity(project, "plot", "sub", {"name": "Sub"})
+        self._scene_with_role(project, "First", "main", "climax")
+        chk = me.check_entity(project, "scene", {"values": {
+            "title": "Second", "sequence_id": "s1",
+            "plot_roles": [{"plot": "sub", "role": "climax"}]}})
+        assert not any(k.startswith("plot_roles.") for k in chk["errors"])
+
+    def test_dry_run_flags_a_duplicated_pair_on_the_second_card(self, project):
+        chk = me.check_entity(project, "scene", {"values": {
+            "title": "Second", "sequence_id": "s1",
+            "plot_roles": [{"plot": "main", "role": "crisis"},
+                           {"plot": "main", "role": "crisis"}]}})
+        assert chk["errors"]["plot_roles.1.role"] == (
+            "Duplicate plot role: main / crisis appears twice in this scene's plot_roles.")
 
     def test_transition_scene_cannot_have_plot_roles(self, project):
         chk = me.check_entity(project, "scene", {"values": {
@@ -155,7 +214,7 @@ class TestScene:
     def test_script_fields_are_shown_not_written(self, project):
         create_entity(project, "location", "kitchen", {"name": "Kitchen", "one_sentence": "x"})
         create_entity(project, "character", "kael", {"name": "Kael", "one_sentence": "x"})
-        edit_entity(project, "scene", "sc1", {"heading": "INT. KITCHEN - DAY", "time_of_day": "DAY",
+        edit_entity(project, "scene", "sc1", {"int_ext": "INT.", "time_of_day": "DAY",
                                               "location": "kitchen", "characters": ["kael"]}, "t")
         c = me.load_entity(project, "scene", "sc1")["computed"]
         assert c["heading"][0]["display"] == "INT. KITCHEN - DAY" and c["location"][0]["display"] == "Kitchen"
@@ -163,12 +222,14 @@ class TestScene:
         cur = me.load_entity(project, "scene", "sc1")
         assert "heading" not in cur["values"]
         out = me.edit_form_entity(project, "scene", "sc1", {"base_version": cur["version"], "values": {
-            **cur["values"], "heading": "HACKED", "location": "x", "characters": [], "one_sentence": "s"}})
+            **cur["values"], "one_sentence": "s"}})
         assert out["computed"]["heading"][0]["display"] == "INT. KITCHEN - DAY"       # untouched
         assert out["computed"]["characters"][0]["display"] == "Kael"
 
     def test_the_script_is_never_touched(self, project):
-        edit_entity(project, "scene", "sc1", {"Content": "INT. KITCHEN - DAY\n\nKael waits."}, "t")
+        create_entity(project, "location", "kitchen", {"name": "Kitchen", "one_sentence": "x"})
+        edit_entity(project, "scene", "sc1", {"int_ext": "INT.", "location": "kitchen",
+                                              "Content": "INT. KITCHEN - DAY\n\nKael waits."}, "t")
         cur = me.load_entity(project, "scene", "sc1")
         assert "Content" not in cur["sections"]
         me.edit_form_entity(project, "scene", "sc1", {"base_version": cur["version"], "values": {
@@ -211,7 +272,9 @@ class TestDelete:
         assert not prev["can_delete"] and "2 sequences" in prev["blockers"][0]
 
     def test_scene_delete_warns_about_its_script_and_beats(self, project):
-        edit_entity(project, "scene", "sc1", {"Content": "INT. ROOM - DAY\n\nSomething happens."}, "t")
+        create_entity(project, "location", "room", {"name": "Room", "one_sentence": "x"})
+        edit_entity(project, "scene", "sc1", {"int_ext": "INT.", "location": "room",
+                                              "Content": "INT. ROOM - DAY\n\nSomething happens."}, "t")
         create_entity(project, "scene_beats", "sc1-beats", {"scene": "sc1"})
         prev = me.delete_preview(project, "scene", "sc1")
         assert prev["can_delete"] and "script" in prev["effects"][0] and "characters" in prev["effects"][0]
@@ -316,7 +379,9 @@ class TestApply:
         assert _scene(project, "sc4")["seq"] == "s3" and ms.load_tree(project)["unassigned"] == []
 
     def test_script_text_survives_a_move(self, project):
-        edit_entity(project, "scene", "sc2", {"Content": "INT. ROOM - DAY\n\nKeep me."}, "t")
+        create_entity(project, "location", "room", {"name": "Room", "one_sentence": "x"})
+        edit_entity(project, "scene", "sc2", {"int_ext": "INT.", "location": "room",
+                                              "Content": "INT. ROOM - DAY\n\nKeep me."}, "t")
         ms.apply(project, _target(project, lambda s: (_seq(s, "s1")["scenes"].remove("sc2"), _seq(s, "s3")["scenes"].append("sc2"))))
         conn = get_db(project)
         try:

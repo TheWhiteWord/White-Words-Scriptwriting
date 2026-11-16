@@ -3,7 +3,7 @@ import pytest
 import json
 from pathlib import Path
 from story_architect.core.section_parser import list_sections, get_section, replace_section
-from story_architect.core.entity import extract_entity, validate_entity, update_sections
+from story_architect.core.entity import extract_entity, validate_entity
 from story_architect.core.screenplay import extract_scenes, match_character, match_location, extract_location
 from story_architect.core.constants import ENTITY_SCHEMAS
 from story_architect.core.writes import (create_entity, create_project, delete_entity,
@@ -560,12 +560,15 @@ class TestPhase3ToolSurface:
             {"title": "Act 1"})
         create_entity(project_path, "sequence", "seq-1",
             {"title": "Seq 1", "act_id": "act-1"})
+        create_entity(project_path, "location", "kitchen",
+            {"name": "Kitchen", "one_sentence": "x"})
         create_entity(project_path, "scene", "test-scene",
             {"title": "Test Scene", "sequence_id": "seq-1", "act_id": "act-1"})
 
         # Edit with data bag: frontmatter field + body section
         result = edit_entity(project_path, "scene", "test-scene",
-            {"status": "written", "Content": "Updated content text."},
+            {"status": "written", "int_ext": "INT.", "location": "kitchen",
+             "Content": "Updated content text."},
             "Update status and content")
         assert result["success"] is True
 
@@ -740,15 +743,20 @@ class TestScreenplayStatsFromSceneContent:
             {"title": "Act 1"})
         create_entity(project_path, "sequence", "seq-1",
             {"title": "Seq 1", "act_id": "act-1"})
+        create_entity(project_path, "location", "the-institute",
+            {"name": "The Institute", "one_sentence": "T"})
         create_entity(project_path, "scene", "scene-1",
-            {"title": "The Institute", "sequence_id": "seq-1", "act_id": "act-1"})
+            {"title": "The Institute", "sequence_id": "seq-1", "act_id": "act-1",
+             "int_ext": "EXT.", "location": "the-institute", "time_of_day": "DAY"})
 
-        # Update the Content section (created empty alongside the entity)
+        # The body is written directly, the way the importer does — the write
+        # boundary does not run here, so the heading line is stripped by hand and
+        # the fields are what compose the line at assembly.
         conn = get_db(project_path)
         try:
             conn.execute(
                 "UPDATE sections SET body=? WHERE entity_id=? AND heading='Content'",
-                ("EXT. THE INSTITUTE - DAY\n\nA vast decaying building.\n\nKAEL (15, intense) stares at a wall of pale light.\n\nKAEL\nSomething's wrong. Everything arrives too perfectly.", "scene-1")
+                ("A vast decaying building.\n\nKAEL (15, intense) stares at a wall of pale light.\n\nKAEL\nSomething's wrong. Everything arrives too perfectly.", "scene-1")
             )
             conn.commit()
         finally:
@@ -756,6 +764,7 @@ class TestScreenplayStatsFromSceneContent:
 
         scene_text = get_screenplay_text(project_path)
         assert scene_text, "get_screenplay_text returned empty string"
+        assert "EXT. THE INSTITUTE - DAY" in scene_text
 
         from story_architect.app.stats import _compute_screenplay_stats
         stats = _compute_screenplay_stats(scene_text)
@@ -764,6 +773,214 @@ class TestScreenplayStatsFromSceneContent:
         assert stats["scriptHtml"], "scriptHtml should not be empty for valid scene content"
         assert "lengthStats" in stats
         assert stats["lengthStats"]["scenes"] >= 1
+
+    def test_the_pipeline_shows_a_scene_per_composed_heading(self, tmp_path):
+        """The 0-scene bug, pinned: a scene's heading is composed from its
+        fields, so the assembled text carries one line per scene and the stats
+        count them. Before the composer, the same project assembled to bare
+        bodies and `lengthStats.scenes` was 0."""
+        from story_architect.core.db import get_dashboard_data, get_db, get_screenplay_text
+
+        project_path = tmp_path / "test-project"
+        project_path.mkdir()
+        (project_path / ".story").mkdir()
+        (project_path / "project.md").write_text("---\nname: Test\n---\n")
+
+        create_entity(project_path, "act", "act-1", {"title": "Act 1"})
+        create_entity(project_path, "sequence", "seq-1",
+                      {"title": "Seq 1", "act_id": "act-1"})
+        create_entity(project_path, "location", "the-institute",
+                      {"name": "The Institute", "one_sentence": "T"})
+        create_entity(project_path, "project", "test", {"name": "Test"})
+        for i, (tod, place) in enumerate([("DAY", ""), ("NIGHT", "cellar")], start=1):
+            create_entity(project_path, "scene", f"scene-{i}",
+                          {"title": f"Scene {i}", "sequence_id": "seq-1", "act_id": "act-1",
+                           "order": i, "int_ext": "INT.", "location": "the-institute",
+                           "time_of_day": tod, "place": place},
+                          sections={"Content": f"Body {i}.\n"})
+
+        text = get_screenplay_text(project_path)
+        assert "INT. THE INSTITUTE - DAY" in text
+        assert "INT. THE INSTITUTE - CELLAR - NIGHT" in text
+
+        from story_architect.app.stats import _compute_screenplay_stats
+        stats = _compute_screenplay_stats(text)
+        assert stats["lengthStats"]["scenes"] == 2
+
+        data = get_dashboard_data(project_path)
+        assert data["screenplay_scene_headings"] == [
+            {"text": "INT. THE INSTITUTE - DAY", "id": "scene-1"},
+            {"text": "INT. THE INSTITUTE - CELLAR - NIGHT", "id": "scene-2"},
+        ]
+        # The dashboard's own copy of the line agrees with the assembled one.
+        headings = {s["id"]: s["heading"] for s in data["story_data"]["scenes"]}
+        assert headings["scene-2"] == "INT. THE INSTITUTE - CELLAR - NIGHT"
+        # And the location's computed places carry the new place on the next read.
+        loc = next(l for l in data["story_data"]["locations"] if l["id"] == "the-institute")
+        assert loc["places"] == ["cellar"]
+
+    def test_the_fixture_round_trip_carries_the_heading_fields(self, fixture_path):
+        """Import → export → import carries `int_ext` and `place`, and the
+        heading the second import composes is the one the notes declared.
+
+        The fixture's notes hold the fields and body-only Content, which is the
+        shape the writer produces; a round trip that dropped a field would
+        silently turn a headed scene back into a body-only one.
+        """
+        import json
+        import shutil
+        import tempfile
+        from pathlib import Path
+
+        from story_architect.tools.story_export import handler as export_handler
+        from story_architect.tools.story_import import handler as import_handler
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            project = tmp / "save-the-children"
+            shutil.copytree(str(fixture_path), str(project))
+            import_handler({"project": str(project), "root_path": tmp})
+
+            export_dir = tmp / "exported"
+            export_dir.mkdir()
+            exported = export_dir / "proj"
+            shutil.copytree(str(project), str(exported))
+            for f in exported.rglob("*.md"):
+                f.unlink()
+            assert json.loads(export_handler(
+                {"project": str(exported), "root_path": str(export_dir)}))["success"] is True
+
+            reimport = tmp / "reimported"
+            (reimport / "save-the-children").parent.mkdir(parents=True)
+            shutil.copytree(str(exported), str(reimport / "save-the-children"))
+            dest = reimport / "save-the-children"
+            import_handler({"project": str(dest), "confirm": True,
+                            "root_path": str(reimport)})
+
+            from story_architect.core.db import get_db, get_screenplay_text
+            conn = get_db(dest)
+            try:
+                rows = {sid: json.loads(extra) for sid, extra in conn.execute(
+                    "SELECT id, extra FROM entities WHERE type='scene'")}
+            finally:
+                conn.close()
+            assert rows["central-room-day"]["int_ext"] == "INT."
+            assert rows["the-core-day"]["int_ext"] == "EXT."
+            assert rows["central-room-day"].get("place", "") == ""
+            assert "INT. THE CENTRAL ROOM - DAY" in get_screenplay_text(dest)
+
+
+class TestStoryOrder:
+    """The order a reader sees: act → sequence → scene.
+
+    Sequence order keys restart in every act, so a scene's position is only
+    meaningful with its act and sequence beside it. Every reader that lays out
+    the story — the Scenes tab, the assembled script, the value graph — has to
+    build the key the same way, or two sequences that share the number 1
+    interleave and Act One's scenes alternate with Act Two's.
+    """
+
+    @staticmethod
+    def _two_acts(tmp_path):
+        """Act One and Act Two, each with one sequence numbered 1.
+
+        The shape that exposed the bug: `seq-a` and `seq-b` both carry
+        order_key 1, because sequence order restarts per act.
+        """
+        project_path = tmp_path / "test-project"
+        project_path.mkdir()
+        (project_path / ".story").mkdir()
+        create_entity(project_path, "project", "test", {"name": "Test"})
+        create_entity(project_path, "location", "the-garden",
+                      {"name": "The Garden", "one_sentence": "G"})
+        create_entity(project_path, "act", "act-1", {"title": "Act One", "order": 1})
+        create_entity(project_path, "act", "act-2", {"title": "Act Two", "order": 2})
+        create_entity(project_path, "sequence", "seq-a",
+                      {"title": "Seq A", "act_id": "act-1", "order": 1})
+        create_entity(project_path, "sequence", "seq-b",
+                      {"title": "Seq B", "act_id": "act-2", "order": 1})
+        for sid, seq, act, order in (("a1", "seq-a", "act-1", 1),
+                                     ("a2", "seq-a", "act-1", 2),
+                                     ("b1", "seq-b", "act-2", 1),
+                                     ("b2", "seq-b", "act-2", 2)):
+            create_entity(project_path, "scene", sid,
+                          {"title": f"Scene {sid}", "sequence_id": seq, "act_id": act,
+                           "order": order, "int_ext": "EXT.", "location": "the-garden",
+                           "time_of_day": "DAY"},
+                          sections={"Content": f"Body {sid}.\n"})
+        return project_path
+
+    def test_the_assembled_script_reads_act_by_act(self, tmp_path):
+        """The dashboard's script must not interleave two acts.
+
+        Ordered by sequence order alone, the four scenes sort as
+        a1 (seq 1, scene 1), b1 (seq 1, scene 1), a2, b2 — Act One and Act Two
+        alternating. The act is part of the story order.
+        """
+        from story_architect.core.db import get_dashboard_data
+
+        data = get_dashboard_data(self._two_acts(tmp_path))
+        assert [h["id"] for h in data["screenplay_scene_headings"]] == [
+            "a1", "a2", "b1", "b2"]
+
+    def test_both_assembly_paths_agree(self, tmp_path):
+        """`get_screenplay_text` and the dashboard assemble the same script."""
+        from story_architect.core.db import get_dashboard_data, get_screenplay_text
+
+        project_path = self._two_acts(tmp_path)
+        dashboard_ids = [h["id"] for h in
+                         get_dashboard_data(project_path)["screenplay_scene_headings"]]
+        text = get_screenplay_text(project_path)
+        positions = [text.find(f"Body {sid}.") for sid in ("a1", "a2", "b1", "b2")]
+        assert all(p >= 0 for p in positions), text
+        assert positions == sorted(positions), text
+        assert dashboard_ids == ["a1", "a2", "b1", "b2"]
+
+    def test_a_scene_is_numbered_by_its_position(self, tmp_path):
+        """A gap in `order_key` must not show as a gap in the scene numbers.
+
+        `order_key` is a sort key, not a number: a scene deleted and replaced
+        leaves a hole (1, 2, 4). The Scenes tab numbers by position — the same
+        numbering the Reorder view shows — so the reader sees 1, 2, 3.
+        """
+        from story_architect.core.db import get_dashboard_data
+
+        project_path = self._two_acts(tmp_path)
+        # A hole after the second scene, the shape a delete-and-recreate leaves.
+        create_entity(project_path, "scene", "a3",
+                      {"title": "Scene a3", "sequence_id": "seq-a", "act_id": "act-1",
+                       "order": 4, "int_ext": "EXT.", "location": "the-garden",
+                       "time_of_day": "DAY"},
+                      sections={"Content": "Body a3.\n"})
+        scenes = {s["id"]: s for s in
+                  get_dashboard_data(project_path)["story_data"]["scenes"]}
+        assert [scenes[sid]["number"] for sid in ("a1", "a2", "a3")] == [1, 2, 3]
+        # The stored key is untouched: the number is derived, not written back.
+        from story_architect.core.db import get_db
+        conn = get_db(project_path)
+        try:
+            assert conn.execute(
+                "SELECT order_key FROM entities WHERE id='a3'").fetchone()[0] == 4
+        finally:
+            conn.close()
+
+    def test_a_new_scene_after_a_deleted_one_takes_the_next_number(self, tmp_path):
+        """Auto-order counts live scenes only, so a delete leaves no hole."""
+        project_path = self._two_acts(tmp_path)
+        create_entity(project_path, "scene", "a3",
+                      {"title": "Scene a3", "sequence_id": "seq-a", "act_id": "act-1",
+                       "int_ext": "EXT.", "location": "the-garden", "time_of_day": "DAY"})
+        delete_entity(project_path, "scene", "a3", "test", confirm=True)
+        create_entity(project_path, "scene", "a4",
+                      {"title": "Scene a4", "sequence_id": "seq-a", "act_id": "act-1",
+                       "int_ext": "EXT.", "location": "the-garden", "time_of_day": "DAY"})
+        from story_architect.core.db import get_db
+        conn = get_db(project_path)
+        try:
+            assert conn.execute(
+                "SELECT order_key FROM entities WHERE id='a4'").fetchone()[0] == 3
+        finally:
+            conn.close()
 
 
 # ---- Unfilled Fields Tests ----
@@ -793,10 +1010,10 @@ class TestUnfilledFields:
 
     def test_unfilled_fields_scene_location(self):
         from story_architect.core.entity import unfilled_fields
-        extra = {"location": "", "heading": "", "dramatic_role": ""}
+        extra = {"location": "", "int_ext": "", "dramatic_role": ""}
         result = unfilled_fields("scene", extra)
         assert "location" in result
-        assert "heading" in result
+        assert "int_ext" in result
         # dramatic_role is at default "" but also optional — should appear
         assert "dramatic_role" in result
 
@@ -811,10 +1028,10 @@ class TestUnfilledFields:
     def test_unfilled_fields_skips_status(self):
         """status is a workflow state, never reported as unfilled."""
         from story_architect.core.entity import unfilled_fields
-        extra = {"status": "planned", "heading": "", "dramatic_role": ""}
+        extra = {"status": "planned", "int_ext": "", "dramatic_role": ""}
         result = unfilled_fields("scene", extra)
         assert "status" not in result
-        assert "heading" in result
+        assert "int_ext" in result
         assert "dramatic_role" in result
 
     def test_unfilled_fields_skips_booleans(self):

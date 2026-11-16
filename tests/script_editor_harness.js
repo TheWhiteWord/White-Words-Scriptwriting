@@ -64,7 +64,9 @@ const waitFor = async (fn, what, ms) => {
   await openScene('the-kitchen', 'The Kitchen');
 
   await test('opens on the scene and shows the generated heading', async () => {
-    assert.deepStrictEqual($$('.se-hline .se-pill').map(b => b.textContent), ['INT.', 'KITCHEN', 'NIGHT']);
+    // The place pill is always present, dim when empty: the row is the composer,
+    // so every segment has a control even before it is filled.
+    assert.deepStrictEqual($$('.se-hline .se-pill').map(b => b.textContent), ['INT.', 'KITCHEN', 'PLACE', 'NIGHT']);
     assert.strictEqual($('#se-sub').textContent, 'Script · INT. KITCHEN - NIGHT');
   });
   await test('blocks come back typed, in order', async () => {
@@ -184,13 +186,12 @@ const waitFor = async (fn, what, ms) => {
     $('[data-h="tod"]').click(); md($$('.se-pop-item').find(b => /DUSK/.test(b.textContent)));
     assert.ok(/EXT\. ATTIC - DUSK/.test($('#se-sub').textContent));
   });
-  await test('an unregistered location is typed, kept as heading text only, and warned about', async () => {
-    $('[data-h="loc"]').click();
+  await test('a new place is typed into the heading and kept as heading text', async () => {
+    $('[data-h="place"]').click();
     const q = $('.se-pop-q'); q.value = 'the cellar'; q.dispatchEvent(new w.Event('input', { bubbles: true }));
     md($$('.se-pop-item').find(b => /Use “the cellar”/.test(b.textContent)));
-    assert.ok(/EXT\. THE CELLAR - DUSK/.test($('#se-sub').textContent));
-    assert.ok($('.se-chip.se-adhoc'), 'shown dashed in settings');
-    await waitFor(() => /not a registered location/.test($('#se-drawer').textContent), 'the location warning');
+    assert.ok(/EXT\. ATTIC - THE CELLAR - DUSK/.test($('#se-sub').textContent));
+    assert.ok(/THE CELLAR/.test($('[data-h="place"]').textContent));
   });
   await test('settings "−" clears the location; save is blocked until one is set again', async () => {
     $('[data-set="remove"]').click();
@@ -240,7 +241,7 @@ const waitFor = async (fn, what, ms) => {
     $('#se-save').click();
     await waitFor(() => $('#se-dirty').hidden && /saved/i.test($('#se-toast').textContent), 'the save to finish');
     const s = await get('/api/projects/demo/scenes/the-kitchen/script');
-    assert.ok(s.content.startsWith('INT. KITCHEN - NIGHT\n'), s.content);
+    assert.ok(s.content.startsWith('Mara stands at the counter'), s.content);
     assert.ok(/ledger open\. Rain hammers the window\./.test(s.content), s.content);
     assert.ok(/DETECTIVE OAK\nEvening, Mara\./.test(s.content), s.content);
     assert.strictEqual(s.scene.heading, 'INT. KITCHEN - NIGHT');
@@ -273,7 +274,7 @@ const waitFor = async (fn, what, ms) => {
     assert.ok(/Hermes rewrote this\./.test((await get('/api/projects/demo/scenes/the-kitchen/script')).content), 'nothing written yet');
     $('[data-banner="overwrite"]').click();
     await waitFor(() => $('#se-dirty').hidden, 'the overwrite');
-    assert.ok(/^INT\. KITCHEN - NIGHT\n\nMine\./.test((await get('/api/projects/demo/scenes/the-kitchen/script')).content));
+    assert.ok(/^Mine\./.test((await get('/api/projects/demo/scenes/the-kitchen/script')).content));
   });
   await test('a change from elsewhere while there are unsaved edits raises the conflict banner, not an overwrite', async () => {
     type(focusEnd(at(0)), 'Unsaved.');
@@ -312,7 +313,7 @@ const waitFor = async (fn, what, ms) => {
     assert.strictEqual(blocks().length, 1);
     assert.strictEqual(D.activeElement, at(0), 'the cursor is on the page');
     const t = $('#se-drawer').textContent;
-    assert.ok(/order is 0/i.test(t) && /Time of day is not set/.test(t) && /No location is set/.test(t) && /no scene heading/.test(t), t);
+    assert.ok(/order is 0/i.test(t) && /Time of day is not set/.test(t) && /No location is set/.test(t) && /no heading/.test(t), t);
     assert.ok($('#se-save').disabled);
     assert.ok($('[data-h="loc"]').classList.contains('se-warn') && $('[data-h="tod"]').classList.contains('se-warn'));
   });
@@ -338,8 +339,11 @@ const waitFor = async (fn, what, ms) => {
   w2.DASH = { story: { scenes: [{ id: 'a', title: 'Scene A', characters: [], locations: [] }, { id: 'b', title: 'Scene B', characters: [], locations: [] }],
       characters: [], locations: [], plots: [] }, boot() {}, setEl() {}, openScriptEditor: (id, o) => opened.push([id, o && o.focusText]) };
   w2.__SECTIONS__ = { scene: { a: { Content: 'INT. A - DAY\n\nMara stands at the counter.\nRain hammers the window.\nMore.\n' }, b: { Content: '[placeholder — scene/Content]' } } };
-  w2.__SCREENPLAY_STATS__ = { sceneIds: ['a', 'b'], lengthStats: { pagesWhole: 2 }, scriptHtml:
+  w2.__SCREENPLAY_STATS__ = { sceneHeadings: [
+      { text: 'INT. A - DAY', id: 'a' }, { text: 'INT. B - NIGHT', id: 'b' }],
+    lengthStats: { pagesWhole: 2 }, scriptHtml:
     '<h3 class="fountain-scene_heading">INT. A - DAY</h3>\n<p><span class="fountain-action">Mara stands.</span></p>\n<div class="dialogue"><h4 class="fountain-character">MARA</h4><p class="fountain-dialogue">Hi.</p></div>\n' +
+    '<h3 class="fountain-scene_heading">INT. ROGUE - DAY</h3>\n' +
     '<h3 class="fountain-scene_heading">INT. B - NIGHT</h3>\n<p><span class="fountain-action">Quiet.</span></p>' };
   ['colors.js', 'utils.js', 'script-editor/model.js', 'panels/panel-manager.js', 'panels/entity-panels.js', 'script-view.js']
     .forEach(f => w2.eval(fs.readFileSync(path.join(WEB, 'js', f), 'utf8')));
@@ -351,7 +355,16 @@ const waitFor = async (fn, what, ms) => {
     assert.deepStrictEqual(opened.map(o => o[0]), ['a', 'b', 'a']);
     assert.strictEqual(opened[0][1], 'Hi.');
   });
-  await test('script view: a scene with no heading cannot shift the others (ids follow headings, not position)', async () => {
+  await test('script view: a heading the server did not compose opens nothing (ids follow text, not position)', async () => {
+    // INT. ROGUE - DAY is a stored line in a scene's body: the server composed
+    // no heading for it, so it gets no id and shifts nothing. Positionally it
+    // would have taken INT. B - NIGHT's id and every click below it would open
+    // the wrong scene.
+    const rogue = D2.querySelectorAll('.fountain-scene_heading')[1];
+    assert.ok(!rogue.classList.contains('se-clickable'), 'the rogue heading is clickable');
+    const before = opened.length;
+    rogue.click();
+    assert.strictEqual(opened.length, before, 'the rogue heading opened a scene');
     assert.ok(D2.querySelectorAll('.se-clickable').length >= 5);
   });
   await test('scene panel: the Content dump is replaced by a Script card that opens the editor', async () => {

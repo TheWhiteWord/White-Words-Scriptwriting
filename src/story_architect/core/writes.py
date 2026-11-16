@@ -16,6 +16,7 @@ import sqlite3
 from pathlib import Path
 
 from .constants import ENTITY_SCHEMAS
+from .fountain_lexer import SCENE_HEADING_RE
 
 _FIELDS_TO_SKIP = {"id", "type"}
 
@@ -80,6 +81,47 @@ def create_project(slug: str, frontmatter_data: dict, root_path: Path) -> dict:
         "message": f"Created project: {slug}",
         "file": str(project_path / ".story" / "story.db"),
     }
+
+
+# ─── scene heading ───
+
+def _scene_heading_guard(state: dict) -> str:
+    """A scene with a script needs a heading; a forced heading is exclusive.
+
+    `state` is the merged heading state: `int_ext`, `location`, `place`,
+    `time_of_day`, `forced_heading` and `content`. Returns the body-only Content
+    — a leading heading line is stripped, so the heading composed at assembly
+    replaces it rather than duplicating it. A placeholder is a template, not a
+    script, so it passes through untouched.
+    """
+    from .scene_script import is_placeholder, split_heading
+
+    content = state.get("content") or ""
+    if is_placeholder(content):
+        return content
+
+    forced = state.get("forced_heading") or ""
+    int_ext = state.get("int_ext") or ""
+    place = state.get("place") or ""
+    time_of_day = state.get("time_of_day") or ""
+    location = state.get("location") or ""
+
+    if content.strip() and not ((int_ext and location) or forced):
+        raise ValueError(
+            "a scene with a script needs a heading — set int_ext + location, "
+            "or a forced heading")
+
+    if forced and (int_ext or place or time_of_day):
+        raise ValueError(
+            "forced_heading is exclusive with the composed heading — "
+            "clear int_ext, place and time_of_day, or unset forced_heading")
+    if forced and not SCENE_HEADING_RE.match(forced):
+        raise ValueError(
+            "forced_heading must be a scene heading "
+            "(INT./EXT. … or a forced '.HEADING')")
+
+    _, body = split_heading(content)
+    return body
 
 
 # ─── create ───
@@ -196,10 +238,16 @@ def create_entity(project_path: Path, entity_type: str, slug: str,
                 if act_id:
                     validate_scene_act_id(project_path, sequence_id, act_id)
             validate_scene_location(project_path, merged.get("location", ""))
-            validate_scene_plot_roles(project_path, merged.get("plot_roles", []))
+            validate_scene_plot_roles(project_path, merged.get("plot_roles", []),
+                                      scene_id=slug, conn=conn)
             validate_scene_dramatic_role(merged.get("dramatic_role", ""),
                                          merged.get("plot_roles", []))
             check_references(project_path, entity_type, merged)
+            # The heading guard, on the merged state. It returns body-only
+            # Content: an agent-written heading line is replaced by the heading
+            # composed at assembly, never stored beside it.
+            sections["Content"] = _scene_heading_guard(
+                {**merged, "content": sections.get("Content", "")})
 
         # Validate plot characters reference existing entities
         if entity_type == "plot":
@@ -317,7 +365,7 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
                              standard_sections as get_std_sections)
         standard_sections = set(get_std_sections(entity_type))
         # The one column map, owned by core.entity. An out-of-tree copy that
-        # was missing `project` made editing a logline write it into `extra` and
+        # missed `project` made editing a logline write it into `extra` and
         # report success while the column stayed unchanged.
         column_map = ENTITY_COLUMN_MAP.get(entity_type, {})
         schema = ENTITY_SCHEMAS.get(entity_type, {})
@@ -467,6 +515,37 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
                 ]
             validate_scene_dramatic_role(merged_role, merged_roles)
 
+        # ── A scene's heading, checked on its MERGED state ──
+        # The same rule the dramatic_role check follows: an edit that sets only
+        # `forced_heading` must be caught against the structured fields already
+        # stored, and an edit that sets only `place` must be caught against a
+        # stored forced heading. Refused before BEGIN, so nothing is written.
+        if entity_type == "scene":
+            stored = conn.execute(
+                "SELECT location_id, extra FROM entities WHERE id=?", (entity_id,)).fetchone()
+            stored_location = stored[0] if stored and stored[0] else ""
+            stored_extra = json.loads(stored[1]) if stored and stored[1] else {}
+            content_row = conn.execute(
+                "SELECT body FROM sections WHERE entity_id=? AND heading='Content'",
+                (entity_id,)).fetchone()
+            scene_schema = ENTITY_SCHEMAS["scene"]
+            merged_heading = {
+                "int_ext": data.get("int_ext",
+                                    stored_extra.get("int_ext",
+                                                     scene_schema["int_ext"]["default"])),
+                "place": data.get("place", stored_extra.get("place", "")),
+                "time_of_day": data.get("time_of_day",
+                                        stored_extra.get("time_of_day", "")),
+                "forced_heading": data.get("forced_heading",
+                                           stored_extra.get("forced_heading", "")),
+                "location": data.get("location", stored_location),
+                "content": section_updates.get(
+                    "Content", content_row[0] if content_row else ""),
+            }
+            body = _scene_heading_guard(merged_heading)
+            if "Content" in data:
+                section_updates["Content"] = body
+
         # ── A scene_beats, checked on its MERGED state ──
         # The same rule the dramatic_role contradiction check follows: an edit
         # that moves the record to another scene, or adds a beat, must be
@@ -609,7 +688,8 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
         if entity_type == "scene" and "plot_roles" in data:
             from .entity import (check_references, plot_role_relations,
                                  validate_scene_plot_roles)
-            validate_scene_plot_roles(project_path, data["plot_roles"])
+            validate_scene_plot_roles(project_path, data["plot_roles"],
+                                      scene_id=entity_id, conn=conn)
             check_references(project_path, entity_type,
                              {"plot_roles": data["plot_roles"]})
             conn.execute(
@@ -1004,9 +1084,15 @@ def _validate_sequence_exists(conn, sequence_id: str) -> None:
 
 
 def _get_next_order_db(conn, entity_type: str, parent_id: str) -> int:
-    """Compute next order value for a new child within its parent."""
+    """Compute next order value for a new child within its parent.
+
+    Live rows only. A soft-deleted child keeps its `order_key`, so counting it
+    would hand the next scene a number with a hole in it (1, 2, 4 after a
+    delete) — and the Scenes tab shows that key as the scene's number.
+    """
     row = conn.execute(
-        "SELECT COALESCE(MAX(order_key), 0) + 1 FROM entities WHERE type=? AND parent_id=?",
+        "SELECT COALESCE(MAX(order_key), 0) + 1 FROM entities "
+        "WHERE type=? AND parent_id=? AND is_deleted=0",
         (entity_type, parent_id),
     ).fetchone()
     return int(row[0]) if row else 1
@@ -1034,8 +1120,7 @@ def _default_for(entity_type: str, field: str):
 
     Resetting a reference to this rather than a bare "" keeps the two apart: a
     field whose default is a real value (project.screenplay_title is "Default")
-    resets to that, while an unfilled field resets to empty (B12 — these
-    defaults were once visible placeholders like "Location not set").
+    resets to that, while an unfilled field resets to empty.
     """
     return ENTITY_SCHEMAS.get(entity_type, {}).get(field, {}).get("default", "")
 

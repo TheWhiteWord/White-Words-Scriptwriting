@@ -20,7 +20,7 @@ def client(tmp_path, monkeypatch):
     create_entity(proj, "world", "w", {"name": "W", "one_sentence": "T"})
     create_entity(proj, "location", "kitchen", {"name": "Kitchen", "one_sentence": "T", "world": "w"})
     create_entity(proj, "scene", "s1", {"title": "S1", "sequence_id": "seq-1", "act_id": "act-1", "order": 1,
-                                        "location": "kitchen", "time_of_day": "NIGHT"},
+                                        "location": "kitchen", "int_ext": "INT.", "time_of_day": "NIGHT"},
                   sections={"Content": "INT. KITCHEN - NIGHT\n\nRain.\n"})
     tc = TestClient(create_app(Config(root=root, port=8731)), base_url="http://127.0.0.1:8731")
     return tc, proj
@@ -28,7 +28,8 @@ def client(tmp_path, monkeypatch):
 
 def _body(s, **over):
     b = {"base_hash": s["hash"], "blocks": s["blocks"],
-         "heading": {"mode": "structured", "int_ext": "INT.", "location": "kitchen", "time_of_day": "NIGHT"},
+         "heading": {"int_ext": "INT.", "location": "kitchen", "place": "",
+                     "time_of_day": "NIGHT", "forced_heading": ""},
          "extra_cast": []}
     b.update(over)
     return b
@@ -37,7 +38,7 @@ def _body(s, **over):
 def test_get_then_put_round_trip(client):
     tc, _ = client
     s = tc.get("/api/projects/demo/scenes/s1/script").json()
-    assert s["heading"]["location"] == "kitchen" and s["blocks"][0]["text"] == "Rain."
+    assert s["scene"]["location"] == "kitchen" and s["blocks"][0]["text"] == "Rain."
     r = tc.put("/api/projects/demo/scenes/s1/script", headers=H,
                json=_body(s, blocks=[{"type": "action", "text": "Heavy rain."}]))
     assert r.status_code == 200 and "Heavy rain." in r.json()["content"]
@@ -81,7 +82,7 @@ def test_locked_is_423_and_invalid_is_422(client):
     tc, proj = client
     s = tc.get("/api/projects/demo/scenes/s1/script").json()
     bad = tc.put("/api/projects/demo/scenes/s1/script", headers=H,
-                 json=_body(s, heading={"mode": "structured", "int_ext": "INT.", "location": "ghost"}))
+                 json=_body(s, heading={"int_ext": "INT.", "location": "ghost"}))
     assert bad.status_code == 422
     edit_entity(proj, "scene", "s1", {"status": "locked"}, "lock")
     s = tc.get("/api/projects/demo/scenes/s1/script").json()
@@ -101,7 +102,7 @@ def test_check_route_is_a_pure_read(client):
     s = tc.get("/api/projects/demo/scenes/s1/script").json()
     r = tc.post("/api/projects/demo/scenes/s1/script/check", headers=H, json={
         "blocks": [{"type": "character", "text": "ZED"}, {"type": "dialogue", "text": "x"}],
-        "heading": {"mode": "structured", "int_ext": "INT.", "location": "kitchen", "time_of_day": "NIGHT"}})
+        "heading": {"int_ext": "INT.", "location": "kitchen", "time_of_day": "NIGHT"}})
     assert r.status_code == 200
     assert any(f["code"] == "character_unregistered" for f in r.json()["findings"])
     assert tc.get("/api/projects/demo/scenes/s1/script").json()["hash"] == s["hash"]

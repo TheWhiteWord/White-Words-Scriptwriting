@@ -1,9 +1,11 @@
 """Draft staging — propose a set of entity changes, write them on commit.
 
 A draft is a row in the project's own `drafts` table holding a list of ops.
-Nothing here touches `entities`, `sections` or `relations` until `commit_draft`
+Nothing here touches `entities`, `sections` or `relations` until `commit`
 dispatches the ops into `core.writes`, so a staged batch is inert: staging a
-change and never committing it leaves no trace in the story.
+change and never committing it leaves no trace in the story. `dry_run` does
+dispatch the ops into `core.writes`, but on a throwaway copy of the database,
+so the project's own tables still go untouched.
 
 Ops mirror what the write functions already take, so staging is the same
 computation as a dry run with a different sink. Design of record:
@@ -62,9 +64,9 @@ def validate_ops(ops) -> list[dict]:
     """Shape-check an op list. Returns the ops unchanged, or raises.
 
     Structural only — is each op dispatchable, with the keys its handler
-    reads. Field-level checks (required fields, enums) are Phase 6's
-    `validate_entity` pass, and cross-entity references stay at commit: they
-    read committed state, and a staged create is not there yet.
+    reads. Field-level checks (required fields, enums) are `validate_entity`'s
+    pass, and cross-entity references stay at commit: they read committed
+    state, and a staged create is not there yet.
     """
     if not isinstance(ops, list) or not ops:
         raise DraftError("`ops` must be a non-empty list of op objects.")
@@ -149,7 +151,6 @@ def validate_shape(ops: list) -> list[str]:
     merge would otherwise hide.
     """
     from .entity import REQUIRED_FIELDS, validate_entity
-    from .scene_content_lint import check_scene_content
 
     findings = []
     for i, op in enumerate(ops):
@@ -168,20 +169,6 @@ def validate_shape(ops: list) -> list[str]:
                 findings.append(
                     f"{where}: '{key}' is read-only (computed from "
                     f"{entity_type} entities) — it cannot be set")
-
-        # A scene whose Content has no opening scene heading renders as nothing,
-        # or silently drops the lines before its heading. Nothing downstream
-        # reports it, so the preview is the last place the agent can hear.
-        # Sections arrive under `sections` on a create and inside `data` on an
-        # edit, so both have to be read or the edit path is unchecked — which is
-        # where a reformat usually happens.
-        if entity_type == "scene" and op["op"] != "delete":
-            content = (op.get("sections") or {}).get("Content")
-            if not content and op["op"] == "edit":
-                content = (payload or {}).get("Content")
-            if content:
-                for f in check_scene_content(content, (payload or {}).get("heading", "")):
-                    findings.append(f"{where}: {f}")
 
         if op["op"] != "create":
             continue
@@ -209,7 +196,11 @@ def validate_shape(ops: list) -> list[str]:
 
 def stage(project_path: Path, ops, summary: str = "",
          draft_id: str | None = None) -> dict:
-    """Store an op list as a draft. Writes one row and nothing else.
+    """Store an op list as a draft and replay it against a copy of the project.
+
+    Writes one row to the project and nothing else: the replay runs on a
+    throwaway copy of the database, so the verdict reaches the caller without
+    touching the story.
 
     Staging twice on the same `draft_id` REPLACES the op list — staging is a
     proposal, not a queue — and the replaced list goes to `prev_ops` so the
@@ -261,6 +252,7 @@ def stage(project_path: Path, ops, summary: str = "",
             summary=summary or (row[1] if row else ""), changes=restaged_changes,
         ),
         "validation": validate_shape(ops),
+        "dry_run": dry_run(project_path, new_id),
     }
     if prev_ops is not None:
         result["restaged"] = True
@@ -435,6 +427,51 @@ def commit(project_path: Path, draft_id: str) -> dict:
     }
 
 
+def dry_run(project_path: Path, draft_id: str) -> dict:
+    """Replay a staged draft against a throwaway copy of the project database.
+
+    `commit` runs unchanged on the copy, so op ordering, within-batch effects
+    and every validator behave exactly as they will at the real commit — there
+    is no second copy of any rule. The copy lives outside the project and is
+    removed on every path, so staging leaves no footprint. Never raises: a
+    sandbox failure is a verdict, not an exception.
+    """
+    import tempfile
+
+    from .db import get_db
+
+    try:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            story_dir = Path(tmp) / ".story"
+            story_dir.mkdir()
+            src = get_db(project_path)
+            try:
+                dest = sqlite3.connect(str(story_dir / "story.db"))
+                try:
+                    # backup(), not a file copy: the DB is in WAL mode, so a
+                    # plain copy can miss committed writes still in the WAL.
+                    src.backup(dest)
+                finally:
+                    dest.close()
+            finally:
+                src.close()
+            try:
+                result = commit(Path(tmp), draft_id)
+            except Exception as e:
+                return {"status": "unavailable",
+                        "error": f"{type(e).__name__}: {e}"}
+    except Exception as e:
+        return {"status": "unavailable", "error": f"{type(e).__name__}: {e}"}
+
+    if result.get("success"):
+        return {"status": "clean"}
+    return {
+        "status": "refused",
+        "failed_op": result["failed"]["op"],
+        "error": result["failed"]["error"],
+    }
+
+
 def _commit_report(landed: list, failed: dict | None, draft_id: str) -> str:
     """What landed, and what did not. Terse by default (decision 4).
 
@@ -596,7 +633,7 @@ def describe_ops(project_path: Path, ops: list) -> list[dict]:
             sections = [{"name": n, "before": None, "after": v}
                         for n, v in (op.get("sections") or {}).items()]
             label = _display_name(entity_type, fm.get("name") or fm.get("title")
-                                  or fm.get("heading"), entity_id)
+                                  or _scene_heading_label(project_path, fm), entity_id)
             # optional schema hint for UI ordering of structured fields
             schema_hint = {}
             for f, m in schema.items():
@@ -699,6 +736,31 @@ def describe_ops(project_path: Path, ops: list) -> list[dict]:
 
 def _display_name(entity_type, name, fallback):
     return name if name else fallback
+
+
+def _scene_heading_label(project_path, fm):
+    """A create's label when it carries neither a name nor a title.
+
+    A scene's heading is composed from its fields, so the approval card shows
+    what the assembled script will show. The location segment is a slug, so it
+    is resolved against the project; an unresolvable one composes to nothing.
+    """
+    from .scene_script import scene_heading
+    loc = fm.get("location") or ""
+    name = ""
+    if loc:
+        try:
+            from .db import get_db
+            conn = get_db(project_path)
+            try:
+                row = conn.execute("SELECT name FROM entities WHERE id=?", (loc,)).fetchone()
+                name = row[0] if row else ""
+            finally:
+                conn.close()
+        except Exception:
+            pass
+    return scene_heading(fm.get("int_ext") or "", name, fm.get("place") or "",
+                         fm.get("time_of_day") or "", fm.get("forced_heading") or "")
 
 
 def _entity_name(project_path, entity_type, slug):

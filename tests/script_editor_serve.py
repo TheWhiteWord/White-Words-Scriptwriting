@@ -32,14 +32,15 @@ def build(root: Path) -> None:
         create_entity(p, "character", slug, {"name": name, "story_role": role, "one_sentence": "T"})
     create_entity(p, "scene", "the-kitchen",
                   {"title": "The Kitchen", "sequence_id": "seq-1", "act_id": "act-1", "order": 2,
-                   "location": "kitchen", "time_of_day": "NIGHT", "heading": "INT. KITCHEN - NIGHT",
+                   "location": "kitchen", "time_of_day": "NIGHT", "int_ext": "INT.",
                    "characters": ["mara-chen"]},
                   sections={"Content": "INT. KITCHEN - NIGHT\n\nMara stands at the counter, a ledger open.\n\n"
                                        "MARA\n(quietly)\nYou knew.\n\nLEO\nSorry.\n"})
     create_entity(p, "scene", "blank", {"title": "Blank", "sequence_id": "seq-1", "act_id": "act-1"})
     edit_entity(p, "scene", "blank", {"order": 0}, "unplace")
     create_entity(p, "scene", "locked-one", {"title": "Locked One", "sequence_id": "seq-1", "act_id": "act-1",
-                                             "order": 3, "location": "kitchen", "time_of_day": "DAY"},
+                                             "order": 3, "int_ext": "INT.", "location": "kitchen",
+                                             "time_of_day": "DAY"},
                   sections={"Content": "INT. KITCHEN - DAY\n\nNothing moves.\n"})
     edit_entity(p, "scene", "locked-one", {"status": "locked"}, "lock")
 

@@ -5,9 +5,9 @@ from pathlib import Path
 from .constants import (
     REQUIRED_FIELDS, ENTITY_SCHEMAS, VALID_ROLES, VALID_STATUSES,
     SCENE_STATUSES, SEQUENCE_STATUSES, ACT_STATUSES,
-    SCENE_TIMES_OF_DAY, SCENE_DRAMATIC_ROLES,
+    SCENE_TIMES_OF_DAY, SCENE_DRAMATIC_ROLES, INT_EXT_CHOICES,
     STRUCTURE_TYPES, PLOT_TYPES,
-    PLOT_SCOPES, VALUE_ARCS, PLOT_ROLES,
+    PLOT_SCOPES, VALUE_ARCS, PLOT_ROLES, UNIQUE_PLOT_ROLES,
     CONFLICT_LEVELS, VALUE_LADDER,
 )
 from .section_parser import list_sections
@@ -44,11 +44,11 @@ def validate_entity(entity_type: str, frontmatter: dict) -> list[str]:
             _validate_field(entity_type, field, frontmatter[field], meta, warnings)
 
     if entity_type == "character":
-        # `empty_ok` like the enum check below: since B12 an unfilled
-        # field is stored empty, so an exported note carries `story_role: ''`
-        # and the write path accepts it. Without this the importer refused
-        # exactly what story_export writes, and a DB -> markdown -> DB
-        # round-trip failed while the write path stored the same value.
+        # `empty_ok` because an unfilled field is stored empty, so an exported
+        # note carries `story_role: ''` and the write path accepts it. Without
+        # this the importer refused exactly what story_export writes, and a
+        # DB -> markdown -> DB round-trip failed while the write path stored the
+        # same value.
         _validate_enum(frontmatter, "story_role", VALID_ROLES, warnings, empty_ok=True)
 
     if entity_type == "plot" and "status" in frontmatter:
@@ -61,9 +61,14 @@ def validate_entity(entity_type: str, frontmatter: dict) -> list[str]:
     if entity_type == "project":
         _validate_enum(frontmatter, "structure_type", STRUCTURE_TYPES, warnings, empty_ok=True)
 
+    if entity_type == "location":
+        _validate_no_separator(frontmatter, "name", warnings, "location name")
+
     if entity_type == "scene":
         _validate_enum(frontmatter, "status", SCENE_STATUSES, warnings)
         _validate_enum(frontmatter, "time_of_day", SCENE_TIMES_OF_DAY, warnings, empty_ok=True)
+        _validate_enum(frontmatter, "int_ext", INT_EXT_CHOICES, warnings, empty_ok=True)
+        _validate_no_separator(frontmatter, "place", warnings, "place")
         _validate_enum(frontmatter, "dramatic_role", SCENE_DRAMATIC_ROLES, warnings, empty_ok=True)
         _validate_numeric(frontmatter, "order", warnings)
 
@@ -231,6 +236,15 @@ def _validate_enum(frontmatter: dict, field: str, valid: list[str], warnings: li
         warnings.append(f"Invalid {field}: {val}")
 
 
+def _validate_no_separator(frontmatter: dict, field: str, warnings: list[str], label: str) -> None:
+    """A heading segment cannot contain the separator that splits place from time."""
+    value = frontmatter.get(field)
+    if isinstance(value, str) and " - " in value:
+        warnings.append(
+            f"{label} cannot contain ' - ' — the scene heading uses it as the "
+            f"separator between place and time")
+
+
 def _validate_numeric(frontmatter: dict, field: str, warnings: list[str]) -> None:
     """Append warning if frontmatter[field] is present and not int/float."""
     if field not in frontmatter:
@@ -266,15 +280,7 @@ def distinct_ladder_words(words: dict) -> bool:
     return len({v.lower() for v in vals}) == len(VALUE_LADDER)
 
 
-def update_sections(note_path: Path, sections: list[str]) -> None:
-    """Update the sections field in a note's frontmatter."""
-    post = frontmatter.load(note_path)
-    post["sections"] = sections
-    with open(note_path, 'w') as f:
-        frontmatter.dump(post, f, sort_keys=False)
-
-
-# ─── DB column/relation mapping (Phase 3) ───
+# ─── DB column/relation mapping ───
 
 # FM field name → DB column name, per entity type
 ENTITY_COLUMN_MAP = {
@@ -300,7 +306,7 @@ FIELDS_TO_SKIP = {"id", "type"}
 # scene (`from_id=character, to_id=scene`), so a scene does not own them.
 # The importer, every existing row, and every reader (story_retrieve,
 # story_export, core/db.py) assume this direction; writing it the other way
-# left the cast unreadable the moment a scene was authored through story_draft.
+# leaves the cast unreadable the moment a scene is authored through story_draft.
 # Single authority — relation_endpoints() is the only place direction is decided.
 REVERSED_RELATION_KINDS = {"character_scene"}
 
@@ -382,9 +388,9 @@ def _is_empty(value, default) -> bool:
       * an empty string, list or dict — a field the user deliberately cleared;
       * None.
 
-    Since B12 an unfilled field is stored empty, so the second case is the one
-    that fires for prose fields; the first is still load-bearing for the
-    defaults that are 0, False, [] or a real value.
+    Since an unfilled field is stored empty, the second case is the one that
+    fires for prose fields; the first is still load-bearing for the defaults
+    that are 0, False, [] or a real value.
     """
     if value is None:
         return True
@@ -934,18 +940,45 @@ def _validate_beat_content(beats) -> None:
                 f"Beat {i} has no content: no surface, subtext, or gap.")
 
 
-def validate_scene_plot_roles(project_path, entries) -> None:
-    """Raise ValueError if a scene's `plot_roles` holds an invalid role or
-    names no plot.
+class PlotRoleError(ValueError):
+    """A refused `plot_roles` entry. Carries the pair, so a dry run can put the
+    message on the card that caused it rather than on the form as a whole."""
 
-    The plot existence check is the generic reference check (`ref: "plot"` on
-    `plot_roles.plot`); what remains here is the rule the schema cannot say:
-    the role must be one of the six dramatic plot roles, and an entry must
-    name a plot at all — `check_references` skips an absent key, and an entry
-    with no plot is not a row, it is a reference that resolves to nothing.
+    def __init__(self, message: str, plot: str, role: str) -> None:
+        super().__init__(message)
+        self.plot = plot
+        self.role = role
+
+
+def validate_scene_plot_roles(project_path, entries, scene_id=None, conn=None) -> None:
+    """Raise ValueError if a scene's `plot_roles` breaks the rules below.
+
+    A pair violation raises `PlotRoleError`, which carries the offending
+    `plot` and `role` so a dry run can put the message on the card that
+    caused it.
+
+    Both rules are about the `(plot, role)` pair:
+
+    - one entry per pair. The `relations` primary key is
+      `(from_id, to_id, kind)`, so a repeat is an `IntegrityError` at the
+      storage layer; here it is an authoring error with a message.
+    - a singular role (`UNIQUE_PLOT_ROLES`) sits on ONE scene per plot, so a
+      plot cannot hold two climaxes.
+
+    The role-enum and plot-present checks stay: `check_references` skips an
+    absent key, and an entry with no plot is not a row, it is a reference that
+    resolves to nothing.
+
+    `scene_id` excludes a scene from its own singular check — an edit re-saves
+    the rows it already holds. `conn` lets a caller read rows its own
+    transaction has written but not committed (the importer), and lets the
+    form's dry run report the conflict next to the card; `project_path` is
+    read only when `conn` is None, so such a caller passes `None`.
     """
     if not isinstance(entries, list):
         return
+    seen = set()
+    singular = []
     for entry in entries:
         if not isinstance(entry, dict):
             continue
@@ -954,20 +987,53 @@ def validate_scene_plot_roles(project_path, entries) -> None:
             raise ValueError(
                 f"Invalid plot role: {role or '(empty)'}. "
                 f"One of: {', '.join(PLOT_ROLES)}")
-        if not entry.get("plot"):
+        plot = str(entry.get("plot") or "")
+        if not plot:
             raise ValueError(
                 f"plot_roles entry needs a plot slug: {entry!r}")
+        pair = (plot, role)
+        if pair in seen:
+            raise PlotRoleError(
+                f"Duplicate plot role: {plot} / {role} appears twice in "
+                f"this scene's plot_roles.", plot, role)
+        seen.add(pair)
+        if role in UNIQUE_PLOT_ROLES:
+            singular.append(pair)
+    if not singular:
+        return
+    from story_architect.core.db import get_db
+    own = conn is None
+    if own:
+        conn = get_db(project_path)
+    try:
+        for plot, role in singular:
+            sql = ("SELECT e.id FROM relations r JOIN entities e ON e.id = r.to_id "
+                   "WHERE r.from_id=? AND r.kind=? AND e.is_deleted=0")
+            params = [plot, f"plot_{role}"]
+            if scene_id:
+                sql += " AND r.to_id<>?"
+                params.append(scene_id)
+            row = conn.execute(sql, params).fetchone()
+            if row:
+                raise PlotRoleError(
+                    f"Plot '{plot}' already has its {role} on scene "
+                    f"'{row[0]}' — one scene per plot.", plot, role)
+    finally:
+        if own:
+            conn.close()
 
 
 def validate_scene_dramatic_role(dramatic_role, plot_roles) -> None:
     """Raise ValueError when `dramatic_role` and `plot_roles` contradict each other.
 
     A scene's role belongs to a plot, so it lives in `plot_roles` — one entry
-    per plot, because one scene can be a climax for one plot and a
-    complication for another. `dramatic_role` therefore carries no role at
-    all; it only distinguishes the scenes that serve NO plot from those that
-    do. There are exactly two ways to serve no plot, and they are mutually
-    exclusive with carrying roles:
+    per `(plot, role)` pair. A scene may hold several roles in one plot, and
+    one plot can be served by several scenes; only the singular roles
+    (`inciting_incident`, `crisis`, `climax`) sit on one scene per plot, which
+    `validate_scene_plot_roles` enforces. `dramatic_role` therefore carries no
+    role at all; it only distinguishes the scenes that serve NO plot from
+    those that do. There are exactly two ways to serve no plot, and they are
+    mutually exclusive with carrying roles:
 
         transition / non-event  ->  plot_roles must be empty
         plot_role / empty        ->  plot_roles may be set

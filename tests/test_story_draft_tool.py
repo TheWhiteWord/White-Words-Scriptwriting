@@ -188,6 +188,15 @@ def test_the_schema_says_relations_ride_in_frontmatter():
     assert "INSIDE frontmatter" in SCHEMA["properties"]["ops"]["description"]
 
 
+def test_the_schema_reports_the_dry_run_verdict():
+    """The agent must be told what `dry_run` means before it can act on it."""
+    desc = SCHEMA["description"]
+    assert "dry_run" in desc
+    assert "'refused'" in desc
+    assert "'unavailable'" in desc
+    assert "re-stage" in desc
+
+
 def _entity_count(project_path):
     import sqlite3
     conn = sqlite3.connect(str(project_path / ".story" / "story.db"))
@@ -195,3 +204,83 @@ def _entity_count(project_path):
         return conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
     finally:
         conn.close()
+
+
+# ─── the card gate ───
+
+def _call_tool(monkeypatch, fixture_path, args):
+    """Drive `on_call_tool` directly and collect what it publishes.
+
+    The handler is what decides whether an approval card reaches the bus; the
+    surrounding MCP transport is not part of that decision.
+    """
+    import asyncio
+    from mcp import types as mcp_types
+    from story_architect.app import mcp_server
+
+    published = []
+
+    async def recorder(ev):
+        published.append(ev)
+
+    monkeypatch.setattr(mcp_server, "_publish_bus", recorder)
+    server = mcp_server.create_mcp_server(
+        mcp_server.Config(root=fixture_path.parent, port=8731))
+    entry = server.get_request_handler("tools/call")
+    assert entry is not None
+    handler = entry.handler
+    params = mcp_types.CallToolRequestParams(name="draft", arguments=args)
+
+    async def run():
+        return await handler(None, params)
+
+    # Never close the loop this runs on: `asyncio.run` closes its own, and every
+    # other chat test then calls get_event_loop() — a closed loop leaves none.
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    loop.run_until_complete(run())
+    return [ev for ev in published if ev.get("type") == "draft"]
+
+
+def test_a_clean_stage_publishes_the_card(monkeypatch, fixture_path):
+    published = _call_tool(monkeypatch, fixture_path, {
+        "action": "stage", "project": str(fixture_path), "ops": OPS,
+        "summary": "The Telling"})
+
+    assert len(published) == 1
+    assert published[0]["draft"]["id"].startswith("d-")
+    assert published[0]["draft"]["status"] == "open"
+
+
+def test_a_refused_stage_publishes_nothing(monkeypatch, fixture_path):
+    ops = [{"op": "edit", "entity_type": "scene", "entity_id": "the-core-day",
+            "data": {"plot_roles": [
+                {"plot": "the-resistance", "role": "climax",
+                 "description": "The children refuse the system's final offer."}]},
+            "summary": "The Core takes the climax"}]
+    assert _call_tool(monkeypatch, fixture_path, {
+        "action": "stage", "project": str(fixture_path), "ops": ops,
+        "summary": "take the climax"}) == []
+
+
+def test_an_unavailable_stage_publishes_nothing(monkeypatch, fixture_path):
+    from story_architect.core import drafts
+
+    monkeypatch.setattr(drafts, "dry_run",
+                        lambda project_path, draft_id: {
+                            "status": "unavailable",
+                            "error": "OperationalError: no such table: drafts"})
+    assert _call_tool(monkeypatch, fixture_path, {
+        "action": "stage", "project": str(fixture_path), "ops": OPS,
+        "summary": "no replay"}) == []
+
+
+def test_a_commit_does_not_publish_an_empty_card(monkeypatch, fixture_path):
+    """A commit carries `draft_id` too; only a clean stage may publish."""
+    staged = call({"action": "stage", "ops": OPS, "summary": "The Telling"}, fixture_path)
+    assert _call_tool(monkeypatch, fixture_path, {
+        "action": "commit", "project": str(fixture_path),
+        "draft_id": staged["draft_id"]}) == []

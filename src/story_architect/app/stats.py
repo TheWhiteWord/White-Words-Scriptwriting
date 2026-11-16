@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from story_architect.core.constants import ENTITY_SCHEMAS, UNFILLED
+from story_architect.core.scene_script import parse_heading_line
 
 CSS_ORDER = ["base.css", "components.css", "views.css", "statistics.css",
              "graph.css", "value-graph.css",
@@ -46,8 +47,12 @@ SCHEMA = {
 }
 
 
-def _compute_screenplay_stats(screenplay_text, scene_ids=None):
+def _compute_screenplay_stats(screenplay_text, scene_headings=None):
     """Compute screenplay statistics from fountain text using fountain_lexer.
+
+    `scene_headings` are the `{text, id}` pairs `_compose_screenplay` produced,
+    in order; they ride out as `sceneHeadings` so a reader can match a rendered
+    heading to its scene by text.
 
     Returns a dict suitable for JSON injection as window.__SCREENPLAY_STATS__.
     Returns None on any error — dashboard still works without stats.
@@ -132,9 +137,9 @@ def _compute_screenplay_stats(screenplay_text, scene_ids=None):
     # ── Location stats ──
     loc_map = {}
     for s in scenes:
-        loc = _parse_scene_location(s['text'])
+        loc = parse_heading_line(s['text'])
         if loc:
-            name = loc['name']
+            name = loc['location']
             if name not in loc_map:
                 loc_map[name] = {
                     'name': name,
@@ -170,7 +175,7 @@ def _compute_screenplay_stats(screenplay_text, scene_ids=None):
     time_counts = {}
     scene_list = []
     for s in scenes:
-        loc = _parse_scene_location(s['text'])
+        loc = parse_heading_line(s['text'])
         loc_type = 'mixed' if (loc and loc.get('interior') and loc.get('exterior')) else \
                    'int' if (loc and loc.get('interior')) else \
                    'ext' if (loc and loc.get('exterior')) else 'other'
@@ -214,7 +219,7 @@ def _compute_screenplay_stats(screenplay_text, scene_ids=None):
         'sceneStats': scene_stats,
         'titlePage': title_page,
         'scriptHtml': script_html,
-        'sceneIds': scene_ids or [],
+        'sceneHeadings': scene_headings or [],
     }
 
 
@@ -264,21 +269,5 @@ def _build_title_page(project_frontmatter: dict) -> dict:
     br.append(_slot(project_frontmatter, "contact", "contact"))
 
     return {"tl": [], "tc": [], "tr": [], "cc": cc, "bl": bl, "br": br, "hidden": []}
-
-
-def _parse_scene_location(heading):
-    """Parse scene heading text into location info. Minimal version of fountain_lexer.parse_location."""
-    import regex as re
-    match = re.match(r'^[ \t]*([.](?![.])|(?:[*]{0,3}_?)(?:int[.]?\/ext|int[.]?\/e|ext|est|int|i[.]?\/e)[. ])(.+?)(#[-.0-9a-z]+#)?$', heading, re.IGNORECASE)
-    if not match:
-        return None
-    location_text = match.group(2)
-    split = re.search(r'(.*)[-–—−](.*)', location_text)
-    return {
-        'name': split.group(1).strip() if split else location_text.strip(),
-        'interior': 'I' in match.group(1),
-        'exterior': 'EX' in match.group(1) or 'E.' in match.group(1),
-        'time_of_day': split.group(2).strip() if split else '',
-    }
 
 

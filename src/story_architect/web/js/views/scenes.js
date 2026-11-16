@@ -56,7 +56,7 @@ DASH.renderSceneItem = function(s) {
     + structTags.map(t => `<span class="tag tag-struct">${DASH.escapeHtml(t)}</span>`).join('');
   return `
     <div class="scene-item" data-id="${s.id}">
-      <div class="scene-number">${String(s.order || 0).padStart(2, '0')}</div>
+      <div class="scene-number">${String(s.number || 0).padStart(2, '0')}</div>
       <div class="scene-body">
         <div class="scene-heading">${s.title || s.id}</div>
         ${s.heading ? `<div class="panel-muted" style="font-size:var(--font-size-xs);margin-top:2px;">${DASH.escapeHtml(s.heading)}</div>` : ''}
@@ -88,13 +88,18 @@ DASH.renderSceneList = function(scenes) {
       unassigned.push(s);
     }
   });
-  Object.values(seqMap).forEach(arr => arr.sort((a, b) => (a.order || 0) - (b.order || 0)));
-  unassigned.sort((a, b) => (a.order || 0) - (b.order || 0));
+  // Order keys can tie — two sequences numbered 1 in different acts, two
+  // scenes moved onto the same key — so the id breaks the tie. This is the
+  // same total order the server derives a scene's number from.
+  const byOrder = (a, b) => ((a.order || 0) - (b.order || 0))
+    || String(a.id).localeCompare(String(b.id));
+  Object.values(seqMap).forEach(arr => arr.sort(byOrder));
+  unassigned.sort(byOrder);
 
   let html = '';
-  acts.sort((a, b) => (a.order || 0) - (b.order || 0));
+  acts.sort(byOrder);
   for (const act of acts) {
-    const actSeqs = sequences.filter(s => s.act_id === act.id).sort((a, b) => (a.order || 0) - (b.order || 0));
+    const actSeqs = sequences.filter(s => s.act_id === act.id).sort(byOrder);
     let actHtml = '';
     for (const seq of actSeqs) {
       const seqScenes = seqMap[seq.id];

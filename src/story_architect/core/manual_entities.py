@@ -32,7 +32,9 @@ from .constants import (ACT_STATUSES, CONFLICT_LEVELS, ENTITY_LABELS, ENTITY_SCH
                         STRUCTURE_TYPES, VALID_ROLES, VALID_STATUSES, VALUE_ARCS, VALUE_LADDER)
 from .db import get_db
 from .entity import (ENTITY_COLUMN_MAP, REVERSED_RELATION_KINDS, _RELATION_FIELDS,
-                     coerce_number, standard_sections)
+                     PlotRoleError, coerce_number, standard_sections,
+                     validate_scene_plot_roles)
+from .scene_script import scene_heading
 
 # What the form can edit today. The spec builder is generic; this is the gate,
 # so a type goes live when its form has been exercised, not when its schema exists.
@@ -99,7 +101,8 @@ LABELS = {
     "act_id": "Act", "sequence_id": "Sequence", "primary_plot": "Primary plot",
     "act_objective": "Objective", "scene_objective": "Objective", "purpose": "Purpose",
     "dramatic_role": "Dramatic role", "plot_roles": "Plot roles", "no_cast": "No characters",
-    "heading": "Heading", "time_of_day": "Time of day", "turning_point": "Turning point",
+    "int_ext": "INT/EXT", "place": "Place", "forced_heading": "Forced heading",
+    "time_of_day": "Time of day", "turning_point": "Turning point",
     "scene_beats": "Beats record", "value_turns": "Value turns", "location": "Location",
 }
 
@@ -143,6 +146,8 @@ UI_REFS = {
     ("sequence", "act_id"): "act",
     ("sequence", "primary_plot"): "plot",
     ("scene", "sequence_id"): "sequence",
+    ("scene", "location"): "location",
+    ("scene", "characters"): "character",
 }
 
 # Where an act / sequence / scene sits is chosen once, when it is made. After that it
@@ -151,9 +156,12 @@ POSITION = {("sequence", "act_id"), ("scene", "sequence_id")}
 # `order` is Reorder's; a scene's `act_id` is just its sequence's act, kept in step by the form.
 HIDDEN = {("act", "order"), ("sequence", "order"), ("scene", "order"), ("scene", "act_id"),
           ("scene", "turning_point"), ("scene", "scene_beats")}      # the last two live in the Beats tab
-# Written by the script editor together with the script, so the heading line and
-# these fields can never disagree. Shown, with a way to get there; never edited here.
-SCRIPT_FIELDS = ("heading", "location", "time_of_day", "characters")
+# The writing-time part of the heading, owned by the script editor: it writes
+# these together with the script, so the composed line cannot disagree with
+# them. The entity form does not show or write them — `_clean` discards them if
+# a client posts them anyway. Cast, location and place are edited by both, since
+# they are facts about the scene as much as parts of its heading.
+SCRIPT_FIELDS = ("int_ext", "time_of_day", "forced_heading")
 # Shown but not editable in this form.
 READ_ONLY: dict = {}
 # Written by the form, but as a purpose-built editor on its own tab rather than a generic widget.
@@ -190,16 +198,24 @@ FIELD_ORDER = {
     "relationship": ["name", "characters", "perspectives", "status", "history", "scenes"],
     "act": ["title", "status", "act_objective"],
     "sequence": ["title", "act_id", "status", "primary_plot", "purpose"],
-    "scene": ["title", "sequence_id", "status", "one_sentence", "scene_objective", "no_cast",
-              "dramatic_role", "plot_roles"],
+    "scene": ["title", "sequence_id", "status", "one_sentence", "scene_objective",
+              "characters", "no_cast", "location", "place", "dramatic_role", "plot_roles"],
 }
 
 # A name the form can suggest from other fields until the person types their own.
 AUTO_NAME = {"relationship": {"from": "characters", "join": " & "}}
 
-# Visual grouping inside one form.
-GROUPS = {("project", k): "Title page" for k in
-          ("screenplay_title", "credit", "author", "contact", "draft_date", "draft")}
+# Visual grouping inside one form. The group is declared on the schema field
+# (`group`), so the form shows exactly what story_describe tells the agent.
+GROUPS = {(entity_type, key): meta["group"]
+          for entity_type, schema in ENTITY_SCHEMAS.items()
+          for key, meta in schema.items() if meta.get("group")}
+
+# A group is the script-side model: it names the fields that compose a heading,
+# which is what story_describe teaches the agent. A form that edits only part of
+# such a group renders no header — half a heading under a "Scene heading" title
+# would mislead.
+UNGROUPED_IN_FORM = {("scene", "location"), ("scene", "place")}
 
 MULTILINE = {"note", "history", "purpose", "spine", "controlling_idea", "act_objective"}
 
@@ -248,7 +264,8 @@ HELP = {
     ("scene", "sequence_id"): "Which sequence it belongs to. Choose once — move it later with Reorder.",
     ("scene", "one_sentence"): "One line that sums up the scene.",
     ("scene", "scene_objective"): "What the driving character wants in this scene.",
-    ("scene", "dramatic_role"): "Leave empty if the scene serves a plot. Transition and non-event scenes serve none.",
+    ("scene", "place"): "The specific place within that location, when it names a bigger area.",
+    ("scene", "dramatic_role"): "Plot role if the scene serves a plot. Transition and non-event scenes serve none.",
     ("scene", "no_cast"): "Tick this when nobody appears on purpose, e.g. an empty room.",
     **{k: v for k, v in VALUE_LADDER.items()},
 }
@@ -313,7 +330,7 @@ def _field_spec(entity_type: str, key: str, meta: dict) -> dict:
         "required": False,
         "default": _json_default(meta),
     }
-    if (entity_type, key) in GROUPS:
+    if (entity_type, key) in GROUPS and (entity_type, key) not in UNGROUPED_IN_FORM:
         spec["group"] = GROUPS[(entity_type, key)]
     if (entity_type, key) in SHOW_IF:
         spec["show_if"] = SHOW_IF[(entity_type, key)]
@@ -397,8 +414,8 @@ def form_spec(entity_type: str) -> dict:
         "fields": fields,
         "sections": _sections(entity_type),
         "singleton": entity_type in SINGLETONS,
-        **({"script_link": True, "tabs": [{"id": "turns", "label": "Value turns"},
-                                          {"id": "beats", "label": "Beats"}]} if entity_type == "scene" else {}),
+        **({"tabs": [{"id": "turns", "label": "Value turns"},
+                     {"id": "beats", "label": "Beats"}]} if entity_type == "scene" else {}),
         **({"auto_name": AUTO_NAME[entity_type]} if entity_type in AUTO_NAME else {}),
     }
 
@@ -464,8 +481,10 @@ def _scene_rows(conn, scene_id: str) -> dict:
     cast = [r[0] for r in conn.execute(
         "SELECT e.name FROM relations r JOIN entities e ON e.id=r.from_id "
         "WHERE r.to_id=? AND r.kind='character_scene' AND e.is_deleted=0 ORDER BY r.\"order\"", (scene_id,))]
+    heading = scene_heading(ex.get("int_ext") or "", loc, ex.get("place") or "",
+                            ex.get("time_of_day") or "", ex.get("forced_heading") or "")
     return {
-        "heading": one(ex.get("heading")), "location": one(loc),
+        "heading": one(heading), "location": one(loc),
         "time_of_day": one(ex.get("time_of_day")), "characters": [{"display": n} for n in cast],
     }
 
@@ -939,19 +958,24 @@ def _validate_kind_specific(conn, entity_type, entity_id, values, errors, warnin
         if baseline is None or values.get(SHEET_KEY) != baseline.get(SHEET_KEY):
             _validate_sheet(conn, values.get(SHEET_KEY) or BLANK_SHEET, errors)
         roles = values.get("plot_roles") or []
-        seen = set()
         for i, r in enumerate(roles):
             at = f"plot_roles.{i}"
             if not r.get("plot"):
                 errors[f"{at}.plot"] = "Choose the plot."
             elif not _exists(conn, "plot", r["plot"]):
                 errors[f"{at}.plot"] = f"There is no plot “{r['plot']}” — pick one from the list."
-            elif r["plot"] in seen:
-                errors[f"{at}.plot"] = "This scene already has a role in that plot — one role per plot."
-            else:
-                seen.add(r["plot"])
             if r.get("role") not in PLOT_ROLES:
                 errors[f"{at}.role"] = "Choose a role."
+        # Only once every card names a real plot and a real role: the pair rules
+        # need that to mean anything. The exception carries the offending pair,
+        # so the message lands on the card that caused it.
+        if not any(k.startswith("plot_roles.") for k in errors):
+            try:
+                validate_scene_plot_roles(None, roles, scene_id=entity_id, conn=conn)
+            except PlotRoleError as e:
+                i = max(j for j, r in enumerate(roles)
+                        if (r.get("plot"), r.get("role")) == (e.plot, e.role))
+                errors[f"plot_roles.{i}.role"] = str(e)
         if values.get("dramatic_role") in ("transition", "non-event") and roles and "dramatic_role" not in errors:
             errors["dramatic_role"] = (f"A {values['dramatic_role']} scene serves no plot, but it has plot roles. "
                                        f"Remove them, or leave the dramatic role empty.")
