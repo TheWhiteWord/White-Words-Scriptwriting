@@ -50,7 +50,8 @@
 
 ## 2. Baseline (dev @ 10de943)
 
-- `python -m pytest tests -q` → **1329 passed, 1 failed**.
+- `python -m pytest tests -q` → **1329 passed, 1 failed** at `10de943`.
+  After patch 01: 1336 passed. After patch 02: **1353 passed**, same 1 failure.
 - Known pre-existing failure, unrelated to this work:
   `tests/test_no_hermes_imports.py` (finds the word "hermes" in
   `src/story_architect/app/config.py`). Leave it alone unless asked.
@@ -62,7 +63,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 
 ### Phase A — Bugs (do first)
 
-- [x] **A1. Live-update stream never fires.** *(patch 01 — done 2026-11-16)*
+- [A] **A1. Live-update stream never fires.** *(patch 01 — applied)*
   `app/routes/projects.py` `/events` opens a *new* SQLite connection every
   second and reads `PRAGMA data_version`. That value only changes for commits
   made by *other* connections while *this* one stays open. Verified with a
@@ -78,14 +79,32 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   The frontend (`web/js/core.js` `watchUpdates`) had no fallback, so the
   "Project updated" banner never appeared before this fix. Frontend unchanged.
 
-- [ ] **A2. Transaction helper; stop running multi-statement writes in
-  autocommit.** `delete_entity`, `create_entity` (and the `manual_*` write
-  paths, check each) have no `BEGIN`. A crash or lock error mid-way leaves a
-  half-applied change. Add `transaction(conn)` context manager in `core/db.py`
-  (BEGIN … COMMIT, ROLLBACK on exception), use it everywhere writes span more
-  than one statement. Replace the existing manual BEGIN/COMMIT/ROLLBACK blocks
-  with it (writes.py, story_import.py).
-  Test: inject a failure mid-delete / mid-create, assert nothing persisted.
+- [x] **A2. Transaction helper; stop running multi-statement writes in
+  autocommit.** *(patch 02 — done 2026-11-16)*
+  **Correction to the original review:** it said `create_entity` and the
+  `manual_*` paths had no transaction. That was wrong — `create_project`,
+  `create_entity`, `edit_entity`, `reorder` and the import handler already had
+  a hand-written `BEGIN … COMMIT / except → swallowed ROLLBACK`. The real
+  findings were: that block was copy-pasted five times, and `delete_entity`,
+  `_purge_deleted` and `_restore_entity` (story_admin) had **no** transaction.
+  (The `manual_*` modules call the `core/writes.py` functions, so they were
+  already covered.)
+  *Result:* `core.db.transaction(conn)` — `BEGIN IMMEDIATE`, commit on exit
+  (also on early `return`), rollback on any exception without masking it,
+  `SAVEPOINT` when nested (needed by E2). All five hand-written blocks now use
+  it; delete / purge / restore are atomic. Also fixed: `story_import` crashed
+  with `cannot rollback - no transaction is active` if anything failed before
+  its `BEGIN` (e.g. the safety backup); it now returns the JSON error.
+  *Why IMMEDIATE:* verified by experiment — with a plain `BEGIN`, a block that
+  reads then writes fails instantly with `database is locked` if another writer
+  commits in between (`busy_timeout` does not apply); with IMMEDIATE the second
+  writer waits. The web UI and the agent's tools can write concurrently.
+  *Tests:* `tests/test_transaction.py` (helper, nesting, locking, 4-thread
+  read-modify-write) and `tests/test_write_atomicity.py` (a SQLite trigger makes
+  the last step of delete / purge / restore / import fail; the database must be
+  unchanged). Against the original code 4 of the 6 behaviour tests fail.
+  Not changed on purpose: `chat/store.py` (Python's implicit transactions plus
+  an explicit `commit()` — fine as is); `drafts.commit` (E2).
 
 ### Phase B — Foundations
 
@@ -195,7 +214,8 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 
 | Patch file | Task | Base | Applied by user? | Notes |
 |---|---|---|---|---|
-| `01-A1-live-update-stream.patch` | A1 | dev @ 4e15cc2 | pending | +7 tests (1336 pass, same 1 baseline failure). Touches `app/routes/projects.py`, adds `tests/test_db_change_watcher.py` |
+| `01-A1-live-update-stream.patch` | A1 | dev @ 4e15cc2 | yes | +7 tests (1336 pass, same 1 baseline failure). Touches `app/routes/projects.py`, adds `tests/test_db_change_watcher.py` |
+| `02-A2-transaction-helper.patch` | A2 | dev @ d6756d9 | pending | +17 tests (1353 pass, same 1 baseline failure). core/db.py, core/writes.py, tools/story_admin.py, tools/story_import.py, docstring in core/drafts.py; two new test files. Source net ≈ +94/−64 ignoring re-indentation |
 
 ## 6. Session notes
 
@@ -219,3 +239,10 @@ WAL mode and `busy_timeout`; `Connection.backup()` for snapshots; FTS5
 external-content table with its three triggers; fractional `order_key`;
 short-lived connections; snapshots before import / purge / project delete; the
 separate `chat.db` (chat is not story data); the existing test coverage.
+- 2026-11-16 — Session 1 (cont.): A1 applied by user. A2 done → patch 02
+  (base dev @ d6756d9). Next: B1 (`PRAGMA user_version` migrations).
+  More practical notes: (e) to prove a new test can fail, run it against an
+  unmodified checkout: `git worktree add /tmp/base HEAD`, copy the test in, run
+  with `PYTHONPATH=/tmp/base/src`; (f) a SQLite trigger that `RAISE(ABORT)` is a
+  neat way to make the last step of a multi-step write fail in a test; (g) use
+  `git diff -w` to review a re-indentation refactor.
