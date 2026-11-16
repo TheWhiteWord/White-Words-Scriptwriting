@@ -1084,9 +1084,15 @@ def _validate_sequence_exists(conn, sequence_id: str) -> None:
 
 
 def _get_next_order_db(conn, entity_type: str, parent_id: str) -> int:
-    """Compute next order value for a new child within its parent."""
+    """Compute next order value for a new child within its parent.
+
+    Live rows only. A soft-deleted child keeps its `order_key`, so counting it
+    would hand the next scene a number with a hole in it (1, 2, 4 after a
+    delete) — and the Scenes tab shows that key as the scene's number.
+    """
     row = conn.execute(
-        "SELECT COALESCE(MAX(order_key), 0) + 1 FROM entities WHERE type=? AND parent_id=?",
+        "SELECT COALESCE(MAX(order_key), 0) + 1 FROM entities "
+        "WHERE type=? AND parent_id=? AND is_deleted=0",
         (entity_type, parent_id),
     ).fetchone()
     return int(row[0]) if row else 1

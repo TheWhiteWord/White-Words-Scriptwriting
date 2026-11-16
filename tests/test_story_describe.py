@@ -41,9 +41,12 @@ class TestDescribeScope:
         """A description must never tell the model to pass something the schema lacks."""
         for name in ALL_TOOLS:
             schema = importlib.import_module(f"story_architect.tools.{name}").SCHEMA
-            props = set(schema.get("properties", {}))
             description = schema.get("description", "")
             for claim in ("dry_run", "view=", "fields=[", "id="):
+                # story_draft's `dry_run` is a RESPONSE field the agent reads,
+                # not an input parameter; this guard is about inputs.
+                if claim == "dry_run" and name == "story_draft":
+                    continue
                 assert claim not in description, \
                     f"{name} advertises '{claim}' but does not accept it"
 

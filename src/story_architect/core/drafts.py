@@ -1,9 +1,11 @@
 """Draft staging — propose a set of entity changes, write them on commit.
 
 A draft is a row in the project's own `drafts` table holding a list of ops.
-Nothing here touches `entities`, `sections` or `relations` until `commit_draft`
+Nothing here touches `entities`, `sections` or `relations` until `commit`
 dispatches the ops into `core.writes`, so a staged batch is inert: staging a
-change and never committing it leaves no trace in the story.
+change and never committing it leaves no trace in the story. `dry_run` does
+dispatch the ops into `core.writes`, but on a throwaway copy of the database,
+so the project's own tables still go untouched.
 
 Ops mirror what the write functions already take, so staging is the same
 computation as a dry run with a different sink. Design of record:
@@ -194,7 +196,11 @@ def validate_shape(ops: list) -> list[str]:
 
 def stage(project_path: Path, ops, summary: str = "",
          draft_id: str | None = None) -> dict:
-    """Store an op list as a draft. Writes one row and nothing else.
+    """Store an op list as a draft and replay it against a copy of the project.
+
+    Writes one row to the project and nothing else: the replay runs on a
+    throwaway copy of the database, so the verdict reaches the caller without
+    touching the story.
 
     Staging twice on the same `draft_id` REPLACES the op list — staging is a
     proposal, not a queue — and the replaced list goes to `prev_ops` so the
@@ -246,6 +252,7 @@ def stage(project_path: Path, ops, summary: str = "",
             summary=summary or (row[1] if row else ""), changes=restaged_changes,
         ),
         "validation": validate_shape(ops),
+        "dry_run": dry_run(project_path, new_id),
     }
     if prev_ops is not None:
         result["restaged"] = True
@@ -417,6 +424,51 @@ def commit(project_path: Path, draft_id: str) -> dict:
         "applied": landed,
         "preview_md": _commit_report(landed, None, draft_id),
         "message": f"Committed {len(landed)} change(s) from draft {draft_id}.",
+    }
+
+
+def dry_run(project_path: Path, draft_id: str) -> dict:
+    """Replay a staged draft against a throwaway copy of the project database.
+
+    `commit` runs unchanged on the copy, so op ordering, within-batch effects
+    and every validator behave exactly as they will at the real commit — there
+    is no second copy of any rule. The copy lives outside the project and is
+    removed on every path, so staging leaves no footprint. Never raises: a
+    sandbox failure is a verdict, not an exception.
+    """
+    import tempfile
+
+    from .db import get_db
+
+    try:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            story_dir = Path(tmp) / ".story"
+            story_dir.mkdir()
+            src = get_db(project_path)
+            try:
+                dest = sqlite3.connect(str(story_dir / "story.db"))
+                try:
+                    # backup(), not a file copy: the DB is in WAL mode, so a
+                    # plain copy can miss committed writes still in the WAL.
+                    src.backup(dest)
+                finally:
+                    dest.close()
+            finally:
+                src.close()
+            try:
+                result = commit(Path(tmp), draft_id)
+            except Exception as e:
+                return {"status": "unavailable",
+                        "error": f"{type(e).__name__}: {e}"}
+    except Exception as e:
+        return {"status": "unavailable", "error": f"{type(e).__name__}: {e}"}
+
+    if result.get("success"):
+        return {"status": "clean"}
+    return {
+        "status": "refused",
+        "failed_op": result["failed"]["op"],
+        "error": result["failed"]["error"],
     }
 
 

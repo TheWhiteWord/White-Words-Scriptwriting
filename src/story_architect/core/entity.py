@@ -280,14 +280,6 @@ def distinct_ladder_words(words: dict) -> bool:
     return len({v.lower() for v in vals}) == len(VALUE_LADDER)
 
 
-def update_sections(note_path: Path, sections: list[str]) -> None:
-    """Update the sections field in a note's frontmatter."""
-    post = frontmatter.load(note_path)
-    post["sections"] = sections
-    with open(note_path, 'w') as f:
-        frontmatter.dump(post, f, sort_keys=False)
-
-
 # ─── DB column/relation mapping ───
 
 # FM field name → DB column name, per entity type

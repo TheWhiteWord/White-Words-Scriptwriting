@@ -349,5 +349,3 @@ write path's behaviour and messages are unchanged, and `PlotRoleError` is a
   errors; a second `setup` → clean; `sub`/`climax` while `main`/`climax` exists →
   clean; `main`/`crisis` twice in one scene →
   `errors["plot_roles.1.role"] == "Duplicate plot role: main / crisis appears twice in this scene's plot_roles."`
-
-
