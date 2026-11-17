@@ -51,7 +51,7 @@
 ## 2. Baseline (dev @ 10de943)
 
 - `python -m pytest tests -q` → **1329 passed, 1 failed** at `10de943`.
-  After patch 01: 1336 passed. After patch 02: 1353 passed. After patch 03: **1366 passed**, same 1 failure.
+  After patch 01: 1336 passed. After patch 02: 1353 passed. After patch 03: 1366. After 04: 1372. After 05: 1383. After 06: **1399 passed**, same 1 failure.
 - Known pre-existing failure, unrelated to this work:
   `tests/test_no_hermes_imports.py` (finds the word "hermes" in
   `src/story_architect/app/config.py`). Leave it alone unless asked.
@@ -108,7 +108,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 
 ### Phase B — Foundations
 
-- [x] **B1. Schema versioning with `PRAGMA user_version`.** *(patch 03 — done 2026-11-17)*
+- [A] **B1. Schema versioning with `PRAGMA user_version`.** *(patch 03 — done 2026-11-17)*
   Replaced `ensure_soft_delete_columns` / `ensure_draft_status_column` (4
   catalogue queries on every `get_db`) and `chat/store.py`'s per-open
   `executescript` + `table_info` + `ALTER` loop.
@@ -150,21 +150,49 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   applies). (3) `get_db` still runs `PRAGMA journal_mode=WAL` on every open
   (persistent setting; harmless).
 
-- [ ] **B2. Backup helper cleanup.** One place for naming and destination.
-  Use a microsecond timestamp (`%Y%m%d_%H%M%S_%f`) and drop both
-  collision-counter loops. Give `backup_database` an optional destination so
-  `_backup_outside` no longer backs up then moves. Optionally move snapshots to
-  `.story/backups/`. Keep WAL-safe `Connection.backup()`.
+- [x] **B2. Backup helper cleanup.** *(patch 04 — done 2026-11-17)*
+  `backup_database(project, *, dest_dir=None, prefix="story")` is now the only
+  backup function. The name is reserved with `tempfile.mkstemp` (no hand-written
+  counter loop); the snapshot is written as `*.partial` and renamed to `.db`
+  only when complete, and a failed one is deleted, so a half-written file can
+  never look like a backup. `delete_project` calls it with
+  `dest_dir=<root>/backups, prefix=<slug>`; `story_admin._backup_outside` (a
+  second naming loop plus a move) is gone. `core/drafts.py` `new_draft_id`
+  keeps its own counter loop on purpose (it guards a primary key, not a file).
+  *Found:* the old check-then-create loop lost or duplicated backups in 9 of 40
+  rounds with 8 simultaneous backups (0 of 40 now). Artificial load, but two
+  at once (UI + agent) is plausible and the failure was silent.
+  *Names:* `story_<date>_<time>_<id>.db` (still match `story_*.db`). Not moved
+  to `.story/backups/` — it would break every existing glob for no real gain.
+  Files are created `0600` (mkstemp), private to the user.
+  **For C4:** a listing must match `story_*.db` and ignore `*.partial`.
 
 ### Phase C — Features a writing app is expected to have
 
-- [ ] **C1. Trash: list deleted entities.** Restore needs an id, but nothing
-  lists deleted entities. Add `story_admin(action="list_deleted")` returning
-  id, type, name, `deleted_at`. (A UI trash view is a later, separate task.)
+- [x] **C1. Trash: list deleted entities.** *(patch 05 — done 2026-11-17)*
+  `story_admin(action="list_deleted")`: every soft-deleted entity, newest
+  first, with `type`, `id`, `name`, `deleted_at`, `purge_eligible` (would a
+  purge with `older_than_days`, default 30, remove it) and `includes` (children
+  deleted in the same operation: same parent, same `deleted_at` stamp — one
+  entry per deletion, as a trash UI would show). Rows with no `deleted_at`
+  (deleted by an earlier build) are listed and never eligible. `type`+`id`
+  feed straight into restore/purge. A UI trash view is still a separate task.
 
-- [ ] **C2. Delete a single item forever.** Purge is currently all-or-nothing
-  by age. Add a per-entity hard delete that only works on already-soft-deleted
-  rows. Reuse the purge internals.
+- [x] **C2. Delete a single item forever.** *(patch 06 — done 2026-11-17)*
+  `story_admin(action="purge", target={entity_type, id}, purge_confirm=…)`
+  removes exactly that entity plus what was deleted with it (children with the
+  same stamp), leaving the rest of the trash alone. Same guards as the sweep
+  (confirm phrase, backup first, one transaction). Refused with nothing
+  changed: entity not in the trash, unknown id, wrong `entity_type`.
+  Works on rows with no `deleted_at`, which the sweep can never see. The shared
+  `_hard_delete()` now also clears the `parent_id`/`location_id` of any
+  remaining row that pointed at a purged entity (a trashed child deleted
+  separately) — in the bulk sweep too.
+  ⚖ **Decision made (see §4): the age floor does not apply to a named item.**
+  **Contract change:** a `target` on `purge` used to be silently ignored (the
+  schema said "for restore") and the call swept everything old enough; now it
+  means "just this one". `tests/test_purge.py`'s helper sent a target on every
+  call, so it now sends one for `restore` only.
 
 - [ ] **C3. Scene revision history.** Table `revisions(id, entity_id, heading,
   body, created_at)`; one choke-point where section bodies are written snapshots
@@ -173,7 +201,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   ⚖ Decide N, and whether to snapshot on every write or only when the body
   actually changed (recommended: only when changed).
 
-- [ ] **C4. Backups: list, restore, retention.** `story_backup` actions to list
+- [ ] **C4. Backups: list, restore, retention.** *(note from B2: list `story_*.db`, ignore `*.partial`; `user_version` travels with a backup, so a restored old one is upgraded on open.)* `story_backup` actions to list
   and restore. Restore must (1) snapshot the current DB first, (2) remove stale
   `story.db-wal` / `-shm` files before replacing `story.db`. Retention: keep the
   last N auto snapshots (⚖ N, suggested 20). Also prune committed `drafts` rows
@@ -200,6 +228,19 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   Update the "exactly as they were" wording in tool descriptions once true.
   Optional follow-up: collapse `is_deleted` + `deleted_at` into one nullable
   `deleted_at` (migration).
+  *Confirmed while doing C1/C2 (2026-11-17):* (1) `delete_entity`'s child query
+  (`SELECT id, type FROM entities WHERE parent_id=?`, core/writes.py) has no
+  `is_deleted=0`, so deleting a parent **re-stamps children that were already in
+  the trash**: their own deletion time is overwritten, a later restore of the
+  parent brings them back, and the confirmation preview (`would_delete` /
+  `cascade_children`) lists them as if this action would delete them. (2) The
+  cascade is one level. A *live* grandchild of the deleted entity is not
+  deleted, and the reference scrub then blanks its `parent_id` (seen with a
+  synthetic grandchild only — check real hierarchies, e.g. nested locations,
+  before treating it as a bug). (3) `list_deleted` and targeted purge group
+  "deleted together" by (same parent, same `deleted_at`), which is exactly what
+  D1's "restore only what this delete flagged" needs too — reuse that rule.
+
 
 - [ ] **D2. Rethink the `DELETE <slug>` confirmation strings.** Today the
   refusal message *prints the required string*, so the agent can supply it
@@ -243,6 +284,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 | Date | Task | Decision |
 |---|---|---|
 | 2026-11-17 | B1 | Refuse (raise `SchemaTooNewError`) a db whose version is newer than the build, rather than open it. Risk: switching to an older branch after a newer one has upgraded a db will refuse to open it until the app is updated or a backup restored. Say if you would rather it only warn. |
+| 2026-11-17 | C2 | Targeted purge (`purge` + `target`) **ignores the 30-day age floor**: naming one already-trashed item is not a sweep; it still needs `purge_confirm`, takes a backup, and refuses live entities. To keep the floor for named items too, add the check in `_select_one_deletion`. |
 
 ## 5. Patch log
 
@@ -250,7 +292,10 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 |---|---|---|---|---|
 | `01-A1-live-update-stream.patch` | A1 | dev @ 4e15cc2 | yes | +7 tests (1336 pass, same 1 baseline failure). Touches `app/routes/projects.py`, adds `tests/test_db_change_watcher.py` |
 | `02-A2-transaction-helper.patch` | A2 | dev @ d6756d9 | yes | +17 tests (1353 pass, same 1 baseline failure). core/db.py, core/writes.py, tools/story_admin.py, tools/story_import.py, docstring in core/drafts.py; two new test files. Source net ≈ +94/−64 ignoring re-indentation |
-| `03-B1-schema-migrations.patch` | B1 | dev @ 3ca8c3b | pending | +13 tests (1366 pass, same 1 baseline failure). core/db.py, chat/store.py; tests/test_schema_migrations.py new; test_legacy_db_migration.py and one test in test_drafts.py adjusted |
+| `03-B1-schema-migrations.patch` | B1 | dev @ 3ca8c3b | yes | +13 tests (1366 pass, same 1 baseline failure). core/db.py, chat/store.py; tests/test_schema_migrations.py new; test_legacy_db_migration.py and one test in test_drafts.py adjusted |
+| `04-B2-backup-helper.patch` | B2 | dev @ 6ae613f | pending | +6 tests (1372). core/db.py, tools/story_admin.py, comment in core/drafts.py |
+| `05-C1-list-deleted.patch` | C1 | stacked on 04 | pending | +11 tests (1383). tools/story_admin.py (new action `list_deleted`) |
+| `06-C2-purge-one.patch` | C2 | stacked on 05 | pending | +16 tests (1399). tools/story_admin.py; tests/test_purge.py helper changed (sends `target` for restore only) |
 
 ## 6. Session notes
 
@@ -284,6 +329,16 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   `isolation_level=None` — an uncommitted INSERT vanishes when the connection
   closes; (j) mutate the code on purpose to prove a test can fail (restore from a
   saved copy afterwards).
+- 2026-11-17 — Session 2 (cont.): B1 applied. B2, C1, C2 done → patches 04, 05,
+  06, stacked in that order (base dev @ 6ae613f). Next: A-phase and B-phase are
+  finished; remaining order suggestion: C3 (scene revisions), C4 (backup
+  list/restore/retention), C5 (project delete → trash folder), then D1/D2 (need
+  your decisions), E-phase. Practical notes: (k) use the `fixture_path` fixture
+  (tests/conftest.py) for tests that need an imported project; (l) when a
+  mutation check says "passed", make sure the mutation text was actually found
+  — a missed target silently tests the unmutated code; (m) a test whose setup
+  relies on an existing quirk (here: re-stamped children) should set the state
+  up in the database directly instead.
 
 ## 7. Things that are fine, leave alone
 

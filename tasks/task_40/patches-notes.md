@@ -55,3 +55,25 @@
 
 The task file also has a short recipe for adding a schema change from now on, and it marks A2 as applied.
 
+### B2. Backup helper cleanup.
+
+**04, B2: one backup function.**
+- **Name and write.** `backup_database` now reserves its file name with Python's `tempfile.mkstemp`. It writes the snapshot as `.partial` and renames it to `.db` only when it's complete, and a failed backup is deleted. `delete_project` uses the same function with a different folder, and the second naming loop is gone.
+- **A silent bug fixed.** The old "check the name, then use it" loop lost or duplicated backups in 9 of 40 rounds with 8 backups at once. The new code had 0 of 40. Eight at once is artificial, but two at once from the UI and the agent is plausible.
+
+## Phase C — Features a writing app is expected to have
+
+### C1. Trash: list deleted entities
+**05, C1: a trash list.** `story_admin(action="list_deleted")` shows every deleted item, newest first. For each it gives the type and id that restore needs, when it was deleted, and whether a purge would remove it. A scene deleted together with its beats appears as one entry with "includes". Items deleted before `deleted_at` existed are listed too, and the bulk purge could never see those.
+
+I also found a real problem in existing code while writing the C1 tests, and I left it for D1. When you delete a parent, `delete_entity` re-stamps children that were already in the trash. Their own deletion time is overwritten, restoring the parent brings them back, and the confirmation preview lists them as "would delete". There's also a lead about grandchildren being orphaned, which I only saw with a made-up test case. Both are written up under D1.
+
+### C2. Delete a single item forever.
+
+**06, C2: delete one item forever.** `purge` with a `target` removes exactly that item, plus what was deleted with it, and leaves the rest of the trash alone. It needs the same confirmation and takes a backup first. It refuses anything that isn't already in the trash, an unknown id, or a wrong type. It also clears links from remaining trashed items that pointed at what was removed, which the bulk purge now does too.
+
+Two things for you to review:
+- **A decision for you.** A named delete-forever skips the 30-day wait, because naming one item isn't a bulk tidy-up. It still needs the confirmation phrase and takes a backup. If you'd like the wait kept, it's a one-line change, and it's recorded in §4.
+- **A contract change.** A `target` on `purge` used to be silently ignored, and the call wiped everything old enough. Now it means "just this one". `tests/test_purge.py`'s helper sent a target on every call, so it now sends one for `restore` only. That's the only existing test I changed.
+
+I caught two gaps in my own tests during mutation checking and fixed them. In one, the mutation text wasn't found, so it had silently tested unmodified code.
