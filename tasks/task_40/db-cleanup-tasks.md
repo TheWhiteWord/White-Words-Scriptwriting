@@ -51,7 +51,7 @@
 ## 2. Baseline (dev @ 10de943)
 
 - `python -m pytest tests -q` → **1329 passed, 1 failed** at `10de943`.
-  After patch 01: 1336 passed. After patch 02: 1353 passed. After patch 03: 1366. After 04: 1372. After 05: 1383. After 06: **1399 passed**, same 1 failure.
+  After patch 01: 1336 passed. After patch 02: 1353 passed. After patch 03: 1366. After 04: 1372. After 05: 1383. After 06: 1399. After 07: **1420 passed**, same 1 failure.
 - Known pre-existing failure, unrelated to this work:
   `tests/test_no_hermes_imports.py` (finds the word "hermes" in
   `src/story_architect/app/config.py`). Leave it alone unless asked.
@@ -150,7 +150,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   applies). (3) `get_db` still runs `PRAGMA journal_mode=WAL` on every open
   (persistent setting; harmless).
 
-- [x] **B2. Backup helper cleanup.** *(patch 04 — done 2026-11-17)*
+- [A] **B2. Backup helper cleanup.** *(patch 04 — done 2026-11-17)*
   `backup_database(project, *, dest_dir=None, prefix="story")` is now the only
   backup function. The name is reserved with `tempfile.mkstemp` (no hand-written
   counter loop); the snapshot is written as `*.partial` and renamed to `.db`
@@ -169,7 +169,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 
 ### Phase C — Features a writing app is expected to have
 
-- [x] **C1. Trash: list deleted entities.** *(patch 05 — done 2026-11-17)*
+- [A] **C1. Trash: list deleted entities.** *(patch 05 — done 2026-11-17)*
   `story_admin(action="list_deleted")`: every soft-deleted entity, newest
   first, with `type`, `id`, `name`, `deleted_at`, `purge_eligible` (would a
   purge with `older_than_days`, default 30, remove it) and `includes` (children
@@ -178,7 +178,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   (deleted by an earlier build) are listed and never eligible. `type`+`id`
   feed straight into restore/purge. A UI trash view is still a separate task.
 
-- [x] **C2. Delete a single item forever.** *(patch 06 — done 2026-11-17)*
+- [A] **C2. Delete a single item forever.** *(patch 06 — done 2026-11-17)*
   `story_admin(action="purge", target={entity_type, id}, purge_confirm=…)`
   removes exactly that entity plus what was deleted with it (children with the
   same stamp), leaving the rest of the trash alone. Same guards as the sweep
@@ -194,12 +194,34 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   means "just this one". `tests/test_purge.py`'s helper sent a target on every
   call, so it now sends one for `restore` only.
 
-- [ ] **C3. Scene revision history.** Table `revisions(id, entity_id, heading,
-  body, created_at)`; one choke-point where section bodies are written snapshots
-  the *previous* body; keep last N per (entity, heading) (default 20); tool/API
-  to list and restore a revision. Schema via a B1 migration.
-  ⚖ Decide N, and whether to snapshot on every write or only when the body
-  actually changed (recommended: only when changed).
+- [x] **C3. Scene revision history.** *(patch 07 — done 2026-11-17)*
+  Table `revisions(id, entity_id, heading, body, replaced_at, summary)` + index
+  (schema migration 3, and `SCHEMA_SQL` for new databases). One hook:
+  `edit_entity` calls `core.revisions.snapshot_replaced_body` just before it
+  overwrites a section, in the same transaction — so the agent's draft commits
+  and the script editor's Save are both covered (the only two paths; the UI's
+  `save_scene_script` goes through `edit_entity`). `core/revisions.py`:
+  `list_revisions`, `get_revision`, `restore_revision`. New `story_admin`
+  actions `list_revisions` (target {id}, optional heading) and
+  `restore_revision` (target {id}, revision_id). Restore is an ordinary edit, so
+  it keeps what it replaces and can be undone by restoring again.
+  *Rules:* nothing is kept when the section is new, its old body is empty, or
+  the new text is identical; sections only, not an entity's other fields
+  (heading parts, cast, status); `replaced_at` is when the text *stopped* being
+  current; each revision carries the summary of the edit that replaced it.
+  Soft delete keeps the history, purge removes it with the entity, the Markdown
+  import leaves it alone (`_clear_all` touches only relations, sections,
+  entities). Restore refuses a locked scene and another entity's revision.
+  ⚖ **Decisions made (see §4):** keep **50** per (entity, section) (the editor
+  saves on demand, so every save is distinct; 50 survives a heavy session);
+  snapshot only when the text actually changed.
+  *Not done:* no web route / UI for history yet (the actions are agent-facing;
+  `core.revisions` is what a route would call). The Markdown import does not
+  snapshot what it overwrites (it takes a full backup first).
+  *Observed:* the scene **lock** is enforced only in the UI save path
+  (`manual_edits.save_scene_script`), not at the write boundary — an agent
+  edit through `story_draft` is not stopped by `status='locked'`. Worth a
+  decision when D-phase happens.
 
 - [ ] **C4. Backups: list, restore, retention.** *(note from B2: list `story_*.db`, ignore `*.partial`; `user_version` travels with a backup, so a restored old one is upgraded on open.)* `story_backup` actions to list
   and restore. Restore must (1) snapshot the current DB first, (2) remove stale
@@ -285,6 +307,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 |---|---|---|
 | 2026-11-17 | B1 | Refuse (raise `SchemaTooNewError`) a db whose version is newer than the build, rather than open it. Risk: switching to an older branch after a newer one has upgraded a db will refuse to open it until the app is updated or a backup restored. Say if you would rather it only warn. |
 | 2026-11-17 | C2 | Targeted purge (`purge` + `target`) **ignores the 30-day age floor**: naming one already-trashed item is not a sweep; it still needs `purge_confirm`, takes a backup, and refuses live entities. To keep the floor for named items too, add the check in `_select_one_deletion`. |
+| 2026-11-17 | C3 | Keep **50** revisions per (entity, section); snapshot only when the text changed (not on empty/identical overwrites). Change `REVISIONS_KEPT` in `core/revisions.py` to alter the cap. |
 
 ## 5. Patch log
 
@@ -293,9 +316,10 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 | `01-A1-live-update-stream.patch` | A1 | dev @ 4e15cc2 | yes | +7 tests (1336 pass, same 1 baseline failure). Touches `app/routes/projects.py`, adds `tests/test_db_change_watcher.py` |
 | `02-A2-transaction-helper.patch` | A2 | dev @ d6756d9 | yes | +17 tests (1353 pass, same 1 baseline failure). core/db.py, core/writes.py, tools/story_admin.py, tools/story_import.py, docstring in core/drafts.py; two new test files. Source net ≈ +94/−64 ignoring re-indentation |
 | `03-B1-schema-migrations.patch` | B1 | dev @ 3ca8c3b | yes | +13 tests (1366 pass, same 1 baseline failure). core/db.py, chat/store.py; tests/test_schema_migrations.py new; test_legacy_db_migration.py and one test in test_drafts.py adjusted |
-| `04-B2-backup-helper.patch` | B2 | dev @ 6ae613f | pending | +6 tests (1372). core/db.py, tools/story_admin.py, comment in core/drafts.py |
-| `05-C1-list-deleted.patch` | C1 | stacked on 04 | pending | +11 tests (1383). tools/story_admin.py (new action `list_deleted`) |
-| `06-C2-purge-one.patch` | C2 | stacked on 05 | pending | +16 tests (1399). tools/story_admin.py; tests/test_purge.py helper changed (sends `target` for restore only) |
+| `04-B2-backup-helper.patch` | B2 | dev @ 6ae613f | yes | +6 tests (1372). core/db.py, tools/story_admin.py, comment in core/drafts.py |
+| `05-C1-list-deleted.patch` | C1 | stacked on 04 | yes | +11 tests (1383). tools/story_admin.py (new action `list_deleted`) |
+| `06-C2-purge-one.patch` | C2 | stacked on 05 | yes | +16 tests (1399). tools/story_admin.py; tests/test_purge.py helper changed (sends `target` for restore only) |
+| `07-C3-revisions.patch` | C3 | dev @ 67a82d3 | pending | +21 tests (1420). core/db.py (schema + migration 3), core/revisions.py (new), core/writes.py (hook), tools/story_admin.py (2 actions, purge cleanup) |
 
 ## 6. Session notes
 
@@ -339,6 +363,13 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   — a missed target silently tests the unmutated code; (m) a test whose setup
   relies on an existing quirk (here: re-stamped children) should set the state
   up in the database directly instead.
+- 2026-11-17 — Session 2 (cont.): 04–06 applied. C3 done → patch 07 (base dev @
+  67a82d3). Next: C4 (backup list/restore/retention — needs two small decisions:
+  how many backups to keep, and whether manual backups are exempt from
+  pruning), C5 (project delete → trash folder), then D1/D2, E-phase.
+  Practical notes: (n) a test assertion ending in `or True` slipped through
+  once — mutation-check every new test file; (o) the script editor has no
+  autosave (explicit Save / Ctrl+S; the only debounce is the live check).
 
 ## 7. Things that are fine, leave alone
 

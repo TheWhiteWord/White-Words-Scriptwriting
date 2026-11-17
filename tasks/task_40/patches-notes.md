@@ -77,3 +77,20 @@ Two things for you to review:
 - **A contract change.** A `target` on `purge` used to be silently ignored, and the call wiped everything old enough. Now it means "just this one". `tests/test_purge.py`'s helper sent a target on every call, so it now sends one for `restore` only. That's the only existing test I changed.
 
 I caught two gaps in my own tests during mutation checking and fixed them. In one, the mutation text wasn't found, so it had silently tested unmodified code.
+
+## C3. Scene revision history.
+
+**What it does.** Until now, saving a scene replaced its text for good. Now every save keeps the text it replaced. It's one hook inside `edit_entity`, and I confirmed that both the agent's draft commits and the script editor's Save go through it. The kept copy is written in the same transaction as the overwrite, so a failed save can't leave a stray revision.
+
+- **Restoring.** Restoring an old version is an ordinary edit, so the text it replaces is kept too. Restoring twice takes you back where you started. It refuses a locked scene or another entity's revision.
+- **Where you reach it.** There are two new `story_admin` actions, `list_revisions` and `restore_revision`. For now they're agent-facing, so you'd say "put back the version of scene X from this morning". There's no web history panel yet, but `core/revisions.py` has what a route or button would call.
+- **Details.**
+  - A revision shows when the text stopped being current, the summary of the edit that replaced it, its length, and a one-line preview.
+  - Soft delete keeps the history. Purge removes it with the entity. A Markdown re-import leaves it alone.
+  - Nothing is kept when the text is identical or the old text is empty.
+  - It covers section text only, not fields like heading parts, cast or status.
+- **Decisions I made (recorded in §4).** I keep the last 50 versions per section, not the 20 in the plan, because the editor saves on demand and a habitual Ctrl+S would burn through 20 in one sitting. Say if you want a different number; it's one constant. I also kept the "only when the text changed" rule from the plan.
+
+**How I checked it.** I broke six rules on purpose, one at a time. Examples: the hook removed, retention pruning the wrong rows, locked scenes allowed, purge leaving history behind. Each break made a test fail. I also found a test of mine with an assertion that could never fail (it ended in `or True`) and fixed it.
+
+**One finding for later.** The scene lock is enforced only in the UI's save path, not at the write boundary. An agent edit through `story_draft` isn't stopped by a locked scene. I didn't change that, but it's recorded in the task file for the D-phase discussion.
