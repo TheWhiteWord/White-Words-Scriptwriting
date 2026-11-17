@@ -51,7 +51,7 @@
 ## 2. Baseline (dev @ 10de943)
 
 - `python -m pytest tests -q` → **1329 passed, 1 failed** at `10de943`.
-  After patch 01: 1336 passed. After patch 02: **1353 passed**, same 1 failure.
+  After patch 01: 1336 passed. After patch 02: 1353 passed. After patch 03: **1366 passed**, same 1 failure.
 - Known pre-existing failure, unrelated to this work:
   `tests/test_no_hermes_imports.py` (finds the word "hermes" in
   `src/story_architect/app/config.py`). Leave it alone unless asked.
@@ -79,7 +79,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   The frontend (`web/js/core.js` `watchUpdates`) had no fallback, so the
   "Project updated" banner never appeared before this fix. Frontend unchanged.
 
-- [x] **A2. Transaction helper; stop running multi-statement writes in
+- [A] **A2. Transaction helper; stop running multi-statement writes in
   autocommit.** *(patch 02 — done 2026-11-16)*
   **Correction to the original review:** it said `create_entity` and the
   `manual_*` paths had no transaction. That was wrong — `create_project`,
@@ -108,13 +108,47 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 
 ### Phase B — Foundations
 
-- [ ] **B1. Schema versioning with `PRAGMA user_version`.** Replace
-  `ensure_soft_delete_columns`, `ensure_draft_status_column` (in `get_db`, run
-  on every open) and the `ALTER TABLE` loop in `chat/store.py` with an ordered
-  list of migration functions, run once when `user_version` is behind.
-  Existing legacy DBs (no version, partially migrated) must land on the current
-  version. Keep `tests/test_legacy_db_migration.py` passing and extend it.
-  This is the place later tasks add their schema changes.
+- [x] **B1. Schema versioning with `PRAGMA user_version`.** *(patch 03 — done 2026-11-17)*
+  Replaced `ensure_soft_delete_columns` / `ensure_draft_status_column` (4
+  catalogue queries on every `get_db`) and `chat/store.py`'s per-open
+  `executescript` + `table_info` + `ALTER` loop.
+  *Result:* `core.db.SCHEMA_MIGRATIONS` (ordered, **append-only**; the number of
+  entries is the schema version), `apply_migrations(conn, list, name=)`,
+  `SchemaTooNewError`. The two old repairs are steps 1 and 2 and stay guarded
+  (they also run on unstamped databases of unknown shape). `chat.store.MIGRATIONS`
+  uses the same runner (step 1 = the five `messages` columns).
+  Rules of the design: `get_db` reads one pragma and runs nothing on a current
+  db; a file with no tables is left alone; `create_schema` stamps a *new* db
+  current without running steps, so future steps never have to cope with a
+  freshly built db; pending steps + version stamp are one transaction and the
+  version is re-read under the write lock (two processes opening an old db
+  upgrade it once); a db *newer* than the build is refused (⚖ see §4);
+  `Connection.backup()` keeps `user_version`, so a restored old backup is
+  upgraded on open (matters for C4).
+  *How to add a schema change from now on:* (1) put the new shape in
+  `SCHEMA_SQL`, (2) append one function to `SCHEMA_MIGRATIONS` that upgrades an
+  existing db, using `conn.execute()` only (never `executescript` — it commits).
+  Steps after #2 may assume the shape the earlier ones leave.
+  *Verified:* tests (13 new) incl. mutation checks; and against databases built
+  from the repo's own history (`SCHEMA_SQL` at `2e9cb29^` = before soft delete,
+  `b5a1c24^` = drafts without `status`): data kept, columns added, stamped.
+  Existing real databases are unstamped (version 0): they run both guarded steps
+  once (no-ops) and get stamped on first open.
+  *Test changes:* `test_legacy_db_migration.py` follows the renamed steps;
+  `test_drafts.py::test_a_database_with_the_old_drafts_table_still_works` now
+  builds an *unstamped* file. Reason: it used to put an old-shaped table into a
+  file stamped current, which the old per-open repair happened to fix; a stamp
+  is trusted by design, and that state cannot occur in real use.
+  Measured: opening a connection went from ~227 µs to ~189 µs. Not the reason
+  for the change.
+  *Observed, not changed (candidates for E3):* (1) `app/services.py`,
+  `tools/story_load.py`, `tools/story_resolve.py`, `core/value_focus.py` open
+  story.db with a bare `sqlite3.connect`, bypassing `get_db` (no upgrade, no WAL
+  or busy_timeout settings). Harmless while every database has been upgraded by
+  some earlier `get_db`, but they would fail on an un-upgraded old file.
+  (2) `chat.db` connections set no WAL / busy_timeout (default 5 s timeout
+  applies). (3) `get_db` still runs `PRAGMA journal_mode=WAL` on every open
+  (persistent setting; harmless).
 
 - [ ] **B2. Backup helper cleanup.** One place for naming and destination.
   Use a microsecond timestamp (`%Y%m%d_%H%M%S_%f`) and drop both
@@ -208,14 +242,15 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 
 | Date | Task | Decision |
 |---|---|---|
-| — | — | none yet |
+| 2026-11-17 | B1 | Refuse (raise `SchemaTooNewError`) a db whose version is newer than the build, rather than open it. Risk: switching to an older branch after a newer one has upgraded a db will refuse to open it until the app is updated or a backup restored. Say if you would rather it only warn. |
 
 ## 5. Patch log
 
 | Patch file | Task | Base | Applied by user? | Notes |
 |---|---|---|---|---|
 | `01-A1-live-update-stream.patch` | A1 | dev @ 4e15cc2 | yes | +7 tests (1336 pass, same 1 baseline failure). Touches `app/routes/projects.py`, adds `tests/test_db_change_watcher.py` |
-| `02-A2-transaction-helper.patch` | A2 | dev @ d6756d9 | pending | +17 tests (1353 pass, same 1 baseline failure). core/db.py, core/writes.py, tools/story_admin.py, tools/story_import.py, docstring in core/drafts.py; two new test files. Source net ≈ +94/−64 ignoring re-indentation |
+| `02-A2-transaction-helper.patch` | A2 | dev @ d6756d9 | yes | +17 tests (1353 pass, same 1 baseline failure). core/db.py, core/writes.py, tools/story_admin.py, tools/story_import.py, docstring in core/drafts.py; two new test files. Source net ≈ +94/−64 ignoring re-indentation |
+| `03-B1-schema-migrations.patch` | B1 | dev @ 3ca8c3b | pending | +13 tests (1366 pass, same 1 baseline failure). core/db.py, chat/store.py; tests/test_schema_migrations.py new; test_legacy_db_migration.py and one test in test_drafts.py adjusted |
 
 ## 6. Session notes
 
@@ -233,12 +268,6 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   (d) tests create SQLite connections per thread — a connection can't be used
   from another thread.
 
-## 7. Things that are fine, leave alone
-
-WAL mode and `busy_timeout`; `Connection.backup()` for snapshots; FTS5
-external-content table with its three triggers; fractional `order_key`;
-short-lived connections; snapshots before import / purge / project delete; the
-separate `chat.db` (chat is not story data); the existing test coverage.
 - 2026-11-16 — Session 1 (cont.): A1 applied by user. A2 done → patch 02
   (base dev @ d6756d9). Next: B1 (`PRAGMA user_version` migrations).
   More practical notes: (e) to prove a new test can fail, run it against an
@@ -246,3 +275,19 @@ separate `chat.db` (chat is not story data); the existing test coverage.
   with `PYTHONPATH=/tmp/base/src`; (f) a SQLite trigger that `RAISE(ABORT)` is a
   neat way to make the last step of a multi-step write fail in a test; (g) use
   `git diff -w` to review a re-indentation refactor.
+
+- 2026-11-17 — Session 2: A2 applied. B1 done → patch 03 (base dev @ 3ca8c3b).
+  Next: B2 (backup helper cleanup), then C1/C2 (trash list, delete forever).
+  More practical notes: (h) `git fetch --unshallow origin dev` gives the full
+  history, useful for rebuilding real old schemas (`git grep -l 'SCHEMA_SQL = """'
+  <rev> -- '*.py'`); (i) when probing with plain `sqlite3.connect`, commit or use
+  `isolation_level=None` — an uncommitted INSERT vanishes when the connection
+  closes; (j) mutate the code on purpose to prove a test can fail (restore from a
+  saved copy afterwards).
+
+## 7. Things that are fine, leave alone
+
+WAL mode and `busy_timeout`; `Connection.backup()` for snapshots; FTS5
+external-content table with its three triggers; fractional `order_key`;
+short-lived connections; snapshots before import / purge / project delete; the
+separate `chat.db` (chat is not story data); the existing test coverage.

@@ -1,6 +1,6 @@
 # PATCHES NOTES
 
-## PHASE 1
+## Phase A — Bugs 
 
 ### A1. Live-update stream never fires
 
@@ -27,3 +27,31 @@
 - **Size.** The diff looks big because of re-indentation, but ignoring whitespace it is about +94/−64 lines of source. I reviewed it with `git diff -w`.
 
 **Left alone on purpose.** The chat store already uses Python's built-in transactions correctly. The draft commit stays as it is until E2, and I fixed a stale comment there that said `create_entity` ran in autocommit.
+
+## Phase B — Foundations
+
+### B1. Schema versioning with `PRAGMA user_version`
+
+**What was wrong.** Every time the app opened `story.db`, it re-checked the table layout with four catalogue queries and added missing columns. `chat.db` did the same with its own loop. Nothing recorded which upgrades a database had already had.
+
+**What it does now.** This is the standard SQLite pattern:
+- **A version number in the file.** Each database stores a version number, `PRAGMA user_version`. A list of upgrade steps, `SCHEMA_MIGRATIONS`, is the schema history, and opening a current database runs nothing.
+- **Your existing databases.** They have no version number yet. On first open they run the two old repairs once (both are no-ops on your data) and get stamped.
+- **Two programs opening an old file together.** It's upgraded once, not twice.
+- **A failed step.** It undoes everything, including the version number.
+- **Restored backups.** Backups keep their version, so a restored old backup is upgraded when opened. This matters for C4.
+- **`chat.db`.** It uses the same runner.
+
+**How I checked it.**
+- **Real old databases.** I rebuilt databases from your repo's own history, from before soft delete and from before `drafts.status`, and opened them with the new code. Your data was kept, and the missing columns were added.
+- **Mutation checks.** I broke two protections on purpose. One of my tests didn't catch the missing race protection, so I rewrote it, and it now does.
+- **Speed.** Opening a connection went from about 227 µs to about 189 µs. It's a small saving and not the reason for the change.
+
+**Two things to know**
+- **A test changed.** `test_drafts.py::test_a_database_with_the_old_drafts_table_still_works` failed after the change. It put an old-shaped table into a file stamped "current", which the old repair-every-open code happened to fix. A stamped file is trusted by design, and that state can't occur in real use. I changed the test to build an unstamped legacy file, which is what the test was trying to prove.
+- **A decision for you.** If a database has a *newer* version than the running app knows, the app now refuses to open it with a clear message instead of carrying on. The risk is that if you switch to an older branch after a newer one has upgraded a database, it won't open until you update or restore a backup. I think refusing is the safer choice. If you'd rather it only warn, that's a small change. It's recorded in §4 of the task file.
+
+**Noticed but left alone.** Four places (`services.py`, `story_load.py`, `story_resolve.py`, `value_focus.py`) open `story.db` directly and skip `get_db`, and `chat.db` has no timeout settings. These are listed under B1 in the task file as candidates for E3.
+
+The task file also has a short recipe for adding a schema change from now on, and it marks A2 as applied.
+
