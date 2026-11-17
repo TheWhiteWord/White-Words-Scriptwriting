@@ -681,8 +681,10 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
                     )
                 applied_relations.append("plot_roles")
 
-            # Upsert sections
+            # Upsert sections. What a body replaces is kept as a revision first.
+            from .revisions import snapshot_replaced_body
             for heading, body in section_updates.items():
+                snapshot_replaced_body(conn, entity_id, heading, body, summary)
                 conn.execute(
                     "INSERT INTO sections (entity_id, heading, body) VALUES (?, ?, ?) "
                     "ON CONFLICT(entity_id, heading) DO UPDATE SET body=excluded.body",

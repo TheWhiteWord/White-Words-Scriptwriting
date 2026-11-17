@@ -74,6 +74,16 @@ CREATE TABLE IF NOT EXISTS drafts (
     created_at TEXT NOT NULL,
     status     TEXT NOT NULL DEFAULT 'open'
 );
+
+CREATE TABLE IF NOT EXISTS revisions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_id   TEXT NOT NULL,
+    heading     TEXT NOT NULL,
+    body        TEXT NOT NULL,
+    replaced_at TEXT NOT NULL,
+    summary     TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_revisions_section ON revisions(entity_id, heading, id);
 """
 
 def _m1_soft_delete_columns(conn: sqlite3.Connection) -> None:
@@ -99,6 +109,25 @@ def _m2_draft_status_column(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE drafts ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
 
 
+def _m3_revisions_table(conn: sqlite3.Connection) -> None:
+    """Version history of section text (core/revisions.py).
+
+    Written out in full rather than shared with SCHEMA_SQL: a migration is a
+    frozen record of what that step did, and SCHEMA_SQL moves on.
+    """
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS revisions ("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " entity_id TEXT NOT NULL,"
+        " heading TEXT NOT NULL,"
+        " body TEXT NOT NULL,"
+        " replaced_at TEXT NOT NULL,"
+        " summary TEXT NOT NULL DEFAULT '')")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_revisions_section "
+        "ON revisions(entity_id, heading, id)")
+
+
 # Schema history of story.db: one function per change, oldest first. The number
 # of entries is the schema version, stored in the file itself (PRAGMA
 # user_version); a database that has run entry N never runs it again.
@@ -116,6 +145,7 @@ def _m2_draft_status_column(conn: sqlite3.Connection) -> None:
 SCHEMA_MIGRATIONS = [
     _m1_soft_delete_columns,
     _m2_draft_status_column,
+    _m3_revisions_table,
 ]
 
 

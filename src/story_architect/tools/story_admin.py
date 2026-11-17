@@ -1,13 +1,14 @@
 """story_admin tool — project lifecycle and the admin-only entity operations.
 
-Six actions, none of them proposals. Entity *authoring* goes through
+Eight actions, none of them proposals. Entity *authoring* goes through
 story_draft, which shows the user what will change and writes nothing until they
 say so. What is here cannot be drafted at all: a project has no database to hold
 a draft before it exists, and purge/restore/delete-project are the operations
 that must never be a side effect of committing a batch.
 
 `list_deleted`, `restore` and `purge` are the trash: look at what was deleted,
-bring one back, or remove it for good. `create_project`, `list_projects` and
+bring one back, or remove it for good. `list_revisions` and `restore_revision`
+are the undo for *text*: an entity's earlier versions, and putting one back. `create_project`, `list_projects` and
 `delete_project` are the project lifecycle; nothing drafts, because a draft
 exists to exist before it is written.
 """
@@ -20,7 +21,8 @@ SCHEMA = {
                    "list_projects, delete_project, list_deleted (the trash: what was deleted and "
                    "when), restore (bring a soft-deleted entity back), "
                    "purge (permanently remove deleted entities: all those deleted over 30 days ago, "
-                   "or one you name). Entity content "
+                   "or one you name), list_revisions / restore_revision (the earlier versions of "
+                   "an entity's text, and putting one back). Entity content "
                    "itself is NOT here — create and edit through story_draft. "
                    "Deleting an entity is a soft delete and is exactly reversible via restore; "
                    "purge is the only irreversible one, and delete_project removes an entire project.",
@@ -29,7 +31,7 @@ SCHEMA = {
         "action": {
             "type": "string",
             "enum": ["create_project", "list_projects", "delete_project", "list_deleted",
-                     "restore", "purge"],
+                     "restore", "purge", "list_revisions", "restore_revision"],
             "description": "create_project (initialise a new project folder + database), "
                            "list_projects (every project under the root, no database opened), "
                            "delete_project (remove a project folder and everything in it), "
@@ -39,7 +41,21 @@ SCHEMA = {
                            "restore (undelete one entity, bringing back its prose and relations "
                            "exactly as they were), purge (permanently remove soft-deleted "
                            "entities — those older than the age floor, or the one named in "
-                           "`target` — irreversible)"
+                           "`target` — irreversible), "
+                           "list_revisions (the earlier versions kept of an entity's sections, "
+                           "newest first; every edit keeps the text it replaced), "
+                           "restore_revision (put one of those back as the current text; the "
+                           "text it replaces is kept in turn, so this is undoable)"
+        },
+        "revision_id": {
+            "type": "integer",
+            "description": "For restore_revision: the id of the revision to put back, from "
+                           "list_revisions.",
+        },
+        "heading": {
+            "type": "string",
+            "description": "For list_revisions: only the revisions of this section, e.g. "
+                           "\"Content\". Default: all sections of the entity.",
         },
         "project": {
             "type": "string",
@@ -56,7 +72,8 @@ SCHEMA = {
             "type": "object",
             "description": "For restore: the entity to bring back. For purge: the one deleted "
                            "entity to remove permanently (it must already be deleted; the age "
-                           "floor does not apply).",
+                           "floor does not apply). For list_revisions / restore_revision: the "
+                           "entity whose text history it is (only `id` is needed).",
             "properties": {
                 "entity_type": {"type": "string",
                                 "description": "Type of entity to restore"},
@@ -115,6 +132,10 @@ def handler(args: dict, **kwargs) -> str:
             return json.dumps(_purge_deleted(args, _resolve(args, root_path)))
         if action == "restore":
             return json.dumps(_restore_entity(args, _resolve(args, root_path)))
+        if action == "list_revisions":
+            return json.dumps(_list_revisions(args, _resolve(args, root_path)))
+        if action == "restore_revision":
+            return json.dumps(_restore_revision(args, _resolve(args, root_path)))
         return json.dumps({"error": f"Unknown action: {action}"})
     except ValueError as e:
         return json.dumps({"error": str(e)})
@@ -393,6 +414,7 @@ def _hard_delete(conn, ids: list) -> None:
     """
     marks = ",".join("?" * len(ids))
     conn.execute(f"DELETE FROM sections WHERE entity_id IN ({marks})", ids)
+    conn.execute(f"DELETE FROM revisions WHERE entity_id IN ({marks})", ids)
     conn.execute(f"DELETE FROM relations WHERE from_id IN ({marks}) "
                  f"OR to_id IN ({marks})", ids + ids)
     conn.execute(f"DELETE FROM entities WHERE id IN ({marks})", ids)
@@ -462,3 +484,37 @@ def _restore_entity(args: dict, project_path: Path) -> dict:
         "was_deleted_at": deleted_at,
         "restored_cascade_children": restored_children,
     }
+
+
+def _target_id(args: dict, action: str) -> str:
+    entity_id = (args.get("target") or {}).get("id")
+    if not entity_id:
+        raise ValueError(f'{action} needs target {{"id": <entity id>}}.')
+    return entity_id
+
+
+def _list_revisions(args: dict, project_path: Path) -> dict:
+    """The earlier versions kept of an entity's sections, newest first."""
+    from story_architect.core.revisions import REVISIONS_KEPT, list_revisions
+
+    entity_id = _target_id(args, "list_revisions")
+    revisions = list_revisions(project_path, entity_id, args.get("heading"))
+    result = {"success": True, "entity_id": entity_id, "count": len(revisions),
+              "revisions": revisions, "kept_per_section": REVISIONS_KEPT}
+    if revisions:
+        result["hint"] = ('Put one back with action="restore_revision", target '
+                          '{id}, revision_id. The text it replaces is kept too.')
+    else:
+        result["message"] = "No earlier versions are kept for this entity."
+    return result
+
+
+def _restore_revision(args: dict, project_path: Path) -> dict:
+    """Put an earlier version of a section back. Undoable: it keeps what it replaces."""
+    from story_architect.core.revisions import restore_revision
+
+    entity_id = _target_id(args, "restore_revision")
+    revision_id = args.get("revision_id")
+    if not isinstance(revision_id, int) or isinstance(revision_id, bool):
+        raise ValueError("restore_revision needs an integer revision_id (see list_revisions).")
+    return restore_revision(project_path, entity_id, revision_id, args.get("summary") or None)
