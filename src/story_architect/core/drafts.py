@@ -44,10 +44,9 @@ class DraftError(ValueError):
 def new_draft_id(conn: sqlite3.Connection) -> str:
     """Return an unused draft id.
 
-    Timestamp with a one-second granularity plus a counter suffix, the same
-    collision defence `backup_database` uses: two drafts staged in the same
-    second would otherwise overwrite each other, the second destroying the
-    first while both reported success.
+    Timestamp with a one-second granularity plus a counter suffix: two drafts
+    staged in the same second would otherwise overwrite each other, the second
+    destroying the first while both reported success.
     """
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     candidate = f"d-{stamp}"

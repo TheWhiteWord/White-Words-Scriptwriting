@@ -155,10 +155,9 @@ def _delete_project(args: dict, root_path: Path) -> dict:
     1. `delete_confirm` must contain "DELETE <project slug>". The agent cannot
        arrive at that string on its own, so it can only happen if the user
        handed it over — a human in the loop by construction, not by prompt.
-    2. A backup is taken and written *outside* the folder being removed, so the
-       project is still recoverable by hand afterwards. `backup_database` puts
-       its snapshot inside `project_path/.story/`, which `rmtree` would take
-       with it — so it is relocated to `<root>/backups/` before the delete.
+    2. A backup is taken and written *outside* the folder being removed
+       (`<root>/backups/`), so the project is still recoverable by hand
+       afterwards.
     """
     project_path = _resolve(args, root_path)
     slug = project_path.name
@@ -183,7 +182,9 @@ def _delete_project(args: dict, root_path: Path) -> dict:
             "project": str(project_path),
         }
 
-    backup = _backup_outside(project_path, root_path)
+    from story_architect.core.db import backup_database
+    # Written outside the folder being removed, or the delete would take it too.
+    backup = backup_database(project_path, dest_dir=root_path / "backups", prefix=slug)
     shutil.rmtree(project_path)
 
     return {
@@ -194,30 +195,6 @@ def _delete_project(args: dict, root_path: Path) -> dict:
         "note": "The backup is the full database as it was immediately before the "
                 "delete. To recover, copy it back to <project>/.story/story.db.",
     }
-
-
-def _backup_outside(project_path: Path, root_path: Path) -> str:
-    """Snapshot a project's database into <root>/backups/, not into the project.
-
-    `backup_database` writes beside the database it copies, which for
-    `delete_project` means the snapshot is destroyed by the very delete it was
-    taken for. Same WAL-safe copy, different destination.
-    """
-    from datetime import datetime
-
-    from story_architect.core.db import backup_database
-
-    snapshot = Path(backup_database(project_path))
-    backups = root_path / "backups"
-    backups.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dest = backups / f"{project_path.name}_{stamp}.db"
-    n = 1
-    while dest.exists():
-        dest = backups / f"{project_path.name}_{stamp}_{n}.db"
-        n += 1
-    shutil.move(str(snapshot), str(dest))
-    return str(dest)
 
 
 def _purge_deleted(args: dict, project_path: Path) -> dict:

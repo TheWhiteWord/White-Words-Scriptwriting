@@ -249,40 +249,56 @@ def transaction(conn: sqlite3.Connection):
         raise
 
 
-def backup_database(project_path: Path) -> str:
-    """Copy story.db to a timestamped file. Returns the backup path.
+def backup_database(project_path: Path, *, dest_dir: Path | None = None,
+                    prefix: str = "story") -> str:
+    """Snapshot story.db into a new file. Returns the backup's path.
 
-    Two things this must get right, both of which a plain file copy got wrong:
+    By default the file goes beside the database, as ``story_<date>_<time>_<id>.db``;
+    ``dest_dir`` and ``prefix`` put it elsewhere (delete_project writes outside
+    the folder it is about to remove). Shared by story_backup, story_import,
+    purge and delete_project so none of them can drift apart.
+
+    What it guarantees, each of which a plain file copy got wrong:
 
     * **WAL safety.** The database runs in WAL mode, so recent writes can sit in
-      `story.db-wal` and not yet be in the main file. `shutil.copy2` copies only
-      the main file, silently producing a *stale* backup. `Connection.backup()`
+      ``story.db-wal`` and not yet be in the main file. A file copy takes only
+      the main file and silently produces a *stale* backup. ``Connection.backup()``
       goes through SQLite and includes everything committed.
-    * **No collisions.** The stamp has one-second granularity, so two backups in
-      the same second overwrote each other — the second destroying the first
-      while both reported success. A counter suffix keeps every snapshot.
-
-    Shared by story_backup and story_import so the two cannot drift apart.
+    * **No collisions.** The name is reserved with ``tempfile.mkstemp``, which
+      never hands out a name that exists, so two backups in the same second (or
+      from two processes) cannot overwrite each other.
+    * **No half-written backup.** The snapshot is written under a ``.partial``
+      name and renamed to ``.db`` only when complete, so a crash or a full disk
+      leaves no file that looks like a backup but is not. A failed backup is
+      removed.
     """
+    import os
+    import tempfile
     from datetime import datetime
 
+    dest_dir = Path(dest_dir) if dest_dir is not None else project_path / ".story"
+    dest_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dest = project_path / ".story" / f"story_{stamp}.db"
-    n = 1
-    while dest.exists():
-        dest = project_path / ".story" / f"story_{stamp}_{n}.db"
-        n += 1
 
     src = get_db(project_path)
     try:
-        out = sqlite3.connect(str(dest))
+        fd, partial = tempfile.mkstemp(
+            prefix=f"{prefix}_{stamp}_", suffix=".partial", dir=str(dest_dir))
+        os.close(fd)
+        final = partial[: -len(".partial")] + ".db"
         try:
-            src.backup(out)
-        finally:
-            out.close()
+            out = sqlite3.connect(partial)
+            try:
+                src.backup(out)
+            finally:
+                out.close()
+            os.replace(partial, final)
+        except BaseException:
+            Path(partial).unlink(missing_ok=True)
+            raise
     finally:
         src.close()
-    return str(dest)
+    return final
 
 
 def create_schema(conn: sqlite3.Connection) -> None:
