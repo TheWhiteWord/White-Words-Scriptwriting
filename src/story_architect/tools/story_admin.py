@@ -1,12 +1,13 @@
 """story_admin tool — project lifecycle and the admin-only entity operations.
 
-Five actions, none of them proposals. Entity *authoring* goes through
+Six actions, none of them proposals. Entity *authoring* goes through
 story_draft, which shows the user what will change and writes nothing until they
 say so. What is here cannot be drafted at all: a project has no database to hold
 a draft before it exists, and purge/restore/delete-project are the operations
 that must never be a side effect of committing a batch.
 
-`purge` and `restore` are the undo pair. `create_project`, `list_projects` and
+`list_deleted`, `restore` and `purge` are the trash: look at what was deleted,
+bring one back, or remove it for good. `create_project`, `list_projects` and
 `delete_project` are the project lifecycle; nothing drafts, because a draft
 exists to exist before it is written.
 """
@@ -16,7 +17,8 @@ from pathlib import Path
 
 SCHEMA = {
     "description": "Project lifecycle and admin operations: create_project (a new project), "
-                   "list_projects, delete_project, restore (bring a soft-deleted entity back), "
+                   "list_projects, delete_project, list_deleted (the trash: what was deleted and "
+                   "when), restore (bring a soft-deleted entity back), "
                    "purge (permanently remove entities deleted over 30 days ago). Entity content "
                    "itself is NOT here — create and edit through story_draft. "
                    "Deleting an entity is a soft delete and is exactly reversible via restore; "
@@ -25,10 +27,14 @@ SCHEMA = {
     "properties": {
         "action": {
             "type": "string",
-            "enum": ["create_project", "list_projects", "delete_project", "restore", "purge"],
+            "enum": ["create_project", "list_projects", "delete_project", "list_deleted",
+                     "restore", "purge"],
             "description": "create_project (initialise a new project folder + database), "
                            "list_projects (every project under the root, no database opened), "
                            "delete_project (remove a project folder and everything in it), "
+                           "list_deleted (every soft-deleted entity, newest first, with the "
+                           "id and type that restore and purge need; entities deleted "
+                           "together with their parent are listed under it), "
                            "restore (undelete one entity, bringing back its prose and relations "
                            "exactly as they were), purge (permanently remove soft-deleted "
                            "entities older than the age floor — irreversible)"
@@ -76,7 +82,9 @@ SCHEMA = {
         "older_than_days": {
             "type": "integer",
             "description": "For action=\"purge\": only purge entities deleted longer ago than "
-                           "this many days. Default 30. Anything newer stays restorable."
+                           "this many days. Default 30. Anything newer stays restorable. "
+                           "For action=\"list_deleted\": the same threshold, used to mark "
+                           "which entries a purge would remove."
         },
     },
     "required": ["action"],
@@ -96,6 +104,8 @@ def handler(args: dict, **kwargs) -> str:
             return json.dumps(_list_projects(root_path))
         if action == "delete_project":
             return json.dumps(_delete_project(args, root_path))
+        if action == "list_deleted":
+            return json.dumps(_list_deleted(_resolve(args, root_path), args))
         if action == "purge":
             return json.dumps(_purge_deleted(args, _resolve(args, root_path)))
         if action == "restore":
@@ -111,7 +121,7 @@ def _resolve(args: dict, root_path: Path) -> Path:
     return resolve_project(args.get("project", ""), root_path)
 
 
-# ─── the five actions ───
+# ─── the actions ───
 
 def _create_project(args: dict, root_path: Path) -> dict:
     from story_architect.core.writes import create_project
@@ -197,6 +207,71 @@ def _delete_project(args: dict, root_path: Path) -> dict:
     }
 
 
+def _purge_cutoff(days: int) -> str:
+    """ISO timestamp: entities deleted at or before it are old enough to purge."""
+    from datetime import datetime, timedelta
+    return (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+
+
+def _list_deleted(project_path: Path, args: dict) -> dict:
+    """The trash: every soft-deleted entity, newest deletion first.
+
+    One entry per *deletion*. Deleting a scene also deletes its beats, all
+    stamped with the same `deleted_at`; they are folded under the scene as
+    `includes` instead of listed as separate things, because restoring the scene
+    brings them back with it. An entity deleted separately, at another time, is
+    its own entry.
+
+    `purge_eligible` says whether a purge with the current age floor would
+    remove it. Rows with no `deleted_at` (deleted by an earlier build) are listed
+    too, and never eligible: bulk purge cannot see them.
+    """
+    from story_architect.core.db import get_db
+
+    days = args.get("older_than_days", 30)
+    cutoff = _purge_cutoff(days)
+
+    conn = get_db(project_path)
+    try:
+        rows = conn.execute(
+            "SELECT id, type, name, deleted_at, parent_id FROM entities "
+            "WHERE is_deleted=1 ORDER BY deleted_at DESC, type, id").fetchall()
+    finally:
+        conn.close()
+
+    by_id = {r[0]: r for r in rows}
+
+    entries, includes = {}, {}
+    for row in rows:
+        parent = by_id.get(row[4])
+        if parent is not None and row[3] is not None and parent[3] == row[3]:
+            # Same deletion stamp as its parent: deleted in the same operation.
+            includes.setdefault(parent[0], []).append(
+                {"type": row[1], "id": row[0], "name": row[2] or row[0]})
+        else:
+            entries[row[0]] = row
+
+    deleted = [
+        {
+            "type": r[1],
+            "id": r[0],
+            "name": r[2] or r[0],
+            "deleted_at": r[3],
+            "purge_eligible": r[3] is not None and r[3] <= cutoff,
+            "includes": includes.get(r[0], []),
+        }
+        for r in entries.values()
+    ]
+    result = {"success": True, "count": len(deleted), "deleted": deleted,
+              "purge_older_than_days": days}
+    if not deleted:
+        result["message"] = "Nothing has been deleted."
+    else:
+        result["hint"] = ('Bring one back with action="restore" and target '
+                          '{entity_type, id}; anything in `includes` comes back with it.')
+    return result
+
+
 def _purge_deleted(args: dict, project_path: Path) -> dict:
     """Permanently remove soft-deleted rows. Two deliberate guards.
 
@@ -209,8 +284,6 @@ def _purge_deleted(args: dict, project_path: Path) -> dict:
 
     A backup is taken first, so even this is recoverable by hand.
     """
-    from datetime import datetime, timedelta
-
     from story_architect.core.db import backup_database, get_db, transaction
 
     required = f"DELETE {project_path.name}"
@@ -223,7 +296,7 @@ def _purge_deleted(args: dict, project_path: Path) -> dict:
         }
 
     days = args.get("older_than_days", 30)
-    cutoff = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+    cutoff = _purge_cutoff(days)
 
     conn = get_db(project_path)
     try:
