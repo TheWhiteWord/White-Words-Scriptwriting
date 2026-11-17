@@ -374,6 +374,11 @@ def test_a_database_with_the_old_drafts_table_still_works(fixture_path):
     conn = sqlite3.connect(str(Path(fixture_path) / ".story" / "story.db"))
     conn.execute("DROP TABLE IF EXISTS drafts")
     conn.execute(old)
+    # A database from before schema versioning carries no version stamp. The
+    # fixture was stamped current when it was built, and a stamp is trusted —
+    # so reset it, or this would be an old table in a file claiming to be new,
+    # a state that cannot occur.
+    conn.execute("PRAGMA user_version = 0")
     conn.commit()
     conn.close()
 

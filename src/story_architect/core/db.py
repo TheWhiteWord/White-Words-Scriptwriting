@@ -76,36 +76,94 @@ CREATE TABLE IF NOT EXISTS drafts (
 );
 """
 
-def ensure_draft_status_column(conn: sqlite3.Connection) -> None:
-    """Add `status` to a drafts table that predates it. Idempotent.
-
-    A commit marks the row rather than deleting it, so a repeated commit
-    replays the same success instead of reporting that nothing was open
-    (drafts.commit). A `drafts` table created before that change has no such
-    column, and `ALTER TABLE ... ADD COLUMN` is the only way to add one to a
-    table that already exists.
-
-    The *table* itself needs no such repair — create_schema makes it, and
-    create_project is the only way a real database comes into being; that
-    reasoning is recorded in tests/test_legacy_db_migration.py, which covers the
-    table only.
-    """
-    if "status" not in {r[1] for r in conn.execute("PRAGMA table_info(drafts)")}:
-        conn.execute("ALTER TABLE drafts ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
-
-
-def ensure_soft_delete_columns(conn: sqlite3.Connection) -> None:
-    """Add is_deleted / deleted_at to databases created before the soft delete.
-
-    `CREATE TABLE IF NOT EXISTS` silently leaves an existing table alone, so any
-    project created by an earlier build has no such column — and every reader
-    that filters on it would fail with "no such column". Idempotent.
-    """
+def _m1_soft_delete_columns(conn: sqlite3.Connection) -> None:
+    """Add is_deleted / deleted_at to an entities table that predates soft delete."""
     have = {r[1] for r in conn.execute("PRAGMA table_info(entities)")}
+    if not have:
+        return  # no entities table: nothing to repair
     if "is_deleted" not in have:
         conn.execute("ALTER TABLE entities ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
     if "deleted_at" not in have:
         conn.execute("ALTER TABLE entities ADD COLUMN deleted_at TEXT")
+
+
+def _m2_draft_status_column(conn: sqlite3.Connection) -> None:
+    """Add `status` to a drafts table that predates it.
+
+    A commit marks the draft row instead of deleting it, so a repeated commit
+    replays the same success (drafts.commit). The *table* needs no repair —
+    create_schema makes it — only this column.
+    """
+    have = {r[1] for r in conn.execute("PRAGMA table_info(drafts)")}
+    if have and "status" not in have:
+        conn.execute("ALTER TABLE drafts ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
+
+
+# Schema history of story.db: one function per change, oldest first. The number
+# of entries is the schema version, stored in the file itself (PRAGMA
+# user_version); a database that has run entry N never runs it again.
+#
+#   * APPEND ONLY. Editing or reordering an entry that has shipped silently
+#     skips it for every database already past it.
+#   * A change to a table needs two edits: the new shape in SCHEMA_SQL (what a
+#     new database is created with) and a new entry here (what an existing one
+#     is upgraded with).
+#   * Steps run inside a transaction: use conn.execute(), never executescript().
+#   * The first two are guarded ("only if missing") because they also run on
+#     databases made before versioning existed, which carry no version number
+#     and can be in any state. Later entries may assume the shape the earlier
+#     ones leave.
+SCHEMA_MIGRATIONS = [
+    _m1_soft_delete_columns,
+    _m2_draft_status_column,
+]
+
+
+class SchemaTooNewError(RuntimeError):
+    """The database was written by a newer build than the one running."""
+
+
+def _user_version(conn: sqlite3.Connection) -> int:
+    return conn.execute("PRAGMA user_version").fetchone()[0]
+
+
+def apply_migrations(conn: sqlite3.Connection, migrations: list, *,
+                     name: str = "database") -> None:
+    """Bring a database up to date with an ordered list of migration steps.
+
+    ``migrations[i]`` upgrades version i to i+1; ``PRAGMA user_version`` (an
+    integer in the file's header, 0 for a file that was never stamped) says how
+    many have run. All pending steps and the new version number are one
+    transaction, so a failing step leaves the database exactly as it was.
+
+    The version is read again once the write lock is held: when two processes
+    open an old database together, the second finds it already upgraded and
+    does nothing, instead of running every step twice.
+
+    Refuses a database whose version is higher than this build knows. That file
+    was written by a newer release, and carrying on would run old code against
+    a schema it does not understand.
+    """
+    target = len(migrations)
+    version = _user_version(conn)
+    if version == target:
+        return
+    if version > target:
+        raise _too_new(name, version, target)
+    with transaction(conn):
+        version = _user_version(conn)
+        if version > target:
+            raise _too_new(name, version, target)
+        for step in migrations[version:]:
+            step(conn)
+        conn.execute(f"PRAGMA user_version = {target}")
+
+
+def _too_new(name: str, version: int, target: int) -> SchemaTooNewError:
+    return SchemaTooNewError(
+        f"{name} has schema version {version}, but this build only understands "
+        f"up to {target}. It was written by a newer version of Story Architect: "
+        f"update the app, or restore an older backup.")
 
 
 def get_db(project_path: Path) -> sqlite3.Connection:
@@ -116,10 +174,10 @@ def get_db(project_path: Path) -> sqlite3.Connection:
     statement in ``with transaction(conn):`` (below) — never issue BEGIN /
     COMMIT / ROLLBACK by hand.
 
-    Also repairs a database this build did not create: a project made by an
-    earlier build has no ``drafts`` table and no soft-delete columns, and a
-    read-only tool never calls create_schema(), so it would fail on the first
-    read. Both repairs are idempotent and unconditional.
+    Also upgrades a database made by an earlier build (see SCHEMA_MIGRATIONS):
+    every caller reaches this first — read-only tools never call
+    create_schema() — so this is where an old database is brought forward. Once
+    it is current, that costs one ``PRAGMA user_version`` per connection.
     """
     db_path = project_path / ".story" / "story.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -127,14 +185,10 @@ def get_db(project_path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=3000")
     conn.execute("PRAGMA foreign_keys=ON")
-    if conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='entities'"
-    ).fetchone():
-        ensure_soft_delete_columns(conn)
-    if conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='drafts'"
-    ).fetchone():
-        ensure_draft_status_column(conn)
+    # A file with no tables yet has nothing to upgrade; create_schema stamps it.
+    if (_user_version(conn) != len(SCHEMA_MIGRATIONS)
+            and conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1").fetchone()):
+        apply_migrations(conn, SCHEMA_MIGRATIONS, name=f"{project_path.name}/.story/story.db")
     return conn
 
 
@@ -234,13 +288,19 @@ def backup_database(project_path: Path) -> str:
 def create_schema(conn: sqlite3.Connection) -> None:
     """Create all tables, indexes, triggers.
 
-    Also migrates an existing db, but only for tables: `CREATE TABLE IF NOT
-    EXISTS` leaves an existing table untouched, so a project created by an
-    earlier build keeps a pre-soft-delete `entities` table. The two columns are
-    added by `get_db` instead, which every caller reaches first — including
-    read-only tools, the ones that never call this.
+    A new database is created in the current shape and stamped with the current
+    schema version straight away, so no migration ever has to run on it. A
+    database that already has tables is upgraded instead: ``CREATE TABLE IF NOT
+    EXISTS`` leaves an old table as it is.
     """
+    is_new = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='entities'"
+    ).fetchone() is None
     conn.executescript(SCHEMA_SQL)
+    if is_new:
+        conn.execute(f"PRAGMA user_version = {len(SCHEMA_MIGRATIONS)}")
+    else:
+        apply_migrations(conn, SCHEMA_MIGRATIONS)
 
 
 def has_schema(conn: sqlite3.Connection) -> bool:

@@ -7,6 +7,8 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from story_architect.core.db import apply_migrations
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS conversations (
@@ -43,14 +45,9 @@ def _db_path(project_path: Path) -> Path:
     return Path(project_path) / ".story" / "chat.db"
 
 
-def connect(project_path: Path) -> sqlite3.Connection:
-    p = _db_path(project_path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(p))
-    conn.execute("PRAGMA foreign_keys=ON")
-    conn.executescript(SCHEMA)
-    # migrate older DBs: add new columns if missing
-    cols = {r[1] for r in conn.execute("PRAGMA table_info(messages)").fetchall()}
+def _m1_message_columns(conn: sqlite3.Connection) -> None:
+    """Add the columns older chat.db files lack (they predate versioning)."""
+    have = {r[1] for r in conn.execute("PRAGMA table_info(messages)")}
     for col, ddl in (
         ("tools", "TEXT"),
         ("drafts", "TEXT"),
@@ -58,9 +55,33 @@ def connect(project_path: Path) -> sqlite3.Connection:
         ("hidden", "INTEGER NOT NULL DEFAULT 0"),
         ("error", "TEXT"),
     ):
-        if col not in cols:
+        if col not in have:
             conn.execute(f"ALTER TABLE messages ADD COLUMN {col} {ddl}")
-    conn.commit()
+
+
+# Schema history of chat.db, same rules as core.db.SCHEMA_MIGRATIONS: append
+# only, steps use conn.execute(), a change needs both SCHEMA (new databases)
+# and an entry here (existing ones). The first is guarded because it also runs
+# on files made before versioning, whatever their shape.
+MIGRATIONS = [
+    _m1_message_columns,
+]
+
+
+def connect(project_path: Path) -> sqlite3.Connection:
+    p = _db_path(project_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(p))
+    conn.execute("PRAGMA foreign_keys=ON")
+    if conn.execute("PRAGMA user_version").fetchone()[0] != len(MIGRATIONS):
+        # New, unstamped or out of date: make sure the tables exist (a no-op on
+        # an existing file), then upgrade. A current file costs one pragma.
+        conn.executescript(SCHEMA)
+        try:
+            apply_migrations(conn, MIGRATIONS, name="chat.db")
+        except Exception:
+            conn.close()
+            raise
     return conn
 
 

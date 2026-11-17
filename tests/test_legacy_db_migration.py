@@ -4,24 +4,21 @@ Regression: story_load failed with "no such column: is_deleted" on a project
 whose story.db predates the soft-delete commit. The migration lived only in
 create_schema(), which read-only tools never call.
 
-That repair stays: `is_deleted` and `deleted_at` are columns on `entities`, and
-`ALTER TABLE ... ADD COLUMN` is the only way to add one to a table that already
-exists. Both live in `ensure_soft_delete_columns` rather than inline in
-get_db, so the rule can be tested and stated once.
+The repairs are now numbered migration steps (`core.db.SCHEMA_MIGRATIONS`) that
+`get_db` runs once, on the first open of a database that has no up-to-date
+version stamp. These tests build databases in the *old shapes* and check they
+open and read correctly; the versioning mechanism itself is in
+test_schema_migrations.py.
 
-The `drafts` *table* still needs no repair: create_schema makes it, and
+The `drafts` *table* needs no repair: create_schema makes it, and
 create_project is the only way a real database comes into being, so no project
-predates draft staging. That reasoning is unchanged.
-
-What did change is the table's *shape*. B1 made a commit mark its row instead
-of deleting it, adding a `status` column — and a drafts table created before
-that has no such column. `ensure_draft_status_column` adds it, guarded on the
-table existing, which is the same rule the soft-delete repair follows.
+predates draft staging. Only its `status` column (added when a commit began to
+mark its row instead of deleting it) is missing from older tables.
 """
 import sqlite3
 
 
-from story_architect.core.db import ensure_soft_delete_columns, get_db
+from story_architect.core.db import _m1_soft_delete_columns, get_db
 
 
 def test_get_db_migrates_a_legacy_database(tmp_path):
@@ -63,11 +60,9 @@ def test_get_db_on_a_fresh_project_does_not_fail(tmp_path):
 
 
 def test_migrations_are_idempotent(tmp_path):
-    """get_db runs these on every connection, so running them twice must be a
-    no-op rather than an error — that is the whole cost of doing them here.
-
-    Needs a real project: get_db guards the repair on the table existing, and
-    calling it directly on a brand-new project is calling it out of contract.
+    """The first two steps are guarded ("only if missing") because they also run
+    on unstamped databases of unknown shape, so running one twice — or on a
+    database that is already in the new shape — must be a no-op, not an error.
     """
     from story_architect.core.writes import create_project
     root = tmp_path / "v"
@@ -76,14 +71,14 @@ def test_migrations_are_idempotent(tmp_path):
 
     conn = get_db(root / "projects" / "stc")
     try:
-        ensure_soft_delete_columns(conn)
-        ensure_soft_delete_columns(conn)
+        _m1_soft_delete_columns(conn)
+        _m1_soft_delete_columns(conn)
     finally:
         conn.close()
 
 
 def test_a_drafts_table_without_status_gains_it(tmp_path):
-    """The shape change B1 made: a drafts table predating it has no `status`.
+    """A drafts table predating the `status` column gains it on open.
 
     The table itself is assumed present — create_schema makes it — so this
     builds one in the old shape and checks the column is added.
