@@ -40,11 +40,17 @@ TARGET = {"entity_type": "character", "id": "kael"}
 
 
 def _edit(vault, action, **args):
-    """The two admin-only actions that act on one entity: purge and restore."""
+    """The two admin-only trash actions: purge (everything past the age floor,
+    unless a `target` is passed) and restore (one entity, so it gets the target).
+
+    A `target` on purge means "just this one entity" and skips the age floor, so
+    these bulk-purge tests must not send one; test_purge_one.py covers that form.
+    """
     from story_architect.tools.story_admin import handler
-    return json.loads(handler({
-        "action": action, "target": TARGET, "project": "stc",
-        "summary": "test", **args}, root_path=str(vault)))
+    base = {"action": action, "project": "stc", "summary": "test"}
+    if action == "restore":
+        base["target"] = TARGET
+    return json.loads(handler({**base, **args}, root_path=str(vault)))
 
 
 def _exists(vault, entity_id):
