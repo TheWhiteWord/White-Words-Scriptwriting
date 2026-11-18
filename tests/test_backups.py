@@ -393,16 +393,3 @@ def test_the_draft_just_committed_keeps_its_receipt_even_if_it_was_staged_long_a
                 (staged["draft_id"],)) == [("committed",)]
     again = drafts.commit(fixture_path, staged["draft_id"])      # a repeated commit replays
     assert again.get("committed") is True
-
-
-# ─── the deleted project's note ───
-
-def test_delete_project_note_warns_against_copying_over_a_live_database(tmp_path):
-    from story_architect.core.writes import create_project
-    from story_architect.tools.story_admin import handler as admin
-    root = tmp_path / "v"
-    (root / "projects").mkdir(parents=True)
-    create_project("stc", {"name": "STC", "logline": "L"}, root)
-    out = json.loads(admin({"action": "delete_project", "project": "stc",
-                            "delete_confirm": "DELETE stc"}, root_path=str(root)))
-    assert "-wal" in out["note"] and "story_backup" in out["note"]

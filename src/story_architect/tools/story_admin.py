@@ -1,6 +1,6 @@
 """story_admin tool — project lifecycle and the admin-only entity operations.
 
-Eight actions, none of them proposals. Entity *authoring* goes through
+Ten actions, none of them proposals. Entity *authoring* goes through
 story_draft, which shows the user what will change and writes nothing until they
 say so. What is here cannot be drafted at all: a project has no database to hold
 a draft before it exists, and purge/restore/delete-project are the operations
@@ -8,33 +8,50 @@ that must never be a side effect of committing a batch.
 
 `list_deleted`, `restore` and `purge` are the trash: look at what was deleted,
 bring one back, or remove it for good. `list_revisions` and `restore_revision`
-are the undo for *text*: an entity's earlier versions, and putting one back. `create_project`, `list_projects` and
-`delete_project` are the project lifecycle; nothing drafts, because a draft
-exists to exist before it is written.
+are the undo for *text*: an entity's earlier versions, and putting one back.
+
+`create_project`, `list_projects`, `delete_project`, `list_trashed_projects`
+and `restore_project` are the project lifecycle. Deleting a project moves its
+folder to a trash folder under the root; nothing drafts, because a draft exists
+to exist before it is written.
 """
 import json
 import shutil
+import tempfile
+from datetime import datetime
 from pathlib import Path
+
+# Deleted projects wait here, under the root but outside projects/, so they are
+# not listed as projects. Hidden so a vault that is also opened in Obsidian does
+# not index the deleted Markdown; not named ".trash", which Obsidian also uses.
+TRASH_DIR = ".story-trash"
 
 SCHEMA = {
     "description": "Project lifecycle and admin operations: create_project (a new project), "
-                   "list_projects, delete_project, list_deleted (the trash: what was deleted and "
+                   "list_projects, delete_project (moves a project to the trash), "
+                   "list_trashed_projects / restore_project (bring a deleted project back), "
+                   "list_deleted (the trash: what was deleted and "
                    "when), restore (bring a soft-deleted entity back), "
                    "purge (permanently remove deleted entities: all those deleted over 30 days ago, "
                    "or one you name), list_revisions / restore_revision (the earlier versions of "
                    "an entity's text, and putting one back). Entity content "
                    "itself is NOT here — create and edit through story_draft. "
                    "Deleting an entity is a soft delete and is exactly reversible via restore; "
-                   "purge is the only irreversible one, and delete_project removes an entire project.",
+                   "purge is the only irreversible one. delete_project takes a whole project out of "
+                   "the projects list into a trash folder, from where restore_project returns it.",
     "type": "object",
     "properties": {
         "action": {
             "type": "string",
             "enum": ["create_project", "list_projects", "delete_project", "list_deleted",
-                     "restore", "purge", "list_revisions", "restore_revision"],
+                     "restore", "purge", "list_revisions", "restore_revision",
+                     "list_trashed_projects", "restore_project"],
             "description": "create_project (initialise a new project folder + database), "
                            "list_projects (every project under the root, no database opened), "
-                           "delete_project (remove a project folder and everything in it), "
+                           "delete_project (move a project folder, with everything in it, to the "
+                           "trash — recoverable with restore_project), "
+                           "list_trashed_projects (deleted projects, newest first), "
+                           "restore_project (bring one back; needs trash_id), "
                            "list_deleted (every soft-deleted entity, newest first, with the "
                            "id and type that restore and purge need; entities deleted "
                            "together with their parent are listed under it), "
@@ -46,6 +63,11 @@ SCHEMA = {
                            "newest first; every edit keeps the text it replaced), "
                            "restore_revision (put one of those back as the current text; the "
                            "text it replaces is kept in turn, so this is undoable)"
+        },
+        "trash_id": {
+            "type": "string",
+            "description": "For restore_project: which deleted project to bring back, exactly "
+                           "as list_trashed_projects shows it.",
         },
         "revision_id": {
             "type": "integer",
@@ -89,9 +111,8 @@ SCHEMA = {
             "description": "Required for action=\"delete_project\". Must contain the literal text "
                            "\"DELETE <project slug>\", e.g. \"DELETE my-film\". This is the "
                            "user's call to make — do not supply it unless the user has asked for "
-                           "the project to be removed entirely. A string, not a boolean, on "
-                           "purpose: a flag is something the agent can set by itself, and this "
-                           "destroys every entity in the project."
+                           "the project to be removed entirely. The project goes to the trash "
+                           "and can be restored with restore_project."
         },
         "purge_confirm": {
             "type": "string",
@@ -126,6 +147,10 @@ def handler(args: dict, **kwargs) -> str:
             return json.dumps(_list_projects(root_path))
         if action == "delete_project":
             return json.dumps(_delete_project(args, root_path))
+        if action == "list_trashed_projects":
+            return json.dumps(_list_trashed_projects(root_path))
+        if action == "restore_project":
+            return json.dumps(_restore_project(args, root_path))
         if action == "list_deleted":
             return json.dumps(_list_deleted(_resolve(args, root_path), args))
         if action == "purge":
@@ -183,17 +208,16 @@ def _list_projects(root_path: Path) -> dict:
 
 
 def _delete_project(args: dict, root_path: Path) -> dict:
-    """Remove a project folder entirely. Backs up first, refuses without a typed string.
+    """Move a project folder to the trash. Refuses without a typed string.
 
-    Two deliberate guards, both because this is the one operation in the plugin
-    that destroys work no flag in the database can bring back:
+    The folder is moved whole, not copied-from and removed: the database (with
+    its WAL files, which only mean something next to it), chat history, memory
+    and any hand-edited Markdown all survive, and bringing the project back is a
+    move in the other direction (`restore_project`). Deleting used to keep only
+    a copy of story.db and `rmtree` the rest.
 
-    1. `delete_confirm` must contain "DELETE <project slug>". The agent cannot
-       arrive at that string on its own, so it can only happen if the user
-       handed it over — a human in the loop by construction, not by prompt.
-    2. A backup is taken and written *outside* the folder being removed
-       (`<root>/backups/`), so the project is still recoverable by hand
-       afterwards.
+    `delete_confirm` must contain "DELETE <project slug>". It is kept for now as
+    the explicit "yes, this project" step; the delete is no longer destructive.
     """
     project_path = _resolve(args, root_path)
     slug = project_path.name
@@ -202,13 +226,14 @@ def _delete_project(args: dict, root_path: Path) -> dict:
     given = args.get("delete_confirm", "")
     if required not in given:
         return {
-            "error": "Delete refused. It removes every entity in the project and "
-                     "no flag in the database can undo it.",
+            "error": "Delete refused. It takes the whole project out of the projects "
+                     "list.",
             "action_required": f'Re-run with delete_confirm="{required}" if the user has '
-                               f"asked for this project to be removed entirely.",
+                               f"asked for this project to be removed.",
             "project": str(project_path),
             "hint": "To keep the project but tidy it up, use action=\"purge\" "
-                    "instead — that only touches entities already soft-deleted.",
+                    "instead — that only touches entities already soft-deleted. A "
+                    "deleted project can be brought back with restore_project.",
         }
 
     if not (project_path / ".story" / "story.db").exists():
@@ -218,23 +243,92 @@ def _delete_project(args: dict, root_path: Path) -> dict:
             "project": str(project_path),
         }
 
-    from story_architect.core.db import backup_database
-    # Written outside the folder being removed, or the delete would take it too.
-    backup = backup_database(project_path, dest_dir=root_path / "backups", prefix=slug)
-    shutil.rmtree(project_path)
+    trash = root_path / TRASH_DIR
+    trash.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # mkdtemp reserves a name nobody else holds; the project lands inside it, so
+    # two deletes of the same slug never collide.
+    slot = Path(tempfile.mkdtemp(prefix=f"{slug}_{stamp}_", dir=str(trash)))
+    try:
+        (slot / "deleted.json").write_text(json.dumps({
+            "slug": slug,
+            "original_path": str(project_path),
+            # Full precision: two deletes in one second must still sort newest-first.
+            "deleted_at": datetime.now().isoformat(),
+        }), encoding="utf-8")
+        shutil.move(str(project_path), str(slot))
+    except BaseException:
+        shutil.rmtree(slot, ignore_errors=True)   # a failed move leaves the project where it was
+        raise
 
+    trashed = slot / slug
     return {
         "success": True,
-        "message": f"Deleted project: {slug}",
+        "message": f"Moved project {slug} to the trash.",
         "project": str(project_path),
-        "backup": backup,
-        "note": "The backup is the full database as it was immediately before the "
-                "delete. To recover the project, create the folder <project>/.story/ and "
-                "copy the backup in as story.db — only while the project does not exist: "
-                "copying over an existing story.db leaves its -wal and -shm files behind "
-                "and corrupts it. To roll back a project that still exists, use "
-                "story_backup action=restore.",
+        "trash_id": slot.name,
+        "trashed_to": str(trashed),
+        "note": 'Bring it back with action="restore_project" and trash_id. To remove it '
+                "for good, delete the folder under the trash directory by hand.",
     }
+
+
+def _trashed_projects(root_path: Path) -> list[dict]:
+    """The projects in the trash, newest first. Only complete entries are listed."""
+    trash = root_path / TRASH_DIR
+    found = []
+    if not trash.is_dir():
+        return found
+    for slot in trash.iterdir():
+        try:
+            meta = json.loads((slot / "deleted.json").read_text(encoding="utf-8"))
+            slug = meta["slug"]
+        except (OSError, ValueError, KeyError):
+            continue
+        folder = slot / slug
+        if not folder.is_dir():
+            continue
+        found.append({
+            "trash_id": slot.name,
+            "slug": slug,
+            "deleted_at": meta.get("deleted_at", ""),
+            "has_database": (folder / ".story" / "story.db").exists(),
+            "path": str(folder),
+        })
+    found.sort(key=lambda e: (e["deleted_at"], e["trash_id"]), reverse=True)
+    return found
+
+
+def _list_trashed_projects(root_path: Path) -> dict:
+    found = _trashed_projects(root_path)
+    result = {"success": True, "count": len(found), "trashed": found}
+    if found:
+        result["hint"] = 'Bring one back with action="restore_project" and trash_id.'
+    else:
+        result["message"] = "No projects are in the trash."
+    return result
+
+
+def _restore_project(args: dict, root_path: Path) -> dict:
+    """Move a trashed project back under projects/. Refuses to overwrite one."""
+    trash_id = args.get("trash_id")
+    if not trash_id:
+        raise ValueError('restore_project needs trash_id (see action="list_trashed_projects").')
+    # Only names from the listing: that is what keeps a path like ../x out.
+    entry = next((e for e in _trashed_projects(root_path) if e["trash_id"] == trash_id), None)
+    if entry is None:
+        raise ValueError(f"No such project in the trash: {trash_id}")
+
+    dest = root_path / "projects" / entry["slug"]
+    if dest.exists():
+        raise ValueError(
+            f"A project named {entry['slug']} already exists. Rename or delete it first; "
+            f"the trashed one was not touched.")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(entry["path"], str(dest))
+    shutil.rmtree(root_path / TRASH_DIR / trash_id, ignore_errors=True)   # the empty slot
+    return {"success": True, "message": f"Restored project {entry['slug']}.",
+            "slug": entry["slug"], "project": str(dest)}
 
 
 def _purge_cutoff(days: int) -> str:

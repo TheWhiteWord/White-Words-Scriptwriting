@@ -134,22 +134,22 @@ class TestDeleteProject:
         assert result["success"] is True
         assert not project.exists()
 
-    def test_the_backup_survives_the_delete(self, root):
-        """A backup written inside the project folder would be destroyed by
-        the very delete it was taken for, so it has to land outside."""
+    def test_the_project_survives_the_delete_outside_the_deleted_tree(self, root):
+        """Deleting moves the folder to the trash instead of removing it, so
+        everything in it — not only the database — is still there, in a usable
+        form, somewhere the delete did not touch."""
         result = _run({"action": "delete_project", "project": "save-the-children",
                        "delete_confirm": "DELETE save-the-children"}, root)
-        backup = Path(result["backup"])
-        assert backup.exists(), f"backup missing: {backup}"
-        assert backup.parent == root / "backups", \
-            "the backup must be outside the deleted tree"
-        # And it must be a usable database, not an empty file.
-        conn = sqlite3.connect(str(backup))
+        trashed = Path(result["trashed_to"])
+        assert trashed.is_dir(), f"trashed project missing: {trashed}"
+        assert (root / "projects") not in trashed.parents, \
+            "the trashed copy must be outside projects/"
+        conn = sqlite3.connect(str(trashed / ".story" / "story.db"))
         try:
             n = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
         finally:
             conn.close()
-        assert n > 0, "the backup must contain the project's data"
+        assert n > 0, "the trashed project must contain its data"
 
     def test_a_folder_that_is_not_a_project_is_refused(self, root):
         (root / "projects" / "just-a-folder").mkdir()

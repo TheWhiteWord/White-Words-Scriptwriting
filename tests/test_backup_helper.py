@@ -88,19 +88,3 @@ def test_concurrent_backups_never_collide(project, tmp_path):
     assert len(set(made)) == 8
     assert sorted(p.name for p in dest.iterdir()) == sorted(Path(m).name for m in made)
     assert all(_entity_count(m) > 0 for m in made)
-
-
-def test_delete_project_backup_is_named_after_the_project(tmp_path):
-    import json
-    from story_architect.tools.story_admin import handler
-
-    root = tmp_path / "v"
-    (root / "projects").mkdir(parents=True)
-    create_project("stc", {"name": "STC", "logline": "L"}, root)
-    out = json.loads(handler({"action": "delete_project", "project": "stc",
-                              "delete_confirm": "DELETE stc"}, root_path=str(root)))
-    backup = Path(out["backup"])
-    assert backup.parent == root / "backups"
-    assert backup.name.startswith("stc_") and backup.suffix == ".db"
-    assert _entity_count(backup) > 0
-    assert not (root / "projects" / "stc").exists()
