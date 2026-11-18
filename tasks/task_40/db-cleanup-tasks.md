@@ -51,7 +51,7 @@
 ## 2. Baseline (dev @ 10de943)
 
 - `python -m pytest tests -q` → **1329 passed, 1 failed** at `10de943`.
-  After patch 01: 1336 passed. After patch 02: 1353 passed. After patch 03: 1366. After 04: 1372. After 05: 1383. After 06: 1399. After 07: **1420 passed**, same 1 failure.
+  After patch 01: 1336 passed. After patch 02: 1353 passed. After patch 03: 1366. After 04: 1372. After 05: 1383. After 06: 1399. After 07: 1420. After 08: **1454 passed**, same 1 failure.
 - Known pre-existing failure, unrelated to this work:
   `tests/test_no_hermes_imports.py` (finds the word "hermes" in
   `src/story_architect/app/config.py`). Leave it alone unless asked.
@@ -194,7 +194,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   means "just this one". `tests/test_purge.py`'s helper sent a target on every
   call, so it now sends one for `restore` only.
 
-- [x] **C3. Scene revision history.** *(patch 07 — done 2026-11-17)*
+- [A] **C3. Scene revision history.** *(patch 07 — done 2026-11-17)*
   Table `revisions(id, entity_id, heading, body, replaced_at, summary)` + index
   (schema migration 3, and `SCHEMA_SQL` for new databases). One hook:
   `edit_entity` calls `core.revisions.snapshot_replaced_body` just before it
@@ -223,18 +223,53 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   edit through `story_draft` is not stopped by `status='locked'`. Worth a
   decision when D-phase happens.
 
-- [ ] **C4. Backups: list, restore, retention.** *(note from B2: list `story_*.db`, ignore `*.partial`; `user_version` travels with a backup, so a restored old one is upgraded on open.)* `story_backup` actions to list
-  and restore. Restore must (1) snapshot the current DB first, (2) remove stale
-  `story.db-wal` / `-shm` files before replacing `story.db`. Retention: keep the
-  last N auto snapshots (⚖ N, suggested 20). Also prune committed `drafts` rows
-  older than N days. Fix the manual-restore instruction returned by
-  `delete_project` (copying over a live DB next to a stale WAL is unsafe).
+- [x] **C4. Backups: list, restore, retention.** *(patch 08 — done 2026-11-17)*
+  New `core/backups.py`: `create_backup`, `list_backups`, `restore_backup`,
+  `prune_automatic_backups`, `AUTO_BACKUPS_KEPT = 20`. `story_backup` tool now
+  has `action`: `create` (default, takes an optional `label`), `list`,
+  `restore` (`backup=<name>`).
+  *Naming:* `story_auto_<date>_<time>[_<label>]_<id>.db` = automatic (taken
+  before an import, a purge, and every restore); `story_<…>.db` = manual,
+  optionally labelled. **Only automatic ones are pruned**; manual ones and any
+  pre-existing `story_*.db` (old names) are never touched. Labels are slugged
+  (accents stripped, lowercase, hyphens, max 40 chars) — the original text is
+  not kept.
+  *Restore:* copies the snapshot **into the live database** with SQLite's backup
+  API instead of swapping the file (verified by experiment: other open
+  connections see it at once, the A1 watcher fires, no -wal/-shm to clean up,
+  a page-size mismatch is refused by SQLite and leaves the live db intact).
+  Checked first: readable, `integrity_check`, has `entities`, not from a newer
+  build, same page size. The current state is saved as an automatic backup
+  (`before-restore`) first, so a restore is undone by restoring that. The
+  restored db is migrated forward if its version is behind. Snapshots are read
+  with `mode=ro&immutable=1` — plain `mode=ro` leaves `-wal`/`-shm` files beside
+  the backup (verified).
+  *Also:* committed `drafts` rows older than 30 days (`drafts.RECEIPT_DAYS`) are
+  pruned on commit, never the one just committed; `delete_project`'s recovery
+  note no longer says to copy over a live `story.db`.
+  ⚖ **Decisions made (see §4):** keep the newest 20 automatic backups; restore
+  has no confirmation phrase (it is reversible through the safety backup, and
+  the tool description says to do it only on the user's request — D2 revisits
+  the whole confirm-string question); restore replaces the WHOLE project.
+  *Not done:* nothing takes a backup periodically (see C6) — until then
+  automatic backups only appear before destructive operations, so the cap of
+  20 will rarely be reached; no UI for any of this; labels are not editable.
 
 - [ ] **C5. Project delete moves the folder to a trash folder** (`<root>/.trash/`
   or `send2trash`) instead of `rmtree` plus a `story.db`-only backup, which
   currently destroys `chat.db`, `memory.md` and hand-edited Markdown.
   ⚖ stdlib `shutil.move` into `<root>/.trash/` (recommended, no dependency) vs
   `send2trash` (OS trash).
+
+- [ ] **C6. Periodic automatic backup.** Today the only automatic backups are
+  the ones taken before an import, a purge or a restore, so a writer who never
+  does those has no safety net at all. Standard behaviour (Scrivener, Fade In,
+  Final Draft): back up on open/close or at most once a day, keep the last N.
+  Proposal: when the web app loads a project, take an automatic backup if the
+  newest automatic one is older than 24 h (`create_backup(automatic=True)`,
+  which already prunes). ⚖ Needs your OK on the trigger (project open vs app
+  start vs on a timer) and the interval. This is also what makes the cap of 20
+  meaningful.
 
 ### Phase D — Simplify soft delete and the confirmation gates
 
@@ -301,6 +336,30 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   is a real editing surface (Obsidian etc.) or just an export. Discuss with the
   user before planning.
 
+### Phase G — Ideas, not planned yet
+
+- [ ] **G1. Named script drafts ("save a draft of the script").** Raised by the
+  user 2026-11-17: a writer's frozen, named state of the script they can come
+  back to (Final Draft "Revisions", Highland/WriterDuet "Versions/Drafts").
+  *Terminology:* "draft" already means *staged agent changes* in this code
+  (`drafts` table, `story_draft` tool, the chat's draft chips). Internally call
+  these **script versions** (or snapshots); show "Draft" to the user only if the
+  staged-changes concept is renamed in the UI (e.g. "Proposed changes").
+  *What exists now:* a **labelled manual backup** (C4) is already a named,
+  permanent, whole-project snapshot that can be restored — usable today, but
+  restore is all-or-nothing and there is no way to *view* or *compare* one
+  without restoring it.
+  *Likely design for a real feature (not started):* a `script_versions(id, name,
+  note, created_at)` table; freezing one stores each scene's `Content` (plus
+  scene order and heading fields) as **pinned revisions** — rows in `revisions`
+  (C3) with a nullable `version_id`, exempt from the 50-per-section cap (the
+  prune query in `core/revisions.snapshot_replaced_body` must then exclude
+  pinned rows). That gives list / view / diff / export of a frozen draft from
+  SQL alone, and "restore this scene from Draft 2" = the existing
+  `restore_revision`. Open questions for the user: restore whole script or per
+  scene (scenes added/deleted since?); compare view; export of a frozen draft.
+  *Nothing in C3 or C4 needs to change to leave room for this.*
+
 ## 4. Decisions log
 
 | Date | Task | Decision |
@@ -308,6 +367,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 | 2026-11-17 | B1 | Refuse (raise `SchemaTooNewError`) a db whose version is newer than the build, rather than open it. Risk: switching to an older branch after a newer one has upgraded a db will refuse to open it until the app is updated or a backup restored. Say if you would rather it only warn. |
 | 2026-11-17 | C2 | Targeted purge (`purge` + `target`) **ignores the 30-day age floor**: naming one already-trashed item is not a sweep; it still needs `purge_confirm`, takes a backup, and refuses live entities. To keep the floor for named items too, add the check in `_select_one_deletion`. |
 | 2026-11-17 | C3 | Keep **50** revisions per (entity, section); snapshot only when the text changed (not on empty/identical overwrites). Change `REVISIONS_KEPT` in `core/revisions.py` to alter the cap. |
+| 2026-11-17 | C4 | Keep the newest **20 automatic** backups; **only automatic ones are pruned** (manual and old-named ones never). Restore replaces the whole project in place, takes a `before-restore` automatic backup first, and has no confirm phrase (reversible). Committed draft receipts kept 30 days. |
 
 ## 5. Patch log
 
@@ -319,7 +379,8 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 | `04-B2-backup-helper.patch` | B2 | dev @ 6ae613f | yes | +6 tests (1372). core/db.py, tools/story_admin.py, comment in core/drafts.py |
 | `05-C1-list-deleted.patch` | C1 | stacked on 04 | yes | +11 tests (1383). tools/story_admin.py (new action `list_deleted`) |
 | `06-C2-purge-one.patch` | C2 | stacked on 05 | yes | +16 tests (1399). tools/story_admin.py; tests/test_purge.py helper changed (sends `target` for restore only) |
-| `07-C3-revisions.patch` | C3 | dev @ 67a82d3 | pending | +21 tests (1420). core/db.py (schema + migration 3), core/revisions.py (new), core/writes.py (hook), tools/story_admin.py (2 actions, purge cleanup) |
+| `07-C3-revisions.patch` | C3 | dev @ 67a82d3 | yes | +21 tests (1420). core/db.py (schema + migration 3), core/revisions.py (new), core/writes.py (hook), tools/story_admin.py (2 actions, purge cleanup) |
+| `08-C4-backups.patch` | C4 | dev @ 8ba007e | pending | +34 tests (1454). core/backups.py (new), core/db.py (label), tools/story_backup.py (rewritten), tools/story_import.py + story_admin.py (automatic backups, delete_project note), core/drafts.py (receipt pruning) |
 
 ## 6. Session notes
 
@@ -370,6 +431,17 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   Practical notes: (n) a test assertion ending in `or True` slipped through
   once — mutation-check every new test file; (o) the script editor has no
   autosave (explicit Save / Ctrl+S; the only debounce is the live check).
+- 2026-11-17 — Session 2 (cont.): 07 applied. C4 done → patch 08 (base dev @
+  8ba007e). User asked for judgement on retention (→ 20 automatic, manual never
+  pruned) and raised the idea of named script drafts → recorded as G1, and C6
+  (periodic backup) added because without it retention rarely triggers. Next:
+  C5 (project delete → trash folder), C6 (needs a trigger decision), D1/D2,
+  E-phase. Practical notes: (p) `fixture_path` already contains an automatic
+  backup left by building it — clear `.story/story_*.db` if a test needs an empty
+  list; (q) a mutation that "passes" can mean the guarded check is redundant
+  (dead code) — delete it rather than test it; (r) `integrity_check` only fails
+  on a *readable* file if a row disagrees with its index — edit a value in the
+  file bytes (same length) to simulate that.
 
 ## 7. Things that are fine, leave alone
 

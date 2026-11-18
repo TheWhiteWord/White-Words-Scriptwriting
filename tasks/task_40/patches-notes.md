@@ -78,7 +78,7 @@ Two things for you to review:
 
 I caught two gaps in my own tests during mutation checking and fixed them. In one, the mutation text wasn't found, so it had silently tested unmodified code.
 
-## C3. Scene revision history.
+### C3. Scene revision history.
 
 **What it does.** Until now, saving a scene replaced its text for good. Now every save keeps the text it replaced. It's one hook inside `edit_entity`, and I confirmed that both the agent's draft commits and the script editor's Save go through it. The kept copy is written in the same transaction as the overwrite, so a failed save can't leave a stray revision.
 
@@ -94,3 +94,30 @@ I caught two gaps in my own tests during mutation checking and fixed them. In on
 **How I checked it.** I broke six rules on purpose, one at a time. Examples: the hook removed, retention pruning the wrong rows, locked scenes allowed, purge leaving history behind. Each break made a test fail. I also found a test of mine with an assertion that could never fail (it ended in `or True`) and fixed it.
 
 **One finding for later.** The scene lock is enforced only in the UI's save path, not at the write boundary. An agent edit through `story_draft` isn't stopped by a locked scene. I didn't change that, but it's recorded in the task file for the D-phase discussion.
+
+### C4. Backups: list, restore, retention.
+
+**What it does**
+- **Backups.** The backup tool now has three actions: create (still the default), list, and restore. Create takes an optional label.
+- **Two kinds, only one pruned.**
+  - Automatic backups (before an import, before a purge, and before every restore) are named `story_auto_…`, and only the newest 20 are kept.
+  - Manual backups are never deleted, and neither are any `story_*.db` files you already have.
+- **Restore.** It copies the backup into the live database instead of swapping files. I tested this first. Other open connections see the restored data immediately, the live-update banner fires, and there's no stale `-wal`/`-shm` file to corrupt things. A damaged backup, one from a newer app version, or a mismatched one is refused before anything changes.
+- **Undoable.** Before restoring, it saves the current state as an automatic backup, so restoring that one undoes the restore.
+- **Cleanup.** Committed draft rows older than 30 days are pruned on commit. The delete-project recovery note no longer tells you to copy a file over a live database.
+
+**Decisions I made, recorded in §4**
+- **Keep 20 automatic backups.** That's typical for desktop writing apps, which keep "the last handful".
+- **No confirmation phrase on restore.** It's reversible through the safety backup, and I'd like to revisit confirmation strings as a whole in D2. Restore always replaces the entire project, not one scene. For one scene's text, `list_revisions` from C3 is the tool.
+
+**Your script-drafts idea.** Yes, this was a good time to raise it. I haven't built it, because the design needs decisions from you, but C4 and C3 leave room for it, and I wrote it up as **G1** in the task file.
+- **Available today.** A labelled manual backup is already a named, permanent snapshot you can restore: `story_backup(action="create", label="after the table read")`. Labels are saved lowercase with hyphens, and accents are stripped (so "Così è meglio" becomes `cosi-e-meglio`).
+- **The limits.** Restoring is all-or-nothing for the whole project, and you can't view or compare a saved state without restoring it.
+- **A proper feature.** It would use the revision table from C3 with a marker for "pinned to draft X". That gives list, view, compare and export of a frozen draft, and restoring one scene from it would reuse the existing restore. Nothing in C3 or C4 needs to change to allow it.
+- **Naming.** "Draft" already means staged agent changes in this code (the `drafts` table, the `story_draft` tool, the chat chips). I'd call these "script versions" internally and show "Draft" to you only if the staged-changes concept gets renamed in the UI, for example "Proposed changes".
+
+**Quality checks.** I mutation-tested eight rules and found a few gaps in my own tests. Two checks looked untested because of the way I'd written them:
+- One was redundant code, which I deleted.
+- One needed a backup that's readable but internally inconsistent. I made one by editing a value in the file.
+
+**Something to know.** Automatic backups only happen before destructive operations, so most writers would never get one. I added **C6**, a periodic automatic backup (at most once a day when a project is opened). It needs your OK on the trigger, and it's also what makes the cap of 20 matter.
