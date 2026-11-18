@@ -1,7 +1,26 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, BackgroundTasks, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 import asyncio
+import logging
 from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+
+def periodic_backup(root, slug: str) -> None:
+    """Opening a project is the moment to make sure it has a recent backup.
+
+    Runs after the response has gone out, so the page never waits for it, and
+    never raises: a backup that cannot be made is logged, not shown as a broken
+    dashboard.
+    """
+    try:
+        if Path(slug).name != slug:
+            return
+        from story_architect.core.backups import maybe_periodic_backup
+        maybe_periodic_backup(Path(root) / "projects" / slug)
+    except Exception:
+        log.warning("periodic backup of %s failed", slug, exc_info=True)
 
 
 class DbChangeWatcher:
@@ -87,7 +106,7 @@ def make_router(config, app):
         return {"projects": services.list_projects(config.root)}
 
     @router.get("/api/projects/{slug}/dashboard")
-    def dashboard(slug: str):
+    def dashboard(slug: str, background: BackgroundTasks):
         from story_architect.app import services
         try:
             data = services.get_project_dashboard(config.root, slug)
@@ -95,6 +114,7 @@ def make_router(config, app):
             return JSONResponse(status_code=404, content={"error": {"code": "not_found", "message": str(e)}})
         except Exception as e:
             return JSONResponse(status_code=500, content={"error": {"code": "error", "message": str(e)}})
+        background.add_task(periodic_backup, config.root, slug)
         return data
 
     @router.get("/api/projects/{slug}/events")

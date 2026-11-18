@@ -16,14 +16,26 @@ match, so a listing only ever shows complete backups.
 """
 import re
 import sqlite3
+import threading
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Standard desktop practice is "the last handful"; automatic backups here are
 # taken before destructive operations and before restores, so 20 spans weeks of
 # normal use without growing without bound.
 AUTO_BACKUPS_KEPT = 20
+
+# The periodic backup (maybe_periodic_backup): at most one a day, and only when
+# the project changed since the last one.
+PERIODIC_BACKUP_INTERVAL = timedelta(hours=24)
+
+# SQLite checkpoints the write-ahead log into story.db when the last connection
+# closes, which can touch the file a moment *after* a backup was taken. Changes
+# within this many seconds of a backup are not counted as new.
+_CHECKPOINT_SLACK_SECONDS = 5
+
+_periodic_lock = threading.Lock()
 
 _NAME = re.compile(r"^story(?P<auto>_auto)?_(?P<date>\d{8})_(?P<time>\d{6})(?P<rest>.*)\.db$")
 
@@ -56,6 +68,36 @@ def create_backup(project_path: Path, *, label: str | None = None,
     if automatic:
         prune_automatic_backups(project_path)
     return path
+
+
+def maybe_periodic_backup(project_path: Path, *, now: datetime | None = None) -> str | None:
+    """Take an automatic backup if one is due; return its path, or None.
+
+    Due means: the newest *automatic* backup is older than PERIODIC_BACKUP_INTERVAL
+    (or there is none) **and** the project database changed after it. The second
+    condition keeps a project that is only ever opened from filling every
+    automatic slot with identical copies, which would push out the older states
+    the cap is there to keep.
+
+    Meant to be called whenever a project is opened. Safe to call from several
+    threads at once: only one of them backs up.
+    """
+    now = now or datetime.now()
+    db = project_path / ".story" / "story.db"
+    if not db.exists():
+        return None
+    with _periodic_lock:
+        newest = next((b for b in list_backups(project_path) if b["kind"] == "automatic"), None)
+        if newest is not None:
+            taken = datetime.fromisoformat(newest["created_at"])
+            if now - taken < PERIODIC_BACKUP_INTERVAL:
+                return None
+            # story.db changes only at checkpoints; the -wal file on every write
+            changed = max((f.stat().st_mtime for f in (db, db.with_name("story.db-wal"))
+                           if f.exists()), default=0)
+            if changed <= taken.timestamp() + _CHECKPOINT_SLACK_SECONDS:
+                return None
+        return create_backup(project_path, automatic=True)
 
 
 def list_backups(project_path: Path) -> list[dict]:
