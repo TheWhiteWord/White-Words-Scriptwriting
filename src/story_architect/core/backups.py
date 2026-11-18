@@ -1,0 +1,180 @@
+"""Backups of a project's database: make, list, restore, prune.
+
+Files live in ``<project>/.story/`` and are named
+``story[_auto]_<date>_<time>[_<label>]_<id>.db``:
+
+* ``story_auto_…`` — **automatic**: taken by the app before something
+  destructive (a Markdown import, a purge) and before every restore. Only these
+  are ever pruned, to the newest AUTO_BACKUPS_KEPT.
+* ``story_…`` — **manual**: taken on request, optionally with a label that
+  names it (a milestone to come back to). Never pruned. Backups made before this
+  naming existed (``story_<date>_<time>.db``) count as manual, so nothing old is
+  ever deleted on a guess.
+
+``*.partial`` files (a backup still being written, or one that failed) never
+match, so a listing only ever shows complete backups.
+"""
+import re
+import sqlite3
+import unicodedata
+from datetime import datetime
+from pathlib import Path
+
+# Standard desktop practice is "the last handful"; automatic backups here are
+# taken before destructive operations and before restores, so 20 spans weeks of
+# normal use without growing without bound.
+AUTO_BACKUPS_KEPT = 20
+
+_NAME = re.compile(r"^story(?P<auto>_auto)?_(?P<date>\d{8})_(?P<time>\d{6})(?P<rest>.*)\.db$")
+
+
+def slugify_label(label: str) -> str | None:
+    """A label as it appears in a file name: ASCII, lowercase, hyphens.
+
+    "Bozza finale — dopo la lettura" -> "bozza-finale-dopo-la-lettura".
+    """
+    ascii_text = unicodedata.normalize("NFKD", label).encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-")[:40].strip("-")
+    return slug or None
+
+
+def create_backup(project_path: Path, *, label: str | None = None,
+                  automatic: bool = False) -> str:
+    """Snapshot the project database. Returns the backup's path.
+
+    Automatic backups prune older automatic ones afterwards; manual ones are kept.
+    """
+    from .db import backup_database
+
+    slug = None
+    if label:
+        slug = slugify_label(label)
+        if slug is None:
+            raise ValueError("The label needs at least one letter or digit.")
+    path = backup_database(project_path, prefix="story_auto" if automatic else "story",
+                           label=slug)
+    if automatic:
+        prune_automatic_backups(project_path)
+    return path
+
+
+def list_backups(project_path: Path) -> list[dict]:
+    """Every complete backup, newest first.
+
+    Each: name, kind ("automatic" | "manual"), label (or None), created_at
+    (local time, from the name), size_bytes.
+    """
+    found = []
+    folder = project_path / ".story"
+    for f in folder.glob("story_*.db"):
+        m = _NAME.match(f.name)
+        if not m or not f.is_file():
+            continue
+        st = f.stat()
+        try:
+            created = datetime.strptime(m["date"] + m["time"], "%Y%m%d%H%M%S")
+        except ValueError:
+            created = datetime.fromtimestamp(st.st_mtime)
+        rest = m["rest"]
+        label = rest[1:-9] or None if rest.startswith("_") and len(rest) > 9 and rest[-9] == "_" else None
+        found.append((created, st.st_mtime_ns, {
+            "name": f.name,
+            "kind": "automatic" if m["auto"] else "manual",
+            "label": label,
+            "created_at": created.isoformat(timespec="seconds"),
+            "size_bytes": st.st_size,
+        }))
+    found.sort(key=lambda t: (t[0], t[1]), reverse=True)
+    return [t[2] for t in found]
+
+
+def prune_automatic_backups(project_path: Path, keep: int | None = None) -> list[str]:
+    """Delete automatic backups beyond the newest `keep`. Returns the names removed.
+
+    Manual backups are never touched. `keep` is at least 1, so the backup that
+    has just been taken always survives.
+    """
+    keep = max(1, AUTO_BACKUPS_KEPT if keep is None else keep)
+    automatic = [b for b in list_backups(project_path) if b["kind"] == "automatic"]
+    removed = []
+    for b in automatic[keep:]:
+        (project_path / ".story" / b["name"]).unlink(missing_ok=True)
+        removed.append(b["name"])
+    return removed
+
+
+def restore_backup(project_path: Path, name: str) -> dict:
+    """Replace the project database with a backup's contents.
+
+    The snapshot is copied *into* the live database through SQLite's backup API
+    instead of swapping the file. A file swap leaves other open connections (the
+    web app, the agent's tools) pointing at the old file, where a write would be
+    lost, and a stale ``-wal`` left beside the new file corrupts it. Copying in
+    place is one transaction on the real file: other connections see the
+    restored data as soon as it commits, and nothing is left behind.
+
+    Before anything changes, the backup is checked (a readable SQLite file, no
+    damage, a project database, not from a newer build, same page size) and the
+    current state is saved as an automatic backup — so a restore can itself be
+    undone by restoring that one. Raises ValueError, changing nothing, if a
+    check fails.
+    """
+    from .db import SCHEMA_MIGRATIONS, apply_migrations, get_db
+
+    # Only names from the listing: that is what keeps a path like ../story.db out.
+    if name not in {b["name"] for b in list_backups(project_path)}:
+        raise ValueError(f"No such backup: {name}. Use action=\"list\" for the names.")
+    source = project_path / ".story" / name
+    if not (project_path / ".story" / "story.db").exists():
+        raise ValueError("This project has no story.db to restore into.")
+
+    # immutable: read it without creating -wal/-shm files beside the backup
+    try:
+        snap = sqlite3.connect(f"file:{source}?mode=ro&immutable=1", uri=True)
+    except sqlite3.Error as e:
+        raise ValueError(f"{name} cannot be opened: {e}")
+    try:
+        try:
+            ok = snap.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            has_entities = snap.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='entities'").fetchone()
+            version = snap.execute("PRAGMA user_version").fetchone()[0]
+            page_size = snap.execute("PRAGMA page_size").fetchone()[0]
+        except sqlite3.Error as e:
+            raise ValueError(f"{name} is not a readable project database: {e}")
+        if not ok:
+            raise ValueError(f"{name} is damaged and was not restored.")
+        if not has_entities:
+            raise ValueError(f"{name} is not a project database (no entities table).")
+        if version > len(SCHEMA_MIGRATIONS):
+            raise ValueError(
+                f"{name} was made by a newer version of Story Architect (schema "
+                f"{version}, this build knows {len(SCHEMA_MIGRATIONS)}). Update the app first.")
+
+        live = get_db(project_path)
+        try:
+            if live.execute("PRAGMA page_size").fetchone()[0] != page_size:
+                raise ValueError(f"{name} uses a different database page size and cannot "
+                                 f"be restored in place.")
+            safety = create_backup(project_path, label="before-restore", automatic=True)
+            snap.backup(live)
+            apply_migrations(live, SCHEMA_MIGRATIONS, name=f"{project_path.name}/.story/story.db")
+            if live.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                raise RuntimeError(
+                    f"The database failed its integrity check after the restore. The state "
+                    f"before it is saved as {Path(safety).name}.")
+        finally:
+            live.close()
+    finally:
+        snap.close()
+
+    meta = next(b for b in list_backups(project_path) if b["name"] == name)
+    return {
+        "success": True,
+        "restored": name,
+        "restored_created_at": meta["created_at"],
+        "safety_backup": Path(safety).name,
+        "message": (f"Restored the project to {meta['created_at']}. Anything done after "
+                    f"that is not in it."),
+        "hint": f"To undo this restore, restore {Path(safety).name}.",
+    }

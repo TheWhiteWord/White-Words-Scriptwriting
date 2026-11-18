@@ -30,8 +30,8 @@ def _backup(project_path: Path) -> str:
     Delegates to core.db.backup_database — the WAL-safe, collision-free copy that
     story_backup also uses.
     """
-    from story_architect.core.db import backup_database
-    return backup_database(project_path)
+    from story_architect.core.backups import create_backup
+    return create_backup(project_path, automatic=True)
 
 
 def _diff(project_path: Path) -> dict:

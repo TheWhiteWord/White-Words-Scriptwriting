@@ -229,7 +229,11 @@ def _delete_project(args: dict, root_path: Path) -> dict:
         "project": str(project_path),
         "backup": backup,
         "note": "The backup is the full database as it was immediately before the "
-                "delete. To recover, copy it back to <project>/.story/story.db.",
+                "delete. To recover the project, create the folder <project>/.story/ and "
+                "copy the backup in as story.db — only while the project does not exist: "
+                "copying over an existing story.db leaves its -wal and -shm files behind "
+                "and corrupts it. To roll back a project that still exists, use "
+                "story_backup action=restore.",
     }
 
 
@@ -315,7 +319,8 @@ def _purge_deleted(args: dict, project_path: Path) -> dict:
     1. `purge_confirm` must contain the literal "DELETE <project slug>".
     2. A backup is taken first, so even this is recoverable by hand.
     """
-    from story_architect.core.db import backup_database, get_db, transaction
+    from story_architect.core.backups import create_backup
+    from story_architect.core.db import get_db, transaction
 
     required = f"DELETE {project_path.name}"
     given = args.get("purge_confirm", "")
@@ -357,7 +362,7 @@ def _purge_deleted(args: dict, project_path: Path) -> dict:
                     }
 
             ids = [r[0] for r in rows]
-            backup = backup_database(project_path)
+            backup = create_backup(project_path, automatic=True)
             _hard_delete(conn, ids)
     finally:
         conn.close()

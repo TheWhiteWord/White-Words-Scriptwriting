@@ -13,7 +13,7 @@ tasks/task_28/draft-staging-design.md.
 """
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from .constants import ENTITY_SCHEMAS
@@ -39,6 +39,10 @@ REQUIRED_OP_KEYS = {
 
 class DraftError(ValueError):
     """A draft op is not dispatchable. The message is agent-facing."""
+
+
+# How long a committed draft's row is kept as the receipt for a repeated commit.
+RECEIPT_DAYS = 30
 
 
 def new_draft_id(conn: sqlite3.Connection) -> str:
@@ -414,6 +418,12 @@ def commit(project_path: Path, draft_id: str) -> dict:
     conn = get_db(project_path)
     try:
         conn.execute("UPDATE drafts SET status='committed' WHERE id=?", (draft_id,))
+        # The receipt only matters while a repeated commit might still arrive; old
+        # ones would otherwise pile up for good. Never the one just written.
+        conn.execute("DELETE FROM drafts WHERE status='committed' AND id != ? "
+                     "AND created_at < ?",
+                     (draft_id, (datetime.now() - timedelta(days=RECEIPT_DAYS))
+                      .isoformat(timespec="seconds")))
     finally:
         conn.close()
     return {

@@ -280,12 +280,14 @@ def transaction(conn: sqlite3.Connection):
 
 
 def backup_database(project_path: Path, *, dest_dir: Path | None = None,
-                    prefix: str = "story") -> str:
+                    prefix: str = "story", label: str | None = None) -> str:
     """Snapshot story.db into a new file. Returns the backup's path.
 
     By default the file goes beside the database, as ``story_<date>_<time>_<id>.db``;
     ``dest_dir`` and ``prefix`` put it elsewhere (delete_project writes outside
-    the folder it is about to remove). Shared by story_backup, story_import,
+    the folder it is about to remove), and ``label`` (lowercase letters, digits
+    and hyphens) adds a name after the time. Most callers want
+    core.backups.create_backup, which also decides the prefix and prunes. Shared by story_backup, story_import,
     purge and delete_project so none of them can drift apart.
 
     What it guarantees, each of which a plain file copy got wrong:
@@ -303,9 +305,12 @@ def backup_database(project_path: Path, *, dest_dir: Path | None = None,
       removed.
     """
     import os
+    import re
     import tempfile
     from datetime import datetime
 
+    if label is not None and not re.fullmatch(r"[a-z0-9-]+", label):
+        raise ValueError("A backup label may only hold lowercase letters, digits and hyphens.")
     dest_dir = Path(dest_dir) if dest_dir is not None else project_path / ".story"
     dest_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -313,7 +318,8 @@ def backup_database(project_path: Path, *, dest_dir: Path | None = None,
     src = get_db(project_path)
     try:
         fd, partial = tempfile.mkstemp(
-            prefix=f"{prefix}_{stamp}_", suffix=".partial", dir=str(dest_dir))
+            prefix=f"{prefix}_{stamp}_{label + '_' if label else ''}",
+            suffix=".partial", dir=str(dest_dir))
         os.close(fd)
         final = partial[: -len(".partial")] + ".db"
         try:
