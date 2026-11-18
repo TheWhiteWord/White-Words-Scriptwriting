@@ -495,13 +495,25 @@ def _select_one_deletion(conn, target: dict):
                      f"that are already deleted. Nothing was purged.",
             "entity_id": row[0],
         }
-    # `IS ?` rather than `= ?` so that a row with no deletion time still matches
-    # its own (equally unstamped) children.
-    children = conn.execute(
+    return [(row[0], row[1], row[2])] + _deleted_together(conn, row[0], row[2]), None
+
+
+def _deleted_together(conn, entity_id: str, deleted_at) -> list:
+    """The children that were deleted in the same operation as `entity_id`.
+
+    One rule, used by restore, by targeted purge and (as a Python grouping) by
+    list_deleted: a child in the trash whose deletion stamp equals the parent's.
+    A child deleted on its own, earlier or later, carries another stamp and is a
+    separate item in the trash.
+
+    `IS ?` rather than `= ?` so that a row with no deletion time (deleted by an
+    earlier build) still matches its own, equally unstamped, children.
+    Returns (id, type, deleted_at) rows.
+    """
+    return conn.execute(
         "SELECT id, type, deleted_at FROM entities "
         "WHERE parent_id=? AND is_deleted=1 AND deleted_at IS ? ORDER BY type, id",
-        (row[0], row[2])).fetchall()
-    return [(row[0], row[1], row[2])] + children, None
+        (entity_id, deleted_at)).fetchall()
 
 
 def _hard_delete(conn, ids: list) -> None:
@@ -558,21 +570,21 @@ def _restore_entity(args: dict, project_path: Path) -> dict:
                 }
             conn.execute(
                 "UPDATE entities SET is_deleted=0, deleted_at=NULL WHERE id=?", (entity_id,))
-            # Children come back with their parent. The restore is meant to be the
-            # exact inverse of the delete, and the delete cascades on `parent_id` —
-            # so leaving a child deleted would restore a scene with no scene_beats,
-            # silently.
+            # Children come back with their parent — the ones THIS delete flagged,
+            # and only those. The delete cascades on `parent_id`, so leaving such a
+            # child deleted would restore a scene with no scene_beats, silently; but
+            # a child that was already in the trash before (or was deleted on its
+            # own after) carries a different stamp, and bringing it back would undo
+            # a deletion nobody asked to undo.
             #
             # Keyed on `parent_id` for every type rather than a per-type branch: the
-            # cascade is one fact (this row owned that row), and the list is what the
-            # delete already soft-deleted.
-            restored_children = [r[0] for r in conn.execute(
-                "SELECT id FROM entities WHERE parent_id=? AND is_deleted=1 "
-                "ORDER BY id", (entity_id,)).fetchall()]
+            # cascade is one fact (this row owned that row).
+            restored_children = sorted(
+                r[0] for r in _deleted_together(conn, entity_id, deleted_at))
             if restored_children:
-                conn.execute(
-                    "UPDATE entities SET is_deleted=0, deleted_at=NULL "
-                    "WHERE parent_id=? AND is_deleted=1", (entity_id,))
+                conn.executemany(
+                    "UPDATE entities SET is_deleted=0, deleted_at=NULL WHERE id=?",
+                    [(c,) for c in restored_children])
     finally:
         conn.close()
 

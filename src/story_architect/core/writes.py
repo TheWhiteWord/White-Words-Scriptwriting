@@ -799,9 +799,14 @@ def delete_entity(project_path: Path, entity_type: str, slug: str,
                 raise ValueError(f"Entity not found: {entity_type}/{slug}")
 
             # Cascade block: structural types (containment hierarchy)
-            # Derived from DB: any entity whose parent_id points to this one is a child
+            # Derived from DB: any live entity whose parent_id points to this one is
+            # a child. A child already in the trash was deleted by an earlier action:
+            # it is not this delete's to re-stamp (that would overwrite its own
+            # deletion time and make restoring the parent bring it back), to list in
+            # the preview, or to count as blocking.
             children = conn.execute(
-                "SELECT id, type FROM entities WHERE parent_id=?", (entity_id,)
+                "SELECT id, type FROM entities WHERE parent_id=? AND is_deleted=0",
+                (entity_id,)
             ).fetchall()
             structural = [c for c in children if c[1] in ("scene", "sequence")]
 
