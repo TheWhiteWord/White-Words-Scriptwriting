@@ -51,7 +51,7 @@
 ## 2. Baseline (dev @ 10de943)
 
 - `python -m pytest tests -q` → **1329 passed, 1 failed** at `10de943`.
-  After patch 01: 1336 passed. After patch 02: 1353 passed. After patch 03: 1366. After 04: 1372. After 05: 1383. After 06: 1399. After 07: 1420. After 08: **1454 passed**, same 1 failure.
+  After patch 01: 1336 passed. After patch 02: 1353 passed. After patch 03: 1366. After 04: 1372. After 05: 1383. After 06: 1399. After 07: 1420. After 08: 1454. After 09 and 10 together: **1482 passed** (+28 combined; the split per patch was not recorded), same 1 failure.
 - Known pre-existing failure, unrelated to this work:
   `tests/test_no_hermes_imports.py` (finds the word "hermes" in
   `src/story_architect/app/config.py`). Leave it alone unless asked.
@@ -223,7 +223,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   edit through `story_draft` is not stopped by `status='locked'`. Worth a
   decision when D-phase happens.
 
-- [x] **C4. Backups: list, restore, retention.** *(patch 08 — done 2026-11-17)*
+- [A] **C4. Backups: list, restore, retention.** *(patch 08 — done 2026-11-17, applied)*
   New `core/backups.py`: `create_backup`, `list_backups`, `restore_backup`,
   `prune_automatic_backups`, `AUTO_BACKUPS_KEPT = 20`. `story_backup` tool now
   has `action`: `create` (default, takes an optional `label`), `list`,
@@ -251,25 +251,31 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   has no confirmation phrase (it is reversible through the safety backup, and
   the tool description says to do it only on the user's request — D2 revisits
   the whole confirm-string question); restore replaces the WHOLE project.
-  *Not done:* nothing takes a backup periodically (see C6) — until then
+  *Post-hoc fix (by the user's own assistant, after applying):*
+  `test_a_readable_but_damaged_backup_is_refused` relied on byte layout of the
+  file; it now tries each copy of a value in the file until `integrity_check`
+  objects. (Lesson recorded in §6.)
+  *Not done (C6 has since been done, patch 10):* nothing took a backup periodically — until then
   automatic backups only appear before destructive operations, so the cap of
   20 will rarely be reached; no UI for any of this; labels are not editable.
 
-- [ ] **C5. Project delete moves the folder to a trash folder** (`<root>/.trash/`
-  or `send2trash`) instead of `rmtree` plus a `story.db`-only backup, which
-  currently destroys `chat.db`, `memory.md` and hand-edited Markdown.
-  ⚖ stdlib `shutil.move` into `<root>/.trash/` (recommended, no dependency) vs
-  `send2trash` (OS trash).
+- [x] **C5. Project delete moves the folder to a trash folder.** *(patch 09 — done)*
+  Deleting a project no longer `rmtree`s it (which used to destroy `chat.db`,
+  `memory.md` and hand-edited Markdown, keeping only a `story.db` backup): the
+  whole folder moves to `<root>/.story-trash`. New `list_trashed_projects` and
+  `restore_project`. `restore_project` **never overwrites** an existing project.
+  Permanent removal of a trashed project is **manual** (nothing in the app does
+  it). The `delete_confirm` string is kept until D2.
+  ⚖ **Decisions made (see §4):** folder name `.story-trash` (hidden; not
+  `.trash`, which Obsidian uses for its own deleted notes); stdlib move, no
+  `send2trash`.
 
-- [ ] **C6. Periodic automatic backup.** Today the only automatic backups are
-  the ones taken before an import, a purge or a restore, so a writer who never
-  does those has no safety net at all. Standard behaviour (Scrivener, Fade In,
-  Final Draft): back up on open/close or at most once a day, keep the last N.
-  Proposal: when the web app loads a project, take an automatic backup if the
-  newest automatic one is older than 24 h (`create_backup(automatic=True)`,
-  which already prunes). ⚖ Needs your OK on the trigger (project open vs app
-  start vs on a timer) and the interval. This is also what makes the cap of 20
-  meaningful.
+- [x] **C6. Periodic automatic backup.** *(patch 10 — done)*
+  Trigger: **opening a project in the web app** (the dashboard load). At most
+  **one automatic backup per 24 h**, and **only if the project changed since the
+  last one** (so an idle project does not fill the cap of 20 with identical
+  copies). Uses the C4 automatic-backup path, so pruning to the newest 20 applies.
+  ⚖ **Decisions made (see §4).**
 
 ### Phase D — Simplify soft delete and the confirmation gates
 
@@ -368,6 +374,8 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 | 2026-11-17 | C2 | Targeted purge (`purge` + `target`) **ignores the 30-day age floor**: naming one already-trashed item is not a sweep; it still needs `purge_confirm`, takes a backup, and refuses live entities. To keep the floor for named items too, add the check in `_select_one_deletion`. |
 | 2026-11-17 | C3 | Keep **50** revisions per (entity, section); snapshot only when the text changed (not on empty/identical overwrites). Change `REVISIONS_KEPT` in `core/revisions.py` to alter the cap. |
 | 2026-11-17 | C4 | Keep the newest **20 automatic** backups; **only automatic ones are pruned** (manual and old-named ones never). Restore replaces the whole project in place, takes a `before-restore` automatic backup first, and has no confirm phrase (reversible). Committed draft receipts kept 30 days. |
+| 2026-11-18 | C5 | Trash folder is `<root>/.story-trash` (hidden; `.trash` is used by Obsidian). Permanent removal of a trashed project is manual. `restore_project` never overwrites an existing project. `delete_confirm` stays until D2. |
+| 2026-11-18 | C6 | Trigger = opening a project in the web app (dashboard load). At most one automatic backup per 24 h, and only if the project changed since the last one. |
 
 ## 5. Patch log
 
@@ -380,7 +388,9 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 | `05-C1-list-deleted.patch` | C1 | stacked on 04 | yes | +11 tests (1383). tools/story_admin.py (new action `list_deleted`) |
 | `06-C2-purge-one.patch` | C2 | stacked on 05 | yes | +16 tests (1399). tools/story_admin.py; tests/test_purge.py helper changed (sends `target` for restore only) |
 | `07-C3-revisions.patch` | C3 | dev @ 67a82d3 | yes | +21 tests (1420). core/db.py (schema + migration 3), core/revisions.py (new), core/writes.py (hook), tools/story_admin.py (2 actions, purge cleanup) |
-| `08-C4-backups.patch` | C4 | dev @ 8ba007e | pending | +34 tests (1454). core/backups.py (new), core/db.py (label), tools/story_backup.py (rewritten), tools/story_import.py + story_admin.py (automatic backups, delete_project note), core/drafts.py (receipt pruning) |
+| `08-C4-backups.patch` | C4 | dev @ 8ba007e | yes | +34 tests (1454). core/backups.py (new), core/db.py (label), tools/story_backup.py (rewritten), tools/story_import.py + story_admin.py (automatic backups, delete_project note), core/drafts.py (receipt pruning). Test `test_a_readable_but_damaged_backup_is_refused` was later fixed by the user's own assistant (no byte offsets) |
+| `09-C5-project-trash.patch` | C5 | stacked on 08 | TO CONFIRM (user to say) | Project delete moves the folder to `<root>/.story-trash`; `list_trashed_projects`, `restore_project`. Tests: see combined total in §2 |
+| `10-C6-daily-backup.patch` | C6 | stacked on 09 | TO CONFIRM (user to say) | Automatic backup on project open: max one per 24 h, only if changed. 09 + 10 together = +28 tests (1482 pass, same 1 baseline failure) |
 
 ## 6. Session notes
 
@@ -442,6 +452,15 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   (dead code) — delete it rather than test it; (r) `integrity_check` only fails
   on a *readable* file if a row disagrees with its index — edit a value in the
   file bytes (same length) to simulate that.
+- 2026-11-18 — Session 3: 08 applied (C4 → [A]). C5 → patch 09, C6 → patch 10
+  (both made outside the notes of this file and recorded here from the user's
+  summary; 09/10 applied status to be confirmed). Remaining: D1, D2 (need the
+  user's decisions), then E1–E3, F1, G1. Practical notes: (s) never chain
+  `pytest | tail && git commit` — the pipe hides pytest's exit code, so a failing
+  run still commits; assert the failure list first; (t) don't use byte offsets
+  in tests (a file's byte layout changes with SQLite/page details — C4's damaged
+  backup test broke that way); (u) a mutation pattern can match twice — give it
+  enough context so it hits exactly one place (and assert the count).
 
 ## 7. Things that are fine, leave alone
 
