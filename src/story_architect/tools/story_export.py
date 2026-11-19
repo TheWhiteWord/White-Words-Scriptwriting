@@ -5,6 +5,7 @@ from pathlib import Path
 
 from story_architect.core.constants import ENTITY_SCHEMAS
 from story_architect.core.entity import PLOT_BEAT_FIELDS
+from story_architect.core.references import dead_ids, live_column, live_extra
 
 SCHEMA = {
     "description": "Write the whole database back out to Markdown files. Use to publish the "
@@ -145,9 +146,12 @@ def _export_all(conn, project_path: Path) -> set:
         "FROM entities WHERE is_deleted=0 ORDER BY type, id"
     ).fetchall()
 
+    dead = dead_ids(conn)
     for row in entity_rows:
         entity_id, entity_type, name, one_sentence, order_key, status, parent_id, location_id, extra_json = row
-        extra = json.loads(extra_json) if extra_json else {}
+        extra = live_extra(json.loads(extra_json) if extra_json else {}, dead)
+        location_id = live_column(location_id, dead)
+        parent_id = live_column(parent_id, dead)
 
         # Denormalize from relations back to frontmatter
         if entity_type == "scene":

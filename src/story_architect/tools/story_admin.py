@@ -534,17 +534,18 @@ def _hard_delete(conn, ids: list) -> None:
 
 
 def _restore_entity(args: dict, project_path: Path) -> dict:
-    """Undelete an entity by clearing is_deleted.
+    """Undelete an entity by clearing is_deleted. The exact inverse of the delete.
 
-    Sections and relations were never removed, so there is nothing to rebuild —
-    which is the whole reason the delete is a flag and not a DELETE. Relations
-    (cast, location links, a plot's roles) simply become visible again, because
-    the `live_relations` view stops hiding them.
+    The delete changes nothing but the flags: sections, relation rows, the names
+    other entities hold in `extra`, and `location_id` all stay as written, and
+    readers hide the ones that name a deleted entity (the `live_relations` view
+    and core/references.py). So there is nothing to rebuild here — clearing the
+    flag makes cast, location links, plot roles, relationship characters and
+    perspectives visible again, and the stored data is byte for byte what it was.
 
-    Not yet exact: the delete still scrubs the dead id out of other entities'
-    `extra` (relationship characters and perspectives, plot characters) and
-    empties `parent_id` / `location_id` columns that pointed at it. Restore does
-    not put those back. Making them read-side filters too is the next step.
+    The one thing that is not given back: a field someone set to a new value
+    while the entity was in the trash. An edit that sets `characters` replaces
+    the stored list, hidden names included.
     """
     from story_architect.core.db import get_db, transaction
 

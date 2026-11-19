@@ -48,7 +48,7 @@ def _rows(conn):
                         "ORDER BY order_key, name, id").fetchall()
     scenes = conn.execute(
         "SELECT s.id, s.name, s.parent_id, s.extra, l.name "
-        "FROM entities s LEFT JOIN entities l ON s.location_id = l.id "
+        "FROM entities s LEFT JOIN entities l ON s.location_id = l.id AND l.is_deleted=0 "
         "WHERE s.type='scene' AND s.is_deleted=0 "
         "ORDER BY s.order_key, s.name, s.id").fetchall()
     return acts, seqs, scenes

@@ -73,27 +73,32 @@ def _call_admin(vault, **args):
 # ─── delete ───
 
 def test_failed_delete_changes_nothing(vault):
-    """The reference scrub is the delete's last step. If it fails, the entity
-    flag, the child flags and the inbound-relation deletes before it must all
-    be undone — not left as a half-deleted character."""
+    """The entity's own flag is the delete's last write. If it fails, the child
+    flagged just before it must be undone too — not left as a scene's beats in
+    the trash under a live scene."""
     from story_architect.core.writes import delete_entity
 
     before = _snapshot(vault)
-    # The scrub rewrites `extra` on relationships that name the character.
-    _break(vault, "CREATE TRIGGER boom BEFORE UPDATE OF extra ON entities "
+    _break(vault, "CREATE TRIGGER boom BEFORE UPDATE OF is_deleted ON entities "
+                  "WHEN NEW.id = 'central-room-day' "
                   "BEGIN SELECT RAISE(ABORT, 'boom'); END")
 
     with pytest.raises(sqlite3.Error, match="boom"):
-        delete_entity(_project(vault), "character", "kael", "t", True)
+        delete_entity(_project(vault), "scene", "central-room-day", "t", True)
 
     assert _snapshot(vault) == before
+    c = _db(vault)
+    assert c.execute("SELECT is_deleted FROM entities "
+                     "WHERE id='central-room-day-beats'").fetchone()[0] == 0
+    c.close()
 
     # Same call succeeds once the fault is gone: the failure left no residue.
     _unbreak(vault, "boom")
-    result = delete_entity(_project(vault), "character", "kael", "t", True)
+    result = delete_entity(_project(vault), "scene", "central-room-day", "t", True)
     assert result["success"] is True
     c = _db(vault)
-    assert c.execute("SELECT is_deleted FROM entities WHERE id='kael'").fetchone()[0] == 1
+    assert c.execute("SELECT is_deleted FROM entities "
+                     "WHERE id='central-room-day-beats'").fetchone()[0] == 1
 
 
 def test_delete_refusals_leave_database_untouched(vault):

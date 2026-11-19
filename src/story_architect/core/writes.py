@@ -17,6 +17,7 @@ from pathlib import Path
 
 from .constants import ENTITY_SCHEMAS
 from .fountain_lexer import SCENE_HEADING_RE
+from .references import dead_ids, live_column, references_to
 
 _FIELDS_TO_SKIP = {"id", "type"}
 
@@ -499,7 +500,10 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
         if entity_type == "scene":
             stored = conn.execute(
                 "SELECT location_id, extra FROM entities WHERE id=?", (entity_id,)).fetchone()
-            stored_location = stored[0] if stored and stored[0] else ""
+            # What a reader sees, not the raw column: a location in the trash
+            # is no location, so an edit of anything else about the scene is
+            # judged against the heading it would actually print.
+            stored_location = live_column(stored[0], dead_ids(conn)) if stored and stored[0] else ""
             stored_extra = json.loads(stored[1]) if stored and stored[1] else {}
             content_row = conn.execute(
                 "SELECT body FROM sections WHERE entity_id=? AND heading='Content'",
@@ -880,9 +884,11 @@ def delete_entity(project_path: Path, entity_type: str, slug: str,
             # `live_relations` view, which drops a row whose either end is flagged.
             # So there is nothing to clean up here and nothing to put back on restore.
 
-            # References held in other entities' extra must still be scrubbed, or a
-            # deleted id would be handed out as a valid target by story_load.
-            depurged, detached = _purge_references(conn, deleted_ids)
+            # Names held in other entities' `extra` and in `location_id` are left as
+            # written, like the relation rows: readers hide them (references.py), so
+            # restore puts everything back. What is reported is what now reads as
+            # gone from those entities.
+            hidden_in, detached = references_to(conn, deleted_ids)
     finally:
         conn.close()
 
@@ -891,7 +897,7 @@ def delete_entity(project_path: Path, entity_type: str, slug: str,
         "message": f"Deleted: {summary}",
         "entity_id": entity_id,
         "cascade_deleted": [c[0] for c in children],
-        "references_purged": depurged,
+        "references_hidden": hidden_in,
         "detached": detached,
         "reversible": True,
         "how_to_undo": f"restore with the same target. Deleted at {stamp}.",
@@ -1077,80 +1083,3 @@ def _default_for(entity_type: str, field: str):
     resets to that, while an unfilled field resets to empty.
     """
     return ENTITY_SCHEMAS.get(entity_type, {}).get(field, {}).get("default", "")
-
-
-def _purge_references(conn, deleted_ids: set) -> tuple:
-    """Strip references to deleted entities out of the JSON `extra` of survivors.
-
-    The cascade in `delete_entity` only handles relation *rows* and `parent_id`.
-    But several reference sites live in `extra` instead, and deleting a
-    character left relationship entities still naming them — with their
-    perspectives intact:
-
-        kael-mira  {"characters": ["kael", ...], "perspectives": {"kael": {...}}}
-
-    A relationship is a first-class entity, not a relation row, so nothing else
-    was touching it. This walks every surviving entity once and removes the dead
-    ids from the known reference fields.
-    """
-    if not deleted_ids:
-        return [], []
-
-    # Only live entities: the delete flags its targets before calling this, so
-    # without the filter it would re-scrub the entity it is deleting.
-    rows = conn.execute(
-        "SELECT id, type, extra FROM entities WHERE is_deleted=0").fetchall()
-    touched = []
-    # Fields emptied that the schema marks required. unfilled_fields skips those
-    # by design, so this is the only place the agent learns about them.
-    detached = []
-    for entity_id, entity_type, extra_json in rows:
-        if entity_id in deleted_ids:
-            continue
-        extra = json.loads(extra_json) if extra_json else {}
-        changed = False
-
-        # Reference *columns*, not extra: a scene's location_id points at a
-        # location, and nothing else would ever clear it. parent_id is checked
-        # too — a child whose parent was deleted as a non-structural cascade
-        # member should not be left pointing at nothing.
-        #
-        # Columns are emptied to "" rather than NULL: unfilled_fields treats a
-        # missing key and an empty value the same way, and "" round-trips to
-        # Markdown as a visible blank instead of a silent null.
-        for column in ("parent_id", "location_id"):
-            row = conn.execute(
-                f"SELECT {column} FROM entities WHERE id=?", (entity_id,)).fetchone()
-            if row and row[0] in deleted_ids:
-                conn.execute(f"UPDATE entities SET {column}='' WHERE id=?", (entity_id,))
-                changed = True
-                # location is optional, so unfilled_fields picks it up on its own.
-                if column == "location_id":
-                    detached.append({"entity_id": entity_id, "entity_type": entity_type,
-                                     "field": "location", "was_pointing_at": row[0]})
-
-        # List-valued references: characters, scenes. The key is kept and the
-        # dead ids dropped, so the field reads as empty rather than absent.
-        for field in ("characters", "scenes"):
-            value = extra.get(field)
-            if isinstance(value, list) and deleted_ids & set(map(str, value)):
-                extra[field] = [v for v in value if str(v) not in deleted_ids]
-                changed = True
-
-
-
-        # Per-character sub-objects: a relationship's perspectives. This one
-        # really is a removal — the surviving half of the relationship is what
-        # the entity is for, so dropping the dead key keeps the other one.
-        perspectives = extra.get("perspectives")
-        if isinstance(perspectives, dict):
-            gone = [k for k in perspectives if k in deleted_ids]
-            for key in gone:
-                del perspectives[key]
-                changed = True
-
-        if changed:
-            conn.execute("UPDATE entities SET extra=? WHERE id=?",
-                         (json.dumps(extra), entity_id))
-            touched.append(entity_id)
-    return touched, detached

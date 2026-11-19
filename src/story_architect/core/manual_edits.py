@@ -25,6 +25,7 @@ from pathlib import Path
 from . import scene_script as ss
 from .constants import INT_EXT_CHOICES, SCENE_TIMES_OF_DAY, PLOT_ROLES
 from .db import get_db
+from .references import dead_ids, live_column, live_extra
 from .entity import ENTITY_COLUMN_MAP, unfilled_fields
 from .fountain_lexer import SCENE_HEADING_RE
 
@@ -56,7 +57,9 @@ def _scene_state(conn, scene_id: str) -> dict:
     ).fetchone()
     if not row:
         raise ScriptNotFound(f"Scene not found: {scene_id}")
-    extra = json.loads(row[7]) if row[7] else {}
+    dead = dead_ids(conn)
+    extra = live_extra(json.loads(row[7]) if row[7] else {}, dead)
+    location_id = live_column(row[6], dead)
     body = conn.execute(
         "SELECT body FROM sections WHERE entity_id=? AND heading='Content'",
         (scene_id,)).fetchone()
@@ -69,10 +72,10 @@ def _scene_state(conn, scene_id: str) -> dict:
         (scene_id, *[f"plot_{r}" for r in PLOT_ROLES])).fetchone()[0]
     return {
         "row": {"name": row[1], "one_sentence": row[2], "order_key": row[3],
-                "status": row[4], "parent_id": row[5], "location_id": row[6]},
+                "status": row[4], "parent_id": row[5], "location_id": location_id},
         "id": row[0], "title": row[1], "status": row[4],
         "order": row[3] or 0, "sequence_id": row[5],
-        "location": row[6] or "", "extra": extra,
+        "location": location_id or "", "extra": extra,
         "int_ext": extra.get("int_ext", ""),
         "place": extra.get("place", ""),
         "time_of_day": extra.get("time_of_day", ""),
@@ -92,8 +95,9 @@ def _registry(conn) -> tuple[list[dict], dict]:
                       "story_role": ex.get("story_role", "")})
     names = {r[0]: r[1] for r in conn.execute(
         "SELECT id, name FROM entities WHERE type='world' AND is_deleted=0")}
+    dead = dead_ids(conn)
     locs = [{"id": i, "name": n or i,
-             "world": ({"id": w, "name": names.get(w, w)} if w else None)}
+             "world": ({"id": w, "name": names.get(w, w)} if live_column(w, dead) else None)}
             for i, n, w in conn.execute(
                 "SELECT id, name, parent_id FROM entities "
                 "WHERE type='location' AND is_deleted=0 ORDER BY name")]

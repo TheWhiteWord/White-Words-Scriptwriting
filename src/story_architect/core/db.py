@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .constants import (MEMORY_CATEGORIES, MEMORY_CHAR_LIMIT, MEMORY_ENTRY_LIMIT,
                         ENTITY_SCHEMAS, PLOT_ROLES)
+from .references import dead_ids, live_column, live_extra
 from .entity import PLOT_BEAT_FIELDS
 from .scene_script import scene_heading
 
@@ -700,6 +701,8 @@ def get_project_summary(project_path: Path, act: str | None = None,
                 variant_of[from_id] = to_id
 
         # ── Organize entities by type ──
+        # References to deleted entities are hidden, not stored away: see references.py.
+        dead = dead_ids(conn)
         acts = {}
         sequences = {}
         scenes = {}
@@ -709,7 +712,7 @@ def get_project_summary(project_path: Path, act: str | None = None,
         worlds = {}
         relationships = {}
         for eid, etype, name, one_sentence, status, order_key, parent_id, extra_json in ent_rows:
-            extra = json.loads(extra_json) if extra_json else {}
+            extra = live_extra(json.loads(extra_json) if extra_json else {}, dead)
 
             if etype == "act":
                 acts[eid] = {
@@ -1071,9 +1074,12 @@ def get_unfilled_map(project_path: Path) -> dict:
                     PLOT_FIELD_BY_KIND[kind], []).append(to_id)
 
         from .entity import unfilled_fields
+        dead = dead_ids(conn)
         unfilled_inv = {}
         for eid, etype, name, one_sentence, status, extra_json, loc_id, parent_id in ent_rows:
-            extra = json.loads(extra_json) if extra_json else {}
+            extra = live_extra(json.loads(extra_json) if extra_json else {}, dead)
+            loc_id = live_column(loc_id, dead)
+            parent_id = live_column(parent_id, dead)
             # The row, so `unfilled_fields` can see the fields that live in
             # columns. Handing it `extra` alone leaves every column reported as
             # a gap on filled data.
@@ -1252,11 +1258,13 @@ def get_dashboard_data(project_path: Path) -> dict:
 
         # Build entity lookup for cross-references (must precede rel lookups)
         entity_by_id = {}
+        dead = dead_ids(conn)
         for r in ent_rows:
             entity_by_id[r[0]] = {
                 "id": r[0], "type": r[1], "name": r[2], "one_sentence": r[3],
-                "order": r[4], "status": r[5], "parent_id": r[6], "location_id": r[7],
-                "extra": json.loads(r[8]) if r[8] else {},
+                "order": r[4], "status": r[5], "parent_id": r[6],
+                "location_id": live_column(r[7], dead),
+                "extra": live_extra(json.loads(r[8]) if r[8] else {}, dead),
             }
 
         # Load all relations for denormalization (note carries the plot role's prose)
@@ -1365,7 +1373,7 @@ def get_dashboard_data(project_path: Path) -> dict:
         for e in ent_rows:
             etype = e[1]
             eid = e[0]
-            extra = json.loads(e[8]) if e[8] else {}
+            extra = live_extra(json.loads(e[8]) if e[8] else {}, dead)
 
             if etype == "character":
                 d = _entity_dict({
@@ -1396,7 +1404,7 @@ def get_dashboard_data(project_path: Path) -> dict:
                 # characters, locations, plots — O(1) reverse lookups
                 d["characters"] = scene_chars.get(eid, [])
                 d["locations"] = scene_locs.get(eid, [])
-                if e[7] and e[7] not in d["locations"]:
+                if e[7] and e[7] not in dead and e[7] not in d["locations"]:
                     d["locations"].append(e[7])
                 d["plots"] = scene_plots.get(eid, [])
                 d["milestone"] = milestone_label(scene_plots.get(eid, []), plot_scopes)
@@ -1416,7 +1424,7 @@ def get_dashboard_data(project_path: Path) -> dict:
             elif etype == "location":
                 d = _entity_dict({
                     "id": eid, "name": e[2], "one_sentence": e[3], "order": e[4],
-                    "status": e[5], "parent_id": e[6], "extra": extra,
+                    "status": e[5], "parent_id": live_column(e[6], dead), "extra": extra,
                 })
                 if eid in variant_map:
                     d["variant_of"] = variant_map[eid]
@@ -1854,7 +1862,7 @@ def _screenplay_rows(conn: sqlite3.Connection) -> list:
         """SELECT s.body, e.id, e.extra, l.name
            FROM sections s
            JOIN entities e ON s.entity_id = e.id
-           LEFT JOIN entities l ON e.location_id = l.id
+           LEFT JOIN entities l ON e.location_id = l.id AND l.is_deleted=0
            LEFT JOIN entities p ON e.parent_id = p.id
            LEFT JOIN entities pp ON p.parent_id = pp.id
            WHERE e.type='scene' AND e.is_deleted=0 AND s.heading='Content' AND s.body != ''

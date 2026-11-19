@@ -31,6 +31,7 @@ from .constants import (ACT_STATUSES, CONFLICT_LEVELS, ENTITY_LABELS, ENTITY_SCH
                         PLOT_TYPES, SCENE_DRAMATIC_ROLES, SCENE_STATUSES, SEQUENCE_STATUSES,
                         STRUCTURE_TYPES, VALID_ROLES, VALID_STATUSES, VALUE_ARCS, VALUE_LADDER)
 from .db import get_db
+from .references import dead_ids, live_column, live_extra
 from .entity import (ENTITY_COLUMN_MAP, REVERSED_RELATION_KINDS, _RELATION_FIELDS,
                      PlotRoleError, coerce_number, standard_sections,
                      validate_scene_plot_roles)
@@ -472,7 +473,10 @@ ROLE_FIELD = {"setup": "setups", "inciting_incident": "inciting_incident", "comp
 def _scene_rows(conn, scene_id: str) -> dict:
     """What the script editor owns on a scene, plus the derived records — display only."""
     row = conn.execute("SELECT location_id, extra FROM entities WHERE id=?", (scene_id,)).fetchone()
-    ex = json.loads(row[1]) if row and row[1] else {}
+    dead = dead_ids(conn)
+    ex = live_extra(json.loads(row[1]) if row and row[1] else {}, dead)
+    if row:
+        row = (live_column(row[0], dead), row[1])
     one = lambda text: [{"display": text}] if text else []          # noqa: E731
     loc = ""
     if row and row[0]:
@@ -503,13 +507,14 @@ def _focus_rows(focus: dict) -> list:
 def _computed(conn, entity_type: str, entity_id: str, project_path: Path | None = None) -> dict:
     """Derived fields, as display rows. Shown, never written."""
     out = {}
+    dead = dead_ids(conn)
     if entity_type == "character":
         names = {r[0]: r[1] for r in conn.execute(
             "SELECT id, name FROM entities WHERE type='character' AND is_deleted=0")}
         rows = []
         for rid, extra in conn.execute(
                 "SELECT id, extra FROM entities WHERE type='relationship' AND is_deleted=0 ORDER BY name"):
-            ex = json.loads(extra) if extra else {}
+            ex = live_extra(json.loads(extra) if extra else {}, dead)
             chars = ex.get("characters") or []
             if entity_id not in chars:
                 continue
@@ -649,13 +654,15 @@ def load_entity(project_path: Path, entity_type: str, entity_id: str) -> dict:
     try:
         row = _row(conn, entity_type, entity_id)
         entity_id = row[0]
-        extra = json.loads(row[7]) if row[7] else {}
+        dead = dead_ids(conn)
+        extra = live_extra(json.loads(row[7]) if row[7] else {}, dead)
         schema = ENTITY_SCHEMAS[entity_type]
         colmap = ENTITY_COLUMN_MAP.get(entity_type, {})
         editable_keys = {f["key"] for f in form_spec(entity_type)["fields"]
                          if f["kind"] not in ("computed", "linked", "unsupported")}
         cols = {"name": row[1], "one_sentence": row[2], "order_key": row[3],
-                "status": row[4], "parent_id": row[5], "location_id": row[6]}
+                "status": row[4], "parent_id": live_column(row[5], dead),
+                "location_id": live_column(row[6], dead)}
         rels = _RELATION_FIELDS.get(entity_type, {})
         values = {}
         for key, meta in schema.items():
@@ -938,13 +945,14 @@ def _validate(conn, entity_type: str, entity_id: str | None, values: dict,
 def _validate_kind_specific(conn, entity_type, entity_id, values, errors, warnings, baseline=None) -> None:
     if entity_type == "relationship" and "characters" not in errors:
         chars = values.get("characters") or []
+        dead = dead_ids(conn)
         if len(chars) != 2 or len(set(chars)) != 2:
             errors["characters"] = "Pick two different characters."
         else:
             for rid, rname, rex in conn.execute(
                     "SELECT id, name, extra FROM entities WHERE type='relationship' AND is_deleted=0 AND id<>?",
                     (entity_id or "",)):
-                if set((json.loads(rex) if rex else {}).get("characters") or []) == set(chars):
+                if set(live_extra(json.loads(rex) if rex else {}, dead).get("characters") or []) == set(chars):
                     nm = _names(conn, chars)
                     warnings["characters"] = (f"{nm.get(chars[0], chars[0])} and {nm.get(chars[1], chars[1])} "
                                               f"already have a relationship (“{rname}”). Saving adds another.")

@@ -85,7 +85,14 @@ def _resolve(conn, entity_type: str, entity_id: str):
 
 
 def _row_data(conn, row) -> dict:
-    return dict(zip(_columns(conn), row))
+    """The entity as a dict, with references to deleted entities hidden."""
+    from story_architect.core.references import dead_ids, live_column, live_extra_json
+    data = dict(zip(_columns(conn), row))
+    dead = dead_ids(conn)
+    data["extra"] = live_extra_json(data.get("extra"), dead)
+    data["location_id"] = live_column(data.get("location_id"), dead)
+    data["parent_id"] = live_column(data.get("parent_id"), dead)
+    return data
 
 
 def _scene_beats_id(conn, scene_id: str) -> str:

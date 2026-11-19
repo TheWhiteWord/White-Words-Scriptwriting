@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from story_architect.core.db import milestone_label
+from story_architect.core.references import dead_ids, live_extra
 
 
 SCHEMA = {
@@ -485,12 +486,13 @@ def _view_relationship(conn, args: dict) -> dict:
     tied to whom) and `detail` says how to read them in full.
     """
     character = args.get("character")
+    dead = dead_ids(conn)
     out = []
     for rel_id, name, status, extra_json in conn.execute(
             "SELECT id, name, status, extra FROM entities "
             "WHERE type='relationship' AND is_deleted=0 "
             "ORDER BY id").fetchall():
-        extra = json.loads(extra_json or "{}")
+        extra = live_extra(json.loads(extra_json or "{}"), dead)
         if character and character not in extra.get("characters", []):
             continue
         perspectives = extra.get("perspectives", {})

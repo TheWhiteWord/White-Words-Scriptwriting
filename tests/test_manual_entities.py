@@ -284,9 +284,12 @@ class TestDelete:
         prev = me.delete_preview(project, "location", "kitchen")
         assert any("Dinner" in e and "no location" in e for e in prev["effects"])
         me.delete_form_entity(project, "location", "kitchen")
+        # The scene reads as having no location; the column keeps its value, so a
+        # restore of the location gives it back (test_live_references.py).
+        assert me.load_entity(project, "scene", "sc1")["values"]["location"] in ("", None)
         conn = get_db(project)
         try:
-            assert conn.execute("SELECT location_id FROM entities WHERE id='sc1'").fetchone()[0] in ("", None)
+            assert conn.execute("SELECT location_id FROM entities WHERE id='sc1'").fetchone()[0] == "kitchen"
         finally:
             conn.close()
 

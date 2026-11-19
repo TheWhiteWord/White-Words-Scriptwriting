@@ -23,6 +23,7 @@ from story_architect.core.db import SCHEMA_MIGRATIONS, apply_migrations, create_
 from story_architect.core.writes import create_project, delete_entity
 from story_architect.tools.story_admin import handler as admin
 from story_architect.tools.story_import import handler as import_handler
+import twin_helpers as twin
 
 SLUG = "save-the-children"
 SRC = Path(core_db.__file__).resolve().parents[1]
@@ -254,55 +255,6 @@ def test_every_read_of_relations_goes_through_the_view():
 
 # ─── hiding is the same as removing, for every reader ───
 
-def _build(fixture_path, tmp_path, name):
-    vault = tmp_path / name
-    p = vault / "projects" / SLUG
-    p.parent.mkdir(parents=True)
-    shutil.copytree(str(fixture_path), str(p))
-    import_handler({"project": SLUG, "confirm": True}, root_path=str(vault))
-    return p, vault
-
-
-def _everything_a_reader_can_say(p, vault):
-    """The output of every reader, per live entity, as comparable text."""
-    from story_architect.core import db, manual_edits, manual_entities, track
-    from story_architect.core import manual_structure
-    from story_architect.tools import story_export, story_load, story_retrieve
-    out = {}
-
-    def rec(name, fn):
-        try:
-            r = fn()
-            out[name] = r if isinstance(r, str) else json.dumps(r, default=str, sort_keys=True)
-        except Exception as e:  # an error is output too; both twins must agree
-            out[name] = f"{type(e).__name__}: {e}"
-
-    for eid, etype in _sql(p, "SELECT id, type FROM entities WHERE is_deleted=0 "
-                              "AND type != 'project'"):
-        rec(f"retrieve:{eid}", lambda: story_retrieve.handler(
-            {"project": SLUG, "entity_type": etype, "id": eid,
-             "fields": ["all"], "sections": ["all"]}, root_path=str(vault)))
-        rec(f"form:{eid}", lambda: manual_entities.load_entity(p, etype, eid))
-        if etype == "scene":
-            rec(f"script:{eid}", lambda: manual_edits.load_scene_script(p, eid))
-            rec(f"values:{eid}", lambda: story_load.handler(
-                {"project": SLUG, "view": "values", "scene": eid}, root_path=str(vault)))
-        if etype in ("character", "location", "world", "relationship"):
-            rec(f"track:{eid}", lambda: track.for_entity(p, eid))
-    rec("summary", lambda: db.get_project_summary(p))
-    rec("unfilled_map", lambda: db.get_unfilled_map(p))
-    rec("dashboard", lambda: db.get_dashboard_data(p))
-    rec("tree", lambda: manual_structure.load_tree(p))
-    for view in (None, "dramatic_elements", "relationship", "unfilled"):
-        rec(f"load:{view}", lambda: story_load.handler(
-            {"project": SLUG, **({"view": view} if view else {})}, root_path=str(vault)))
-    rec("export", lambda: story_export.handler({"project": SLUG}, root_path=str(vault)))
-    out["export_files"] = "\n".join(
-        f"## {f.relative_to(p)}\n{f.read_text()}" for f in sorted(p.rglob("*.md"))
-        if ".story" not in f.parts)
-    return out
-
-
 @pytest.mark.parametrize("etype,eid", [
     ("character", "kael"), ("character", "mira"), ("scene", "central-room-day"),
     ("scene", "the-core-day"), ("plot", "the-resistance"), ("location", "the-central-room"),
@@ -318,22 +270,18 @@ def test_hiding_a_deleted_entitys_relations_reads_the_same_as_removing_them(
     able to tell them apart. A reader that goes back to the raw table shows the
     kept rows and breaks the equality.
     """
-    hidden, vh = _build(fixture_path, tmp_path, "hidden")
-    removed, vr = _build(fixture_path, tmp_path, "removed")
+    hidden, vh = twin.build(fixture_path, tmp_path, "hidden")
+    removed, vr = twin.build(fixture_path, tmp_path, "removed")
     has_rows = bool(_sql(hidden, "SELECT 1 FROM relations WHERE from_id=? OR to_id=?", eid, eid))
     for p in (hidden, removed):
         assert delete_entity(p, etype, eid, "t", True)["success"]
-    conn = sqlite3.connect(str(removed / ".story" / "story.db"))
-    conn.execute("DELETE FROM relations WHERE from_id IN (SELECT id FROM entities "
-                 "WHERE is_deleted=1) OR to_id IN (SELECT id FROM entities WHERE is_deleted=1)")
-    conn.commit()
-    conn.close()
+    twin.remove_relation_rows(removed)
     if has_rows:  # (a relationship entity keeps its characters in extra, not in the table)
         assert len(_raw(hidden)) > len(_raw(removed)), "the twins must differ in the table"
 
-    a, b = _everything_a_reader_can_say(hidden, vh), _everything_a_reader_can_say(removed, vr)
-    assert a.keys() == b.keys()
-    differing = sorted(k for k in a if a[k] != b[k])
+    a = twin.everything_a_reader_can_say(hidden, vh)
+    b = twin.everything_a_reader_can_say(removed, vr)
+    differing = twin.differing(a, b)
     assert differing == [], f"readers that can tell hidden from removed: {differing}"
 
 

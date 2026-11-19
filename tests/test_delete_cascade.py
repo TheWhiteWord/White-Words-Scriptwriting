@@ -42,36 +42,46 @@ def _delete(p, entity_type, slug, confirm=True):
 
 
 def _references_to(project, target):
-    """Every surviving reference to `target`, of any kind."""
+    """Every reference to `target` that a reader can still see, of any kind.
+
+    A delete leaves the stored references alone (restore needs them) and hides
+    them from readers, so this asks the readers — the web form's view of every
+    live entity — plus the one thing storage must still guarantee: no live row
+    has a deleted parent.
+    """
+    from story_architect.core.manual_entities import load_entity
     conn = sqlite3.connect(str(project / ".story" / "story.db"))
     found = []
     try:
-        for eid, parent, location, extra_json in conn.execute(
-                "SELECT id, parent_id, location_id, extra FROM entities "
-                "WHERE is_deleted=0"):
-            extra = json.loads(extra_json or "{}")
-            if parent == target:
-                found.append((eid, "parent_id"))
-            if location == target:
-                found.append((eid, "location_id"))
-            if target in (extra.get("characters") or []):
-                found.append((eid, "extra.characters"))
-            if target in (extra.get("scenes") or []):
-                found.append((eid, "extra.scenes"))
-            if extra.get("scene") == target:
-                found.append((eid, "extra.scene"))
-            if target in (extra.get("perspectives") or {}):
-                found.append((eid, "extra.perspectives"))
-        # The rows themselves survive on purpose — restore needs them, and
-        # reconstructing them would be guesswork. What must not survive is a
-        # relation a READER can see: `live_relations` is what every reader uses.
-        for from_id, kind in conn.execute(
-                "SELECT from_id, kind FROM live_relations "
-                "WHERE from_id=? OR to_id=?", (target, target)):
-            found.append((from_id, f"relation:{kind}"))
+        live = conn.execute(
+            "SELECT id, type, parent_id FROM entities WHERE is_deleted=0 "
+            "AND type != 'project'").fetchall()
     finally:
         conn.close()
+    for eid, etype, parent in live:
+        if parent == target:
+            found.append((eid, "parent_id"))
+        try:
+            values = load_entity(project, etype, eid)["values"]
+        except Exception as e:  # a type the form cannot load (scene_beats)
+            if "can't be edited from the form" not in str(e):
+                raise
+            continue
+        if values.get("location") == target:
+            found.append((eid, "location"))
+        if target in (values.get("characters") or []):
+            found.append((eid, "characters"))
+        if target in (values.get("scenes") or []):
+            found.append((eid, "scenes"))
+        if target in (values.get("perspectives") or {}):
+            found.append((eid, "perspectives"))
     return found
+
+
+def _shown(project, entity_type, entity_id):
+    """What the web form shows for an entity: the values a person would edit."""
+    from story_architect.core.manual_entities import load_entity
+    return load_entity(project, entity_type, entity_id)["values"]
 
 
 def _extra(project, entity_id):
@@ -95,7 +105,7 @@ def _extra(project, entity_id):
     ("relationship", "kael-mira"),
 ])
 class TestNothingDangles:
-    def test_no_reference_of_any_kind_survives(self, fixture_path, tmp_path, entity_type, slug):
+    def test_no_reader_shows_a_reference_to_it(self, fixture_path, tmp_path, entity_type, slug):
         p, vault = _setup(fixture_path, tmp_path, f"v-{entity_type}-{slug}")
         result = _delete(p, entity_type, slug)
         assert result.get("success") is True
@@ -108,16 +118,18 @@ class TestRelationshipEntities:
     def test_deleting_a_character_strips_it_from_relationships(self, fixture_path, tmp_path):
         p, vault = _setup(fixture_path, tmp_path, "rel")
         _delete(p, "character", "kael")
-        extra = _extra(p, "kael-mira")
-        assert "kael" not in extra["characters"]
-        assert "mira" in extra["characters"], "the surviving character must remain"
+        shown = _shown(p, "relationship", "kael-mira")
+        assert "kael" not in shown["characters"]
+        assert "mira" in shown["characters"], "the surviving character must remain"
+        assert "kael" in _extra(p, "kael-mira")["characters"], "still stored, for restore"
 
     def test_perspectives_of_the_dead_character_are_removed(self, fixture_path, tmp_path):
         p, vault = _setup(fixture_path, tmp_path, "persp")
         _delete(p, "character", "kael")
-        perspectives = _extra(p, "kael-mira")["perspectives"]
+        perspectives = _shown(p, "relationship", "kael-mira")["perspectives"]
         assert "kael" not in perspectives
         assert "mira" in perspectives, "the other perspective must be untouched"
+        assert "kael" in _extra(p, "kael-mira")["perspectives"], "still stored, for restore"
 
     def test_the_relationship_entity_itself_survives(self, fixture_path, tmp_path):
         """Kael and Mira still have a relationship; only Kael's half is gone."""
@@ -139,21 +151,23 @@ class TestRelationshipEntities:
     def test_scene_removal_strips_relationship_scene_lists(self, fixture_path, tmp_path):
         p, vault = _setup(fixture_path, tmp_path, "scenes")
         _delete(p, "scene", "central-room-day")
-        assert "central-room-day" not in _extra(p, "kael-mira")["scenes"]
+        assert "central-room-day" not in _shown(p, "relationship", "kael-mira")["scenes"]
 
 
 class TestColumnReferences:
-    def test_location_id_is_emptied(self, fixture_path, tmp_path):
-        """Emptied to "", not NULL: the field still exists and reads as a gap."""
+    def test_location_reads_as_empty(self, fixture_path, tmp_path):
+        """Reads "", not None: the field still exists and reads as a gap. The
+        column keeps the id, so a restore of the location gives it back."""
         p, vault = _setup(fixture_path, tmp_path, "loc")
         _delete(p, "location", "the-garden")
+        assert _shown(p, "scene", "the-core-day")["location"] == ""
         conn = sqlite3.connect(str(p / ".story" / "story.db"))
         try:
             row = conn.execute(
                 "SELECT location_id FROM entities WHERE id='the-core-day'").fetchone()
         finally:
             conn.close()
-        assert row[0] == ""
+        assert row[0] == "the-garden"
 
     def test_the_scene_itself_survives_the_location_removal(self, fixture_path, tmp_path):
         p, vault = _setup(fixture_path, tmp_path, "loc2")
@@ -177,18 +191,18 @@ class TestFieldsSurviveAsBlanks:
     def test_relationship_keeps_an_empty_scenes_list(self, fixture_path, tmp_path):
         p, vault = _setup(fixture_path, tmp_path, "blank-scenes")
         _delete(p, "scene", "central-room-day")
-        assert _extra(p, "kael-mira")["scenes"] == ["central-room-night"]
+        assert _shown(p, "relationship", "kael-mira")["scenes"] == ["central-room-night"]
 
     def test_character_keeps_an_empty_characters_list(self, fixture_path, tmp_path):
         p, vault = _setup(fixture_path, tmp_path, "blank-chars")
         _delete(p, "character", "kael")
-        assert _extra(p, "kael-mira")["characters"] == ["mira"]
+        assert _shown(p, "relationship", "kael-mira")["characters"] == ["mira"]
 
-    def test_perspectives_key_is_removed_not_emptied(self, fixture_path, tmp_path):
-        """The one genuine removal: a dead viewpoint has no blank form."""
+    def test_perspectives_key_is_left_out_not_emptied(self, fixture_path, tmp_path):
+        """The one genuine omission: a dead viewpoint has no blank form."""
         p, vault = _setup(fixture_path, tmp_path, "blank-persp")
         _delete(p, "character", "kael")
-        perspectives = _extra(p, "kael-mira")["perspectives"]
+        perspectives = _shown(p, "relationship", "kael-mira")["perspectives"]
         assert "kael" not in perspectives
         assert "mira" in perspectives
 
@@ -243,17 +257,18 @@ class TestDefaultsOnReset:
 
 
 class TestReporting:
-    def test_reports_what_it_purged(self, fixture_path, tmp_path):
+    def test_reports_what_it_hid(self, fixture_path, tmp_path):
         p, vault = _setup(fixture_path, tmp_path, "report")
         result = _delete(p, "character", "kael")
-        assert "kael-mira" in result["references_purged"]
+        assert "kael-mira" in result["references_hidden"]
+        assert "references_purged" not in result  # nothing is purged: purge is the irreversible action
 
     def test_reports_the_cascade(self, fixture_path, tmp_path):
         p, vault = _setup(fixture_path, tmp_path, "cascade")
         result = _delete(p, "character", "kael")
         assert result["cascade_deleted"] == []
 
-    def test_nothing_purged_when_nothing_referenced(self, fixture_path, tmp_path):
-        p, vault = _setup(fixture_path, tmp_path, "nopurge")
+    def test_nothing_hidden_when_nothing_referenced(self, fixture_path, tmp_path):
+        p, vault = _setup(fixture_path, tmp_path, "nohide")
         result = _delete(p, "plot", "the-resistance")
-        assert result["references_purged"] == []
+        assert result["references_hidden"] == []
