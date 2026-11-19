@@ -51,7 +51,7 @@
 ## 2. Baseline (dev @ 10de943)
 
 - `python -m pytest tests -q` → **1329 passed, 1 failed** at `10de943`.
-  After patch 01: 1336 passed. After patch 02: 1353 passed. After patch 03: 1366. After 04: 1372. After 05: 1383. After 06: 1399. After 07: 1420. After 08: 1454. After 09 and 10 together: **1482 passed** (+28 combined; the split per patch was not recorded), same 1 failure.
+  After patch 01: 1336 passed. After patch 02: 1353 passed. After patch 03: 1366. After 04: 1372. After 05: 1383. After 06: 1399. After 07: 1420. After 08: 1454. After 09 and 10 together: 1482 (+28 combined; the split per patch was not recorded). After 11: 1495. After 12: 1535. After 13: **1580 passed** (fresh clone of dev @ 9460c54 + patch 13), same 1 failure.
 - Known pre-existing failure, unrelated to this work:
   `tests/test_no_hermes_imports.py` (finds the word "hermes" in
   `src/story_architect/app/config.py`). Leave it alone unless asked.
@@ -259,7 +259,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   automatic backups only appear before destructive operations, so the cap of
   20 will rarely be reached; no UI for any of this; labels are not editable.
 
-- [x] **C5. Project delete moves the folder to a trash folder.** *(patch 09 — done)*
+- [A] **C5. Project delete moves the folder to a trash folder.** *(patch 09 — applied, 98508b2)*
   Deleting a project no longer `rmtree`s it (which used to destroy `chat.db`,
   `memory.md` and hand-edited Markdown, keeping only a `story.db` backup): the
   whole folder moves to `<root>/.story-trash`. New `list_trashed_projects` and
@@ -270,7 +270,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   `.trash`, which Obsidian uses for its own deleted notes); stdlib move, no
   `send2trash`.
 
-- [x] **C6. Periodic automatic backup.** *(patch 10 — done)*
+- [A] **C6. Periodic automatic backup.** *(patch 10 — applied, 50faebe)*
   Trigger: **opening a project in the web app** (the dashboard load). At most
   **one automatic backup per 24 h**, and **only if the project changed since the
   last one** (so an idle project does not fill the cap of 20 with identical
@@ -279,31 +279,88 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 
 ### Phase D — Simplify soft delete and the confirmation gates
 
-- [ ] **D1. Soft delete = flag only; filter on read.** ⚖ *Needs the user's
-  go-ahead and a verification step first.* Claim to verify: relation reads
-  already exclude relations with a deleted endpoint, so the relation `DELETE`s
-  in `delete_entity` (inbound relations, `plot_*` rows) and the scrub in
-  `_purge_references` are redundant for relations. Dead ids in `extra`
-  (`characters`, `scenes`, `perspectives`) and `parent_id` / `location_id`
-  would need read-side filtering. If it holds, `delete_entity` shrinks and
-  restore becomes truly exact. Also make restore restore only the children that
-  *this* delete flagged (same `deleted_at` stamp), not children deleted earlier.
-  Update the "exactly as they were" wording in tool descriptions once true.
-  Optional follow-up: collapse `is_deleted` + `deleted_at` into one nullable
-  `deleted_at` (migration).
-  *Confirmed while doing C1/C2 (2026-11-17):* (1) `delete_entity`'s child query
-  (`SELECT id, type FROM entities WHERE parent_id=?`, core/writes.py) has no
-  `is_deleted=0`, so deleting a parent **re-stamps children that were already in
-  the trash**: their own deletion time is overwritten, a later restore of the
-  parent brings them back, and the confirmation preview (`would_delete` /
-  `cascade_children`) lists them as if this action would delete them. (2) The
-  cascade is one level. A *live* grandchild of the deleted entity is not
-  deleted, and the reference scrub then blanks its `parent_id` (seen with a
-  synthetic grandchild only — check real hierarchies, e.g. nested locations,
-  before treating it as a bug). (3) `list_deleted` and targeted purge group
-  "deleted together" by (same parent, same `deleted_at`), which is exactly what
-  D1's "restore only what this delete flagged" needs too — reuse that rule.
+- [x] **D1. Soft delete = flag only; filter on read.** *(done 2026-11-19 as
+  three stacked patches: 11 = D1a [A], 12 = D1b [A], 13 = D1c [not yet applied])*
 
+  **Verification result: the premise was false.** The claim "relation reads
+  already exclude relations with a deleted endpoint" held for only four readers
+  (the `db.py` dashboard/summary ones); about fifteen others read relations raw.
+  Today's delete therefore already left ghosts (a deleted character still listed
+  in a live scene's cast), and delete + restore was **lossy**: a restored scene
+  lost its cast, location link and plot roles; a restored character lost his
+  `perspectives` (prose the writer wrote) and his place in relationships and
+  plots; a restored location left its scenes with no location. So D1 was not a
+  deletion of redundant code but a read-side change, done in three steps.
+
+  * **D1a (patch 11).** `delete_entity` flags only LIVE children (so it no longer
+    re-stamps children already in the trash, lists them in the preview, or lets a
+    trashed scene block its sequence). Restore brings back only the children
+    carrying the parent's own `deleted_at` stamp. One shared definition:
+    `story_admin._deleted_together()`, used by restore and targeted purge.
+    (`list_deleted` groups by the same rule in Python.)
+  * **D1b (patch 12).** New SQL view **`live_relations`** (relations with no
+    soft-deleted end; schema + migration 4, skipped where there is no
+    `relations` table). Every READ of the `relations` table goes through it;
+    writers use the table. `delete_entity` no longer deletes any relation row.
+    `story_load` opens its DB with `get_db` (a bare `sqlite3.connect` skips the
+    upgrade the view needs).
+  * **D1c (patch 13).** New `core/references.py` (`dead_ids`, `live_extra`,
+    `live_extra_json`, `live_column`). Readers that parse an entity's `extra` or
+    read `location_id` / `parent_id` pass it through. `delete_entity` changes
+    nothing but the flags; `_purge_references` is gone. Hidden fields:
+    `extra.characters`, `extra.scenes`, the keys of `extra.perspectives`, and the
+    columns `location_id` and `parent_id` (the latter only matters for a
+    grandchild: a location placed under a location, which the tools allow).
+    The delete's report key `references_purged` was renamed
+    **`references_hidden`** (purge is the irreversible action); `detached` is
+    unchanged (the web UI reads it). **Restore is now an exact inverse**: a test
+    compares every row of `entities`, `relations`, `sections`, `revisions`
+    before the delete and after the restore, for 11 scenarios.
+
+  **How it is tested (the pattern to reuse).** `tests/twin_helpers.py` builds two
+  identical projects, deletes in both, physically removes the references in one
+  (what the old delete did) and requires *every reader* in
+  `everything_a_reader_can_say()` to answer identically on both. A reader that
+  does not hide something shows it in one twin only. Plus a source scan that
+  forbids a raw `FROM relations` read, an "every reader opens an old database"
+  test, and edit-after-delete twins (an agent must not meet a new refusal because
+  a hidden name is still stored). Mutation-checked: reverting each filter call
+  one at a time is caught, except equivalent mutants (scene `extra` that carries
+  none of the fields; the shared `entity_by_id` lookup; the duplicate-relationship
+  warning; queries that already join `entities` with `is_deleted=0`).
+
+  **Rules for new code (D1 leaves these as standing rules).**
+  1. A READ of relations uses `live_relations`, never the table
+     (`tests/test_live_relations.py::test_every_read_of_relations_goes_through_the_view`
+     fails otherwise). Writers use the table.
+  2. A reader that parses an entity's `extra` or reads `location_id` / `parent_id`
+     to *show* something passes it through `live_extra` / `live_column` with
+     `dead_ids(conn)`. A new reference field is declared once in
+     `core/references.py`. A NEW READER must be added to
+     `twin_helpers.everything_a_reader_can_say()` — that is the only thing that
+     tests it.
+  3. A writer merges into the stored `extra`, so references it does not touch
+     stay (restore stays exact). An edit that SETS `characters` / `scenes` /
+     `perspectives` replaces the stored value, hidden names included: pinned in
+     `test_an_edit_that_sets_the_field_replaces_it`. Likewise replacing a scene's
+     whole cast / plot-role list overwrites the hidden relation rows of a trashed
+     character or plot.
+  4. **E3 warning:** SQLite re-checks views on `ALTER TABLE ... RENAME`, so a
+     table-rebuild migration of `entities` or `relations` must drop and recreate
+     `live_relations` around it.
+
+  **Not done, by decision (2026-11-19):** collapsing `is_deleted` + `deleted_at`
+  into one nullable column. Rows deleted by earlier builds have `is_deleted=1`
+  and no timestamp, so the migration would need an invented stamp, and it touches
+  ~110 lines for little gain. Revisit only if a second reason appears.
+
+  **Known limits.** Deletion stamps have one-second resolution: a child trashed
+  on its own within the same second as its parent's delete would be restored with
+  it. Deep nested references inside `scene_beats` (`driver`, `true_character`,
+  `changes`, `beats[].by`) were never scrubbed and are still not hidden (same as
+  before D1). The character form's computed `relationships` list shows a blank
+  name for a relationship whose other character is deleted (identical to the old
+  behaviour, which the twin tests preserve); it could be improved separately.
 
 - [ ] **D2. Rethink the `DELETE <slug>` confirmation strings.** Today the
   refusal message *prints the required string*, so the agent can supply it
@@ -327,7 +384,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   remainder, `already_committed` replay) *only if* it is no longer reachable.
   Largest refactor in the list; do after A2 and E1.
 
-- [ ] **E3. Minor hygiene** (can be split): indexes on `relations(to_id)`,
+- [ ] **E3. Minor hygiene** (can be split; any table-rebuild migration must drop and recreate the `live_relations` view, see D1 rule 4): indexes on `relations(to_id)`,
   `entities(parent_id)`, `entities(type, is_deleted)`; declare foreign keys with
   `ON DELETE CASCADE` on `sections` / `relations` (needs a table-rebuild
   migration; currently `PRAGMA foreign_keys=ON` has nothing to enforce); UTC
@@ -375,6 +432,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 | 2026-11-17 | C3 | Keep **50** revisions per (entity, section); snapshot only when the text changed (not on empty/identical overwrites). Change `REVISIONS_KEPT` in `core/revisions.py` to alter the cap. |
 | 2026-11-17 | C4 | Keep the newest **20 automatic** backups; **only automatic ones are pruned** (manual and old-named ones never). Restore replaces the whole project in place, takes a `before-restore` automatic backup first, and has no confirm phrase (reversible). Committed draft receipts kept 30 days. |
 | 2026-11-18 | C5 | Trash folder is `<root>/.story-trash` (hidden; `.trash` is used by Obsidian). Permanent removal of a trashed project is manual. `restore_project` never overwrites an existing project. `delete_confirm` stays until D2. |
+| 2026-11-19 | D1 | Verification showed the premise false (see D1). Done as three stacked patches (11/12/13) instead of one. Optional `is_deleted`/`deleted_at` merge **skipped**. Flag-only + filter-at-read chosen over "record what the scrub removed and replay it" (one mechanism, no replay conflicts). `references_purged` renamed `references_hidden`. |
 | 2026-11-18 | C6 | Trigger = opening a project in the web app (dashboard load). At most one automatic backup per 24 h, and only if the project changed since the last one. |
 
 ## 5. Patch log
@@ -389,8 +447,11 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 | `06-C2-purge-one.patch` | C2 | stacked on 05 | yes | +16 tests (1399). tools/story_admin.py; tests/test_purge.py helper changed (sends `target` for restore only) |
 | `07-C3-revisions.patch` | C3 | dev @ 67a82d3 | yes | +21 tests (1420). core/db.py (schema + migration 3), core/revisions.py (new), core/writes.py (hook), tools/story_admin.py (2 actions, purge cleanup) |
 | `08-C4-backups.patch` | C4 | dev @ 8ba007e | yes | +34 tests (1454). core/backups.py (new), core/db.py (label), tools/story_backup.py (rewritten), tools/story_import.py + story_admin.py (automatic backups, delete_project note), core/drafts.py (receipt pruning). Test `test_a_readable_but_damaged_backup_is_refused` was later fixed by the user's own assistant (no byte offsets) |
-| `09-C5-project-trash.patch` | C5 | stacked on 08 | TO CONFIRM (user to say) | Project delete moves the folder to `<root>/.story-trash`; `list_trashed_projects`, `restore_project`. Tests: see combined total in §2 |
-| `10-C6-daily-backup.patch` | C6 | stacked on 09 | TO CONFIRM (user to say) | Automatic backup on project open: max one per 24 h, only if changed. 09 + 10 together = +28 tests (1482 pass, same 1 baseline failure) |
+| `09-C5-project-trash.patch` | C5 | stacked on 08 | yes (98508b2) | Project delete moves the folder to `<root>/.story-trash`; `list_trashed_projects`, `restore_project`. Tests: see combined total in §2 |
+| `10-C6-daily-backup.patch` | C6 | stacked on 09 | yes (50faebe) | Automatic backup on project open: max one per 24 h, only if changed. 09 + 10 together = +28 tests (1482 pass, same 1 baseline failure) |
+| `11-D1a-delete-restore-same-stamp.patch` | D1a | dev @ 50faebe | yes (e1e6bb0) | +13 tests (1495). core/writes.py (live children only), tools/story_admin.py (`_deleted_together`), tests/test_delete_stamps.py new |
+| `12-D1b-live-relations.patch` | D1b | dev @ e1e6bb0 | yes (9460c54) | +40 tests (1535). View `live_relations` (db.py schema + migration 4); ~25 reader sites; delete keeps relation rows; story_load uses get_db; tests/test_live_relations.py new; 5 older tests rewritten (asserted physical deletion) |
+| `13-D1c-live-references.patch` | D1c | dev @ 9460c54 | NOT YET (user to confirm) | +45 tests (1580). core/references.py new; readers in db.py, story_retrieve, manual_entities, manual_edits, manual_structure, story_export, story_load; `_purge_references` removed; `references_purged` → `references_hidden`; tests/twin_helpers.py + tests/test_live_references.py new; test_delete_cascade / test_manual_entities / test_write_atomicity rewritten to the new contract |
 
 ## 6. Session notes
 
@@ -461,6 +522,22 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   in tests (a file's byte layout changes with SQLite/page details — C4's damaged
   backup test broke that way); (u) a mutation pattern can match twice — give it
   enough context so it hits exactly one place (and assert the count).
+- 2026-11-19 — Session 4: patches 09 and 10 confirmed applied (C5/C6 → [A]);
+  patch 11 applied. D1 done in three patches (see D1): the "relation reads
+  already filter" premise was false, so D1 became a read-side change; restore is
+  now an exact inverse. Remaining: **D2** (needs the user's decision; ask with a
+  recommendation), then E1–E3, F1, G1. Practical notes: (v) a background process
+  (`nohup … &`) dies when the tool call's shell ends: a mutation loop that was
+  killed left one source file mutated — run mutation batches in the foreground,
+  in small batches, and `diff -r` the source tree against a snapshot afterwards;
+  (w) twin-project tests are the right tool when a change must not alter any
+  output — they found two readers, a screenplay join and a dashboard second
+  parse, that hand-written tests did not; (x) mutation survivors need a verdict:
+  equivalent (unobservable) or genuinely untested — the latter got a test;
+  (y) check your own claims: "a live row never has a deleted parent" was wrong
+  for a location nested under a location, found only by testing it; (z) an `ALTER
+  TABLE ... RENAME` re-validates every view, so create a view only over tables
+  that exist.
 
 ## 7. Things that are fine, leave alone
 
