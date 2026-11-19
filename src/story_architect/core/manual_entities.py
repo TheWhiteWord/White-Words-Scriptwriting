@@ -479,7 +479,7 @@ def _scene_rows(conn, scene_id: str) -> dict:
         r = conn.execute("SELECT name FROM entities WHERE id=?", (row[0],)).fetchone()
         loc = (r[0] if r else row[0]) or row[0]
     cast = [r[0] for r in conn.execute(
-        "SELECT e.name FROM relations r JOIN entities e ON e.id=r.from_id "
+        "SELECT e.name FROM live_relations r JOIN entities e ON e.id=r.from_id "
         "WHERE r.to_id=? AND r.kind='character_scene' AND e.is_deleted=0 ORDER BY r.\"order\"", (scene_id,))]
     heading = scene_heading(ex.get("int_ext") or "", loc, ex.get("place") or "",
                             ex.get("time_of_day") or "", ex.get("forced_heading") or "")
@@ -522,7 +522,7 @@ def _computed(conn, entity_type: str, entity_id: str, project_path: Path | None 
     elif entity_type == "plot":
         by_field = {f: [] for f in ROLE_FIELD.values()}
         for sname, sid, kind, note in conn.execute(
-                "SELECT e.name, e.id, r.kind, r.note FROM relations r JOIN entities e ON e.id=r.to_id "
+                "SELECT e.name, e.id, r.kind, r.note FROM live_relations r JOIN entities e ON e.id=r.to_id "
                 "WHERE r.from_id=? AND r.kind LIKE 'plot\\_%' ESCAPE '\\' AND e.is_deleted=0 "
                 "ORDER BY r.\"order\"", (entity_id,)):
             field = ROLE_FIELD.get(kind[len("plot_"):])
@@ -664,7 +664,7 @@ def load_entity(project_path: Path, entity_type: str, entity_id: str) -> dict:
             if key == "plot_roles" and entity_type == "scene":
                 v = [{"plot": r[0], "role": r[1][len("plot_"):], "description": r[2] or ""}
                      for r in conn.execute(
-                         "SELECT from_id, kind, note FROM relations WHERE to_id=? AND kind LIKE 'plot\\_%' "
+                         "SELECT from_id, kind, note FROM live_relations WHERE to_id=? AND kind LIKE 'plot\\_%' "
                          "ESCAPE '\\' ORDER BY \"order\"", (entity_id,))]
                 values[key] = v
                 continue
@@ -674,7 +674,7 @@ def load_entity(project_path: Path, entity_type: str, entity_id: str) -> dict:
                 kind, is_list = rels[key]
                 own, other = ("to_id", "from_id") if kind in REVERSED_RELATION_KINDS else ("from_id", "to_id")
                 found = [r[0] for r in conn.execute(
-                    f"SELECT {other} FROM relations WHERE {own}=? AND kind=? ORDER BY \"order\"",
+                    f"SELECT {other} FROM live_relations WHERE {own}=? AND kind=? ORDER BY \"order\"",
                     (entity_id, kind))]
                 v = found if is_list else (found[0] if found else "")
             else:
@@ -1333,7 +1333,7 @@ def delete_preview(project_path: Path, entity_type: str, entity_id: str) -> dict
 
         # What survives but loses a link.
         cast = [r[0] for r in conn.execute(
-            f"SELECT DISTINCT e.name FROM relations r JOIN entities e ON e.id=r.to_id "
+            f"SELECT DISTINCT e.name FROM live_relations r JOIN entities e ON e.id=r.to_id "
             f"WHERE r.kind='character_scene' AND r.from_id IN ({marks}) AND e.is_deleted=0", gone_l)]
         if cast:
             effects.append(f"Removed from the cast of {_plural(len(cast), 'scene')}: {_list(cast)}.")
@@ -1353,7 +1353,7 @@ def delete_preview(project_path: Path, entity_type: str, entity_id: str) -> dict
                 effects.insert(0, f"Its script ({len(text):,} characters) is deleted with it.")
         if entity_type == "plot":
             roles = [r[0] for r in conn.execute(
-                f"SELECT DISTINCT e.name FROM relations r JOIN entities e ON e.id=r.to_id "
+                f"SELECT DISTINCT e.name FROM live_relations r JOIN entities e ON e.id=r.to_id "
                 f"WHERE r.from_id IN ({marks}) AND r.kind LIKE 'plot\\_%' ESCAPE '\\' "
                 f"AND e.type='scene' AND e.is_deleted=0", gone_l)]
             if roles:
@@ -1364,7 +1364,7 @@ def delete_preview(project_path: Path, entity_type: str, entity_id: str) -> dict
         if located:
             effects.append(f"{_plural(len(located), 'scene')} will have no location: {_list(located)}.")
         variants = [r[0] for r in conn.execute(
-            f"SELECT DISTINCT e.name FROM relations r JOIN entities e ON e.id=r.from_id "
+            f"SELECT DISTINCT e.name FROM live_relations r JOIN entities e ON e.id=r.from_id "
             f"WHERE r.kind IN ('location_variant','world_variant') AND r.to_id IN ({marks}) "
             f"AND r.from_id NOT IN ({marks}) AND e.is_deleted=0", gone_l + gone_l)]
         if variants:

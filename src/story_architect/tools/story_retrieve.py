@@ -127,7 +127,7 @@ def _location_places(conn, location_id: str) -> list[str]:
     location payload.
     """
     rows = conn.execute(
-        "SELECT e.extra FROM relations r JOIN entities e ON e.id=r.to_id "
+        "SELECT e.extra FROM live_relations r JOIN entities e ON e.id=r.to_id "
         "WHERE r.from_id=? AND r.kind='location_scene' "
         "AND e.type='scene' AND e.is_deleted=0",
         (location_id,)).fetchall()
@@ -200,12 +200,12 @@ def _entity_fields(conn, data: dict, entity_type: str, wanted: set) -> dict:
         # are the rows pointing AT it. Every other kind points away from the owner.
         if kind in REVERSED_KINDS:
             rows = conn.execute(
-                'SELECT from_id, note FROM relations WHERE to_id=? AND kind=? ORDER BY "order"',
+                'SELECT from_id, note FROM live_relations WHERE to_id=? AND kind=? ORDER BY "order"',
                 (data["id"], kind),
             ).fetchall()
         else:
             rows = conn.execute(
-                'SELECT to_id, note FROM relations WHERE from_id=? AND kind=? ORDER BY "order"',
+                'SELECT to_id, note FROM live_relations WHERE from_id=? AND kind=? ORDER BY "order"',
                 (data["id"], kind),
             ).fetchall()
         if not is_list:
@@ -221,7 +221,7 @@ def _entity_fields(conn, data: dict, entity_type: str, wanted: set) -> dict:
         values["plot_roles"] = [
             {"plot": plot, "role": kind[len("plot_"):], "description": note or ""}
             for plot, kind, note in conn.execute(
-                'SELECT from_id, kind, note FROM relations '
+                'SELECT from_id, kind, note FROM live_relations '
                 "WHERE to_id=? AND kind LIKE 'plot_%' ORDER BY \"order\"",
                 (data["id"],),
             ).fetchall()
@@ -234,15 +234,15 @@ def _unfilled(conn, data: dict, entity_type: str) -> list:
     extra = json.loads(data.get("extra") or "{}")
     # A plot beat is filled only when its relation row exists, not when extra has a key.
     for field, (kind, _) in _RELATION_FIELDS.get(entity_type, {}).items():
-        sql = ("SELECT 1 FROM relations WHERE to_id=? AND kind=? LIMIT 1"
+        sql = ("SELECT 1 FROM live_relations WHERE to_id=? AND kind=? LIMIT 1"
                if kind in REVERSED_KINDS
-               else "SELECT 1 FROM relations WHERE from_id=? AND kind=? LIMIT 1")
+               else "SELECT 1 FROM live_relations WHERE from_id=? AND kind=? LIMIT 1")
         if conn.execute(sql, (data["id"], kind)).fetchone():
             extra[field] = [1]
     # The same for a scene's plot_roles — filled means a row exists, not an
     # extra key, and plot_roles is never in extra.
     if entity_type == "scene" and conn.execute(
-            "SELECT 1 FROM relations WHERE to_id=? AND kind LIKE 'plot_%' LIMIT 1",
+            "SELECT 1 FROM live_relations WHERE to_id=? AND kind LIKE 'plot_%' LIMIT 1",
             (data["id"],)).fetchone():
         extra["plot_roles"] = [1]
     # `data` IS the row (see _row_data), so the column-backed fields —

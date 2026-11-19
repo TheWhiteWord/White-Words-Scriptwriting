@@ -182,13 +182,14 @@ class TestDeleteGuard:
         with pytest.raises(ValueError, match="not found"):
             _delete(p, "character", "ghost", confirm=True)
 
-    def test_deleting_a_scene_leaves_no_dangling_relations(self, proj):
+    def test_deleting_a_scene_leaves_no_visible_relations(self, proj):
+        """The rows stay (restore needs them); no reader can see one."""
         p, _ = proj
         _delete(p, "scene", "central-room-day", confirm=True)
         conn = sqlite3.connect(str(p / ".story" / "story.db"))
         try:
             dangling = conn.execute(
-                "SELECT COUNT(*) FROM relations WHERE from_id='central-room-day' "
+                "SELECT COUNT(*) FROM live_relations WHERE from_id='central-room-day' "
                 "OR to_id='central-room-day'").fetchone()[0]
         finally:
             conn.close()

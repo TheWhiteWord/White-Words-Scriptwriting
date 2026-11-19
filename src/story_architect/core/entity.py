@@ -1007,7 +1007,7 @@ def validate_scene_plot_roles(project_path, entries, scene_id=None, conn=None) -
         conn = get_db(project_path)
     try:
         for plot, role in singular:
-            sql = ("SELECT e.id FROM relations r JOIN entities e ON e.id = r.to_id "
+            sql = ("SELECT e.id FROM live_relations r JOIN entities e ON e.id = r.to_id "
                    "WHERE r.from_id=? AND r.kind=? AND e.is_deleted=0")
             params = [plot, f"plot_{role}"]
             if scene_id:

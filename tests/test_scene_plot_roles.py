@@ -5,19 +5,17 @@ through where it is already writing the scene, so a plot is never reopened to
 add a scene to it. The plot's six role fields became `computed` — the same
 rows, seen from the other side.
 
-Two of these tests fail without the fix and are marked as such below: the
+One of these tests fails without the fix and is marked as such below: the
 export round-trip (silent loss — the markdown loses every role and re-import
-has nothing to complain about) and the delete sweep (a dead plot's rows
-outlive the plot they name).
+has nothing to complain about).
 
 One correction to the plan, measured while implementing: the sweep was
 specified to stop a deleted plot's rows *reattaching* when a plot is recreated
 with the same slug. That is not reachable — `delete_entity` soft-deletes, so
 the slug stays taken and `create_entity` refuses it ("Entity already exists").
-The rows are still unreachable while the plot is dead (every reader filters on
-`to_id`, and db.py filters `from_id` on `is_deleted`), so the sweep is right —
-but its real cost lands on `restore`, not on reattachment. That cost is pinned
-in `test_restore_brings_the_plot_back_without_its_roles`.
+The rows are hidden while the plot is dead, by the `live_relations` view that
+every reader uses, and they come back with it on `restore` (TestDelete). They
+used to be deleted by a sweep in `delete_entity`, which made restore lossy.
 """
 import json
 import shutil
@@ -239,55 +237,54 @@ class TestValidation:
 
 
 class TestDelete:
-    def test_deleting_a_plot_removes_its_rows(self, vault):
-        """FAILS WITHOUT THE FIX. The plot owns the row (`from_id`), so the
-        `to_id` sweep in delete_entity never sees it: the row survives, every
-        reader filters on `to_id` so it is unreachable while dead, and it
-        reattaches silently if a plot takes the same slug again."""
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
-                                   "description": "d"}])
+    """Delete only flags. The role rows stay in the table and drop out of view."""
+
+    ROLE = {"plot": "the-resistance", "role": "setup", "description": "d"}
+
+    def _plot_rows(self, vault):
+        return [r for r in rows(vault) if r[2].startswith("plot_")]
+
+    def _visible_plot_rows(self, vault):
+        conn = sqlite3.connect(str(Path(vault) / ".story" / "story.db"))
+        try:
+            return conn.execute(
+                "SELECT from_id, to_id, kind FROM live_relations "
+                "WHERE kind LIKE 'plot\\_%' ESCAPE '\\'").fetchall()
+        finally:
+            conn.close()
+
+    def test_deleting_a_plot_keeps_its_rows_but_hides_them(self, vault):
+        write_roles(vault, "s1", [self.ROLE])
         delete_entity(vault, "plot", "the-resistance", "cut it", confirm=True)
-        assert [r for r in rows(vault) if r[2].startswith("plot_")] == []
+        assert len(self._plot_rows(vault)) == 1
+        assert self._visible_plot_rows(vault) == []
 
     def test_a_deleted_plot_role_is_unreachable_while_the_plot_is_dead(self, vault):
-        """The row is gone AND the plot is gone, so nothing dangles.
-
-        Checked on the delete side because that is the sweep's whole purpose.
-        See the module docstring for why a *recreated* plot was the original
-        worry and why it is not reachable.
-        """
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
-                                   "description": "d"}])
+        """Seen from the scene side, which is where the role is written."""
+        from story_architect.core.manual_entities import load_entity
+        write_roles(vault, "s1", [self.ROLE])
+        assert load_entity(vault, "scene", "s1")["values"]["plot_roles"]
         delete_entity(vault, "plot", "the-resistance", "cut it", confirm=True)
-        assert [r for r in rows(vault) if r[2].startswith("plot_")] == []
+        assert load_entity(vault, "scene", "s1")["values"]["plot_roles"] == []
 
-    def test_restore_brings_the_plot_back_without_its_roles(self, vault):
-        """The accepted cost, pinned so it cannot change unnoticed.
-
-        `restore` is documented as exact — prose and relations included. That
-        is now false for a plot's role rows: the delete sweep took them, and
-        putting them back would mean resurrecting rows nobody can vouch for.
-        A test is the only thing that makes a documented exception real.
-        """
+    def test_restore_brings_the_plot_back_with_its_roles(self, vault):
+        """Restore is exact for roles now: the rows were never removed."""
+        from story_architect.core.db import get_dashboard_data
         from story_architect.tools.story_admin import _restore_entity
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
-                                   "description": "d"}])
+        write_roles(vault, "s1", [self.ROLE])
         delete_entity(vault, "plot", "the-resistance", "cut it", confirm=True)
         _restore_entity({"target": {"entity_type": "plot", "id": "the-resistance"},
-                         "summary": "put it back"},
-                        vault)
-        from story_architect.core.db import get_dashboard_data
+                         "summary": "put it back"}, vault)
         plot = next(p for p in get_dashboard_data(vault)["story_data"]["plots"]
                     if p["id"] == "the-resistance")
-        assert plot["setups"] == [], \
-            "if this passes, restore is exact again — drop the exception note"
+        assert len(plot["setups"]) == 1
+        assert self._visible_plot_rows(vault) == [("the-resistance", "s1", "plot_setup")]
 
-    def test_deleting_a_scene_still_removes_its_rows(self, vault):
-        """The other direction, which already worked via the `to_id` sweep."""
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
-                                   "description": "d"}])
+    def test_deleting_a_scene_keeps_its_rows_but_hides_them(self, vault):
+        write_roles(vault, "s1", [self.ROLE])
         delete_entity(vault, "scene", "s1", "cut it", confirm=True)
-        assert [r for r in rows(vault) if r[2].startswith("plot_")] == []
+        assert len(self._plot_rows(vault)) == 1
+        assert self._visible_plot_rows(vault) == []
 
 
 class TestExportRoundTrip:

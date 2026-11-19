@@ -62,14 +62,12 @@ def _references_to(project, target):
                 found.append((eid, "extra.scene"))
             if target in (extra.get("perspectives") or {}):
                 found.append((eid, "extra.perspectives"))
-        # Relations *owned by* the deleted entity survive on purpose — restore
-        # has to put them back, and reconstructing them would be guesswork.
-        # What must not survive is a live entity pointing at a dead one.
+        # The rows themselves survive on purpose — restore needs them, and
+        # reconstructing them would be guesswork. What must not survive is a
+        # relation a READER can see: `live_relations` is what every reader uses.
         for from_id, kind in conn.execute(
-                "SELECT from_id, kind FROM relations "
-                "WHERE (from_id=? OR to_id=?) AND from_id NOT IN "
-                "(SELECT id FROM entities WHERE is_deleted=1)",
-                (target, target)):
+                "SELECT from_id, kind FROM live_relations "
+                "WHERE from_id=? OR to_id=?", (target, target)):
             found.append((from_id, f"relation:{kind}"))
     finally:
         conn.close()

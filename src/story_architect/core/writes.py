@@ -484,7 +484,7 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
                 merged_roles = [
                     {"plot": pid, "role": kind[len("plot_"):], "description": note}
                     for pid, kind, note in conn.execute(
-                        "SELECT from_id, kind, note FROM relations "
+                        "SELECT from_id, kind, note FROM live_relations "
                         "WHERE to_id=? AND kind LIKE 'plot_%' ORDER BY \"order\"",
                         (entity_id,),
                     ).fetchall()
@@ -775,8 +775,8 @@ def delete_entity(project_path: Path, entity_type: str, slug: str,
                   summary: str, confirm=None) -> dict:
     """Soft-delete an entity and its dependencies. Requires explicit consent.
 
-    Rows are flagged `is_deleted=1` rather than removed, so restore is an exact
-    inverse and no prose can be lost. **Returns** rather than raises in two
+    Rows are flagged `is_deleted=1` rather than removed, so no prose and no
+    relation can be lost; restore clears the flag. **Returns** rather than raises in two
     cases, because the payload is the point of the refusal:
 
     * without `confirm` — a report of what would go, and nothing has changed;
@@ -827,7 +827,7 @@ def delete_entity(project_path: Path, entity_type: str, slug: str,
                     "SELECT COUNT(*) FROM sections WHERE entity_id=?", (entity_id,)
                 ).fetchone()[0]
                 relations = conn.execute(
-                    "SELECT COUNT(*) FROM relations WHERE from_id=? OR to_id=?",
+                    "SELECT COUNT(*) FROM live_relations WHERE from_id=? OR to_id=?",
                     (entity_id, entity_id)).fetchone()[0]
                 return {
                     "error": "Delete refused without confirm. Nothing has changed yet.",
@@ -862,9 +862,7 @@ def delete_entity(project_path: Path, entity_type: str, slug: str,
                 }
 
             # Soft delete: flag the row instead of removing it. Sections and
-            # relations are left intact, so `restore` is an exact inverse — a hard
-            # delete would have to reconstruct all of it, and could not do it
-            # faithfully.
+            # relations are left intact, so nothing has to be reconstructed later.
             stamp = datetime.now().isoformat(timespec="seconds")
             for child_id, child_type in children:
                 conn.execute(
@@ -876,30 +874,11 @@ def delete_entity(project_path: Path, entity_type: str, slug: str,
 
             deleted_ids = {entity_id} | {c[0] for c in children}
 
-            # Relations *owned by* a deleted entity survive, so restore can put
-            # them back. Relations *pointing at* one must go: a live character
-            # pointing at a dead scene is the dangling state this whole function
-            # exists to prevent.
-            for dead_id in deleted_ids:
-                conn.execute(
-                    "DELETE FROM relations WHERE from_id NOT IN "
-                    "(SELECT id FROM entities WHERE is_deleted=1) AND to_id=?",
-                    (dead_id,))
-
-            # Plot roles are the one case the sweep above cannot reach: the PLOT
-            # owns the row, so deleting a plot leaves it behind. Every reader
-            # filters on `to_id` only, so the row becomes unreachable while the
-            # plot is dead — and silently reattaches if a plot is recreated with
-            # the same slug.
-            #
-            # Cost, accepted: restore puts the plot entity back but not its role
-            # rows, so restore is no longer an exact inverse for these. A lost role
-            # row is recoverable by rewriting the scene; a role that reattaches to
-            # the wrong plot is not, and nothing reports it.
-            for dead_id in deleted_ids:
-                conn.execute(
-                    "DELETE FROM relations WHERE from_id=? AND kind LIKE 'plot_%'",
-                    (dead_id,))
+            # Relations are left exactly as they are, in both directions: the ones the
+            # entity owns, the ones pointing at it, a plot's `plot_*` role rows. They
+            # are hidden, not removed: every read of relations goes through the
+            # `live_relations` view, which drops a row whose either end is flagged.
+            # So there is nothing to clean up here and nothing to put back on restore.
 
             # References held in other entities' extra must still be scrubbed, or a
             # deleted id would be handed out as a valid target by story_load.

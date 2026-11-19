@@ -61,10 +61,10 @@ def _scene_state(conn, scene_id: str) -> dict:
         "SELECT body FROM sections WHERE entity_id=? AND heading='Content'",
         (scene_id,)).fetchone()
     chars = [r[0] for r in conn.execute(
-        "SELECT from_id FROM relations WHERE to_id=? AND kind='character_scene' "
+        "SELECT from_id FROM live_relations WHERE to_id=? AND kind='character_scene' "
         "ORDER BY \"order\", from_id", (scene_id,))]
     n_roles = conn.execute(
-        "SELECT COUNT(*) FROM relations WHERE to_id=? AND kind IN (%s)"
+        "SELECT COUNT(*) FROM live_relations WHERE to_id=? AND kind IN (%s)"
         % ",".join("?" * len(PLOT_ROLES)),
         (scene_id, *[f"plot_{r}" for r in PLOT_ROLES])).fetchone()[0]
     return {

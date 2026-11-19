@@ -118,14 +118,14 @@ def handler(args: dict, **kwargs) -> str:
     if not db_path.exists():
         return json.dumps({"error": "Database not found. Run story_import first."})
 
-    from story_architect.core.db import has_schema
-    from story_architect.core.db import get_project_summary
-    import sqlite3
+    from story_architect.core.db import get_db, get_project_summary, has_schema
 
     view = args.get("view")
     conn = None
     try:
-        conn = sqlite3.connect(str(db_path))
+        # get_db, not a bare connect: it upgrades an old database first, and the
+        # readers below need what the upgrade creates (the live_relations view).
+        conn = get_db(project_path)
         if not has_schema(conn):
             return json.dumps({"error": "Database schema not found. Run story_import first."})
 
@@ -257,7 +257,7 @@ def _view_dramatic_elements(conn, args: dict) -> dict:
     for plot_id, in conn.execute(
             "SELECT id FROM entities WHERE type='plot' AND is_deleted=0 ORDER BY id"):
         for to_id, kind in conn.execute(
-                "SELECT to_id, kind FROM relations "
+                "SELECT to_id, kind FROM live_relations "
                 "WHERE from_id=:f AND kind LIKE 'plot\\_%' ESCAPE '\\'",
                 {"f": plot_id}):
             plot_refs.setdefault(to_id, []).append(
@@ -719,7 +719,7 @@ def _values_for_scene(conn, project_path, scene_id, turns, schemas) -> dict:
     # The plots the scene serves: its plot_roles relations, else its sequence's
     # primary_plot. A scene can serve more than one; both sources can be empty.
     plot_ids = [p for p, in conn.execute(
-        'SELECT DISTINCT from_id FROM relations '
+        'SELECT DISTINCT from_id FROM live_relations '
         "WHERE to_id=? AND kind LIKE 'plot\\_%' ESCAPE '\\'", (scene_id,))]
     if not plot_ids and seq_id and seq_extra.get("primary_plot"):
         plot_ids = [seq_extra["primary_plot"]]

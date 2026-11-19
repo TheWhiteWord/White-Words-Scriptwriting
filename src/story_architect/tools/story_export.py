@@ -152,7 +152,7 @@ def _export_all(conn, project_path: Path) -> set:
         # Denormalize from relations back to frontmatter
         if entity_type == "scene":
             chars = conn.execute(
-                "SELECT from_id FROM relations WHERE to_id=? AND kind='character_scene'",
+                "SELECT from_id FROM live_relations WHERE to_id=? AND kind='character_scene'",
                 (entity_id,)
             ).fetchall()
             if chars:
@@ -163,7 +163,7 @@ def _export_all(conn, project_path: Path) -> set:
             # to complain about. Rebuilt from the rows, which is where the plot
             # note's role list came from.
             role_rows = conn.execute(
-                "SELECT from_id, kind, note FROM relations "
+                "SELECT from_id, kind, note FROM live_relations "
                 "WHERE to_id=? AND kind LIKE 'plot_%' ORDER BY \"order\"",
                 (entity_id,)
             ).fetchall()
@@ -176,7 +176,7 @@ def _export_all(conn, project_path: Path) -> set:
         if entity_type == "location" or entity_type == "world":
             kind = "location_variant" if entity_type == "location" else "world_variant"
             var = conn.execute(
-                f"SELECT to_id FROM relations WHERE from_id=? AND kind='{kind}'",
+                f"SELECT to_id FROM live_relations WHERE from_id=? AND kind='{kind}'",
                 (entity_id,)
             ).fetchone()
             if var:

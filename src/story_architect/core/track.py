@@ -147,7 +147,7 @@ def _attach_cast(conn, scenes) -> None:
     scene. A scene with no cast relation is a scene with no cast.
     """
     for from_id, to_id, kind in conn.execute(
-            "SELECT from_id, to_id, kind FROM relations "
+            "SELECT from_id, to_id, kind FROM live_relations "
             "WHERE kind IN ('character_scene', 'location_scene')"):
         scene = scenes.get(to_id)
         if scene is None:

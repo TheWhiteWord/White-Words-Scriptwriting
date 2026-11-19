@@ -84,6 +84,14 @@ CREATE TABLE IF NOT EXISTS revisions (
     summary     TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_revisions_section ON revisions(entity_id, heading, id);
+
+-- The relations that exist for a reader: those with no soft-deleted end.
+-- Deleting an entity only flags it; its relation rows stay, so restore is exact,
+-- and every READ of relations goes through this view. Writers use the table.
+CREATE VIEW IF NOT EXISTS live_relations AS
+SELECT * FROM relations
+WHERE from_id NOT IN (SELECT id FROM entities WHERE is_deleted=1)
+  AND to_id   NOT IN (SELECT id FROM entities WHERE is_deleted=1);
 """
 
 def _m1_soft_delete_columns(conn: sqlite3.Connection) -> None:
@@ -128,6 +136,27 @@ def _m3_revisions_table(conn: sqlite3.Connection) -> None:
         "ON revisions(entity_id, heading, id)")
 
 
+def _m4_live_relations_view(conn: sqlite3.Connection) -> None:
+    """The `live_relations` view (see SCHEMA_SQL): relations with no deleted end.
+
+    Written out in full, like step 3: a migration is a frozen record.
+
+    Guarded on the tables it reads. A view over a table that does not exist is
+    accepted by SQLite but breaks every later ``ALTER TABLE ... RENAME`` (it
+    re-checks all views), which a table-rebuild step would hit. A file that has
+    no `relations` is no project yet; `create_schema` makes the view with the
+    tables (it is in SCHEMA_SQL), so skipping here loses nothing.
+    """
+    have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if not {"entities", "relations"} <= have:
+        return
+    conn.execute(
+        "CREATE VIEW IF NOT EXISTS live_relations AS "
+        "SELECT * FROM relations "
+        "WHERE from_id NOT IN (SELECT id FROM entities WHERE is_deleted=1) "
+        "AND to_id NOT IN (SELECT id FROM entities WHERE is_deleted=1)")
+
+
 # Schema history of story.db: one function per change, oldest first. The number
 # of entries is the schema version, stored in the file itself (PRAGMA
 # user_version); a database that has run entry N never runs it again.
@@ -146,6 +175,7 @@ SCHEMA_MIGRATIONS = [
     _m1_soft_delete_columns,
     _m2_draft_status_column,
     _m3_revisions_table,
+    _m4_live_relations_view,
 ]
 
 
@@ -648,11 +678,7 @@ def get_project_summary(project_path: Path, act: str | None = None,
 
         # ── All relations ──
         rel_rows = conn.execute(
-            "SELECT from_id, to_id, kind, note FROM relations"
-            # A soft-deleted endpoint means the relation is invisible: the
-            # entity it points at is gone from every other reader.
-            " WHERE from_id NOT IN (SELECT id FROM entities WHERE is_deleted=1)"
-            " AND to_id NOT IN (SELECT id FROM entities WHERE is_deleted=1)"
+            "SELECT from_id, to_id, kind, note FROM live_relations"
         ).fetchall()
 
         # ── Build cross-reference maps ──
@@ -1034,9 +1060,7 @@ def get_unfilled_map(project_path: Path) -> dict:
         scene_loc = {}
         plot_beats = {}
         for from_id, to_id, kind in conn.execute(
-            "SELECT from_id, to_id, kind FROM relations"
-            " WHERE from_id NOT IN (SELECT id FROM entities WHERE is_deleted=1)"
-            " AND to_id NOT IN (SELECT id FROM entities WHERE is_deleted=1)"
+            "SELECT from_id, to_id, kind FROM live_relations"
         ).fetchall():
             if kind == "character_scene":
                 scene_chars.setdefault(to_id, []).append(from_id)
@@ -1237,9 +1261,7 @@ def get_dashboard_data(project_path: Path) -> dict:
 
         # Load all relations for denormalization (note carries the plot role's prose)
         rel_rows = conn.execute(
-            "SELECT from_id, to_id, kind, note FROM relations"
-            " WHERE from_id NOT IN (SELECT id FROM entities WHERE is_deleted=1)"
-            " AND to_id NOT IN (SELECT id FROM entities WHERE is_deleted=1)"
+            "SELECT from_id, to_id, kind, note FROM live_relations"
         ).fetchall()
         # Build lookup: entity_id -> {kind -> [{to_id, note}]}
         rel_map = {}
@@ -1671,10 +1693,9 @@ def get_dashboard_data(project_path: Path) -> dict:
         # of the story. The relations are where the roles live, and this is the
         # same fact the plot's computed fields report per plot.
         role_rows = conn.execute(
-            "SELECT kind, COUNT(*) FROM relations "
+            "SELECT kind, COUNT(*) FROM live_relations "
             "WHERE kind LIKE 'plot\\_%' ESCAPE '\\' "
             "AND to_id IN (SELECT id FROM entities WHERE type='scene' AND is_deleted=0) "
-            "AND from_id NOT IN (SELECT id FROM entities WHERE is_deleted=1) "
             "GROUP BY kind"
         ).fetchall()
         scene_roles = {r[0][len("plot_"):]: r[1] for r in role_rows}

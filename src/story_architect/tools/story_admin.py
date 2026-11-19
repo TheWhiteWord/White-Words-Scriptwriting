@@ -534,16 +534,17 @@ def _hard_delete(conn, ids: list) -> None:
 
 
 def _restore_entity(args: dict, project_path: Path) -> dict:
-    """Undelete an entity by clearing is_deleted. Exact inverse of the delete.
+    """Undelete an entity by clearing is_deleted.
 
     Sections and relations were never removed, so there is nothing to rebuild —
-    which is the whole reason the delete is a flag and not a DELETE.
+    which is the whole reason the delete is a flag and not a DELETE. Relations
+    (cast, location links, a plot's roles) simply become visible again, because
+    the `live_relations` view stops hiding them.
 
-    One exception: a PLOT's `plot_<role>` rows. The plot owns those rows, so the
-    `to_id` sweep in delete_entity cannot reach them and a second sweep takes
-    them; restore therefore brings back the plot without its roles. The
-    alternative is a dead plot's rows silently reattaching, which is worse.
-    See the delete sweep in core/writes.py.
+    Not yet exact: the delete still scrubs the dead id out of other entities'
+    `extra` (relationship characters and perspectives, plot characters) and
+    empties `parent_id` / `location_id` columns that pointed at it. Restore does
+    not put those back. Making them read-side filters too is the next step.
     """
     from story_architect.core.db import get_db, transaction
 
