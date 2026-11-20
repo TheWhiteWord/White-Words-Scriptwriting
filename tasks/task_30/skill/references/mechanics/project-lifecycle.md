@@ -9,21 +9,25 @@ not parameters — those are in the tool schema.
 
 ---
 
-## The two destructive operations, and how they are gated
+## Deleting is reversible; only purge waits for the user
 
-*Both require the same literal string, and neither should be supplied by the
-agent.*
+*Nothing is typed. The one thing that cannot be undone needs the person, in the app.*
 
-- **`delete_project`** and **`purge`** each need a confirmation containing the
-  literal text `DELETE <project slug>`. Without it both refuse, and both say why:
-  *"It removes every entity in the project and no flag in the database can undo
-  it"* and *"It is irreversible and must be the user's call."*
-- **The string is the user's to give.** It exists so that a human types the word
-  DELETE for an operation that cannot be undone. Supplying it on the user's
-  behalf removes the only thing it does. **Ask, and wait.**
-- `purge`'s refusal also points at the exact alternative: *"To undo a delete
-  instead, use action='restore' — that is exact."* So the choice between
-  restore and purge is the choice between reversible and not.
+- **`delete_project`** moves the whole folder to a trash folder and asks for no
+  confirmation. Nothing is lost: **`restore_project`** (with the `trash_id` it
+  returns) puts it back. Do it only when the user has asked for the project to go;
+  tell them it can be restored.
+- **Deleting an entity** is a soft delete, made through a draft the user approves,
+  and **`restore`** undoes it exactly.
+- **`purge`** is the only irreversible operation, and it is the only one that
+  waits for the user. Calling it **stages a draft**; nothing is removed. The user
+  sees an approval card ("Will be removed ... This cannot be undone") and approves
+  or rejects it in the app. **Relay `preview_md` and say plainly that it cannot be
+  undone**; do not describe it as done. There is no string to supply and none is
+  printed: the approval is the person's, not something the agent can give.
+- `purge` has no reason to be proposed unprompted: **restore** covers the case
+  people reach for purge to solve. Propose it only when the user asks for the
+  trash to be emptied or for a specific deleted item to be gone for good.
 
 ## `create_project` is the one write with no review loop
 
@@ -54,10 +58,9 @@ agent.*
   from it is a manual copy back into place. That is stated in the tool's own
   description, and it is the reason a backup is worth taking anyway: it is the
   only copy that will exist.
-- **`delete_project` takes its own backup** before removing anything, and says
-  where it put it and how to put it back. So that one is recoverable by
-  following the message — **but the user has to be told the path**, because
-  nothing surfaces it again.
+- **`delete_project` keeps everything**: it moves the folder, with its database,
+  chat history, memory and Markdown, to the trash and returns a `trash_id`.
+  Recovering is `restore_project`; **tell the user it can be restored.**
 - **`export` is not a backup.** It writes Markdown, and the tool says so
   directly. Use it to publish or to snapshot before an import; use `backup` to
   keep the database.
@@ -104,12 +107,12 @@ agent.*
   and its relations as they were**, and reports what it did — including any
   children restored with it.
 - So delete is genuinely reversible, and the exposure is only at `purge`.
-- **`purge` is the only irreversible operation on an entity, and it is gated
+- **`purge` is the only irreversible operation on an entity, and it is guarded
   three times over:**
-  1. it needs the confirm string, exactly as `delete_project` does;
-  2. **it only touches entities deleted more than thirty days ago** — verified by
-     backdating one deletion: given the confirm string, it purged the 45-day-old
-     character and left the recent one untouched and still restorable;
+  1. **the user approves it** on a card in the app; the agent can only propose it;
+  2. **it only touches entities deleted more than thirty days ago** (unless one is
+     named), so a fresh delete is not even eligible, and the age floor still holds
+     after approval;
   3. **it takes its own backup** first, and says where.
 - So even the irreversible operation is recoverable by hand, and a fresh delete
   has a thirty-day window in which it is not even eligible. **The practical
@@ -131,6 +134,6 @@ agent.*
 
 - [ ] `create_project` has no preview, and it is the only creative write without
       one. Worth stating in SKILL.md as a hard rule, or is this file enough?
-- [ ] The confirm string is the user's to type, and the schema says so — but a
-      model under instruction to be helpful can supply it. Is there a phrasing
-      here that survives that, or is it a matter of the instruction's authority?
+- [x] ~~The confirm string is the user's to type, but a model can supply it.~~
+      Answered: there is no string. Purge is a draft the user approves in the app,
+      so the model cannot give the approval for them.
