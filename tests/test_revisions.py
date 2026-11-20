@@ -199,8 +199,8 @@ def test_purging_an_entity_removes_its_history_and_only_its_history(fixture_path
     _write(fixture_path, "Version B.")
     _write(fixture_path, "Other B.", scene=OTHER)
     delete_entity(fixture_path, "scene", SCENE, "t", True)
-    out = _admin(fixture_path, action="purge", purge_confirm="DELETE save-the-children",
-                 target={"entity_type": "scene", "id": SCENE})
+    from story_architect.core.trash import purge_deleted
+    out = purge_deleted(fixture_path, {"entity_type": "scene", "id": SCENE})
     assert out["success"] is True
     assert _sql(fixture_path, "SELECT count(*) FROM revisions WHERE entity_id=?", (SCENE,))[0][0] == 0
     assert len(_revs(fixture_path, scene=OTHER)) == 1

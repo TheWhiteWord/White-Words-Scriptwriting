@@ -151,10 +151,8 @@ def test_import_and_purge_take_automatic_backups(fixture_path):
 
     imp({"project": str(fixture_path), "confirm": True}, root_path=str(fixture_path.parent))
     delete_entity(fixture_path, "character", "kael", "t", True)
-    json.loads(admin({"action": "purge", "project": str(fixture_path),
-                      "purge_confirm": "DELETE save-the-children",
-                      "target": {"entity_type": "character", "id": "kael"}},
-                     root_path=str(fixture_path.parent)))
+    from story_architect.core.trash import purge_deleted
+    purge_deleted(fixture_path, {"entity_type": "character", "id": "kael"})
     kinds = [b["kind"] for b in list_backups(fixture_path)]
     assert kinds.count("automatic") == 2 and kinds.count("manual") == 0
 

@@ -1,4 +1,7 @@
-"""story_admin action=purge with a `target`: delete one trashed item forever."""
+"""Purging one trashed item forever: `purge_deleted` with a `target`.
+
+The approved draft runs `purge_deleted` (see test_purge_approval.py for the approval
+itself); these tests call it directly."""
 import json
 import sqlite3
 from pathlib import Path
@@ -6,9 +9,8 @@ from pathlib import Path
 import pytest
 
 from story_architect.core.writes import delete_entity
+from story_architect.core.trash import purge_deleted
 from story_architect.tools.story_admin import handler
-
-CONFIRM = "DELETE save-the-children"
 
 
 def _admin(project: Path, **args):
@@ -16,9 +18,12 @@ def _admin(project: Path, **args):
     return json.loads(out)
 
 
+def _purge(project, target=None, older_than_days=30):
+    return purge_deleted(project, target, older_than_days)
+
+
 def _purge_one(project, entity_id, entity_type, **extra):
-    return _admin(project, action="purge", purge_confirm=CONFIRM,
-                  target={"entity_type": entity_type, "id": entity_id}, **extra)
+    return _purge(project, target={"entity_type": entity_type, "id": entity_id}, **extra)
 
 
 def _sql(project, sql, params=()):
@@ -95,13 +100,13 @@ def test_takes_a_backup_first_and_it_still_has_the_entity(fixture_path):
 
 # ─── refusals: nothing may change ───
 
-def test_needs_the_confirmation_phrase(fixture_path):
+def test_the_agents_request_removes_nothing(fixture_path):
+    """The admin action only stages it; the person approves in the app."""
     delete_entity(fixture_path, "character", "kael", "t", True)
-    before = _snapshot(fixture_path)
     out = _admin(fixture_path, action="purge",
                  target={"entity_type": "character", "id": "kael"})
-    assert "error" in out and "purge_confirm" in out["action_required"]
-    assert _snapshot(fixture_path) == before
+    assert out["purged"] is False and out["success"] is True
+    assert _exists(fixture_path, "kael")
 
 
 def test_refuses_an_entity_that_is_not_in_the_trash(fixture_path):
@@ -157,8 +162,7 @@ def test_a_row_with_no_deletion_time_can_be_purged_this_way(fixture_path):
     """Bulk purge cannot see rows deleted before deleted_at existed; naming one can."""
     delete_entity(fixture_path, "character", "kael", "t", True)
     _sql(fixture_path, "UPDATE entities SET deleted_at=NULL WHERE id='kael'")
-    assert _admin(fixture_path, action="purge", purge_confirm=CONFIRM,
-                  older_than_days=0)["purged"] == []          # the sweep skips it
+    assert _purge(fixture_path, older_than_days=0)["purged"] == []          # the sweep skips it
     assert _purge_one(fixture_path, "kael", "character")["success"] is True
     assert not _exists(fixture_path, "kael")
 
@@ -177,7 +181,7 @@ def test_the_bulk_purge_also_clears_dead_links_on_what_it_leaves_behind(fixture_
     delete_entity(fixture_path, "scene", scene, "t", True)
     _sql(fixture_path, "UPDATE entities SET deleted_at='2020-01-01T00:00:00' WHERE id=?", (scene,))
     # the beat keeps the newer stamp, so the sweep takes the scene and leaves the beat
-    out = _admin(fixture_path, action="purge", purge_confirm=CONFIRM)
+    out = _purge(fixture_path)
     assert [p["id"] for p in out["purged"]] == [scene]
     assert _exists(fixture_path, beat)
     assert _sql(fixture_path, "SELECT parent_id FROM entities WHERE id=?", (beat,)) == [("",)]

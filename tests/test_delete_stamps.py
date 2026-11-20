@@ -162,11 +162,8 @@ class TestRestoreBringsBackOnlyWhatThatDeleteFlagged:
         p, vault = proj
         _trash_beats_earlier(p)
         delete_entity(p, "scene", SCENE, "t", True)
-        res = json.loads(admin({
-            "action": "purge", "project": "save-the-children",
-            "target": {"entity_type": "scene", "id": SCENE},
-            "purge_confirm": "DELETE save-the-children", "summary": "t"},
-            root_path=str(vault)))
+        from story_architect.core.trash import purge_deleted
+        res = purge_deleted(p, {"entity_type": "scene", "id": SCENE})
         assert res.get("success"), res
         assert [x["id"] for x in res["purged"]] == [SCENE]
         assert _sql(p, "SELECT 1 FROM entities WHERE id=?", SCENE) == []

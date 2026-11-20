@@ -211,10 +211,8 @@ class TestPreviewAndPurge:
     def test_purge_still_removes_the_rows_for_good(self, proj):
         p, vault = proj
         delete_entity(p, "character", "kael", "t", True)
-        res = json.loads(admin({
-            "action": "purge", "project": SLUG,
-            "target": {"entity_type": "character", "id": "kael"},
-            "purge_confirm": f"DELETE {SLUG}", "summary": "t"}, root_path=str(vault)))
+        from story_architect.core.trash import purge_deleted
+        res = purge_deleted(p, {"entity_type": "character", "id": "kael"})
         assert res.get("success"), res
         assert [r for r in _raw(p) if "kael" in r[:2]] == []
 

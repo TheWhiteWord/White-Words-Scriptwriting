@@ -1,10 +1,18 @@
 """story_admin tool — project lifecycle and the admin-only entity operations.
 
-Ten actions, none of them proposals. Entity *authoring* goes through
-story_draft, which shows the user what will change and writes nothing until they
-say so. What is here cannot be drafted at all: a project has no database to hold
-a draft before it exists, and purge/restore/delete-project are the operations
-that must never be a side effect of committing a batch.
+Ten actions. Entity *authoring* goes through story_draft, which shows the user
+what will change and writes nothing until they say so. What is here cannot be
+drafted at all, with one exception: a project has no database to hold a draft
+before it exists, and restore / delete-project act on something that is not a
+batch of edits.
+
+The exception is `purge`, the only irreversible operation. It does not run when
+called: it STAGES a draft with a single `purge` op, and the person approves it on
+the card in the app (core/drafts.py, core/trash.py). A purge is never bundled
+with other changes, so approving a batch can never remove anything for good as a
+side effect. Nothing here asks for a typed confirmation any more: a soft delete,
+`delete_project` and `restore` are all undoable, and the one thing that is not
+waits for the person rather than for a string the caller could echo back.
 
 `list_deleted`, `restore` and `purge` are the trash: look at what was deleted,
 bring one back, or remove it for good. `list_revisions` and `restore_revision`
@@ -21,6 +29,8 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+from story_architect.core.trash import deleted_together, purge_cutoff
+
 # Deleted projects wait here, under the root but outside projects/, so they are
 # not listed as projects. Hidden so a vault that is also opened in Obsidian does
 # not index the deleted Markdown; not named ".trash", which Obsidian also uses.
@@ -32,13 +42,16 @@ SCHEMA = {
                    "list_trashed_projects / restore_project (bring a deleted project back), "
                    "list_deleted (the trash: what was deleted and "
                    "when), restore (bring a soft-deleted entity back), "
-                   "purge (permanently remove deleted entities: all those deleted over 30 days ago, "
-                   "or one you name), list_revisions / restore_revision (the earlier versions of "
+                   "purge (PROPOSE removing deleted entities for good: all those deleted over 30 days "
+                   "ago, or one you name — nothing is removed until the user approves it in the app), "
+                   "list_revisions / restore_revision (the earlier versions of "
                    "an entity's text, and putting one back). Entity content "
                    "itself is NOT here — create and edit through story_draft. "
                    "Deleting an entity is a soft delete and is exactly reversible via restore; "
-                   "purge is the only irreversible one. delete_project takes a whole project out of "
-                   "the projects list into a trash folder, from where restore_project returns it.",
+                   "purge is the only irreversible one, and the only one that waits for the user. "
+                   "delete_project takes a whole project out of the projects list into a trash folder, "
+                   "from where restore_project returns it; neither needs a confirmation, so do it "
+                   "only when the user asked.",
     "type": "object",
     "properties": {
         "action": {
@@ -56,9 +69,11 @@ SCHEMA = {
                            "id and type that restore and purge need; entities deleted "
                            "together with their parent are listed under it), "
                            "restore (undelete one entity, bringing back its prose and relations "
-                           "exactly as they were), purge (permanently remove soft-deleted "
+                           "exactly as they were), purge (propose permanently removing soft-deleted "
                            "entities — those older than the age floor, or the one named in "
-                           "`target` — irreversible), "
+                           "`target`. Irreversible, so it is staged as a draft: the user sees "
+                           "an approval card and nothing is removed until they approve. Relay "
+                           "preview_md verbatim), "
                            "list_revisions (the earlier versions kept of an entity's sections, "
                            "newest first; every edit keeps the text it replaced), "
                            "restore_revision (put one of those back as the current text; the "
@@ -104,22 +119,8 @@ SCHEMA = {
         },
         "summary": {
             "type": "string",
-            "description": "For restore: one line naming what was restored",
-        },
-        "delete_confirm": {
-            "type": "string",
-            "description": "Required for action=\"delete_project\". Must contain the literal text "
-                           "\"DELETE <project slug>\", e.g. \"DELETE my-film\". This is the "
-                           "user's call to make — do not supply it unless the user has asked for "
-                           "the project to be removed entirely. The project goes to the trash "
-                           "and can be restored with restore_project."
-        },
-        "purge_confirm": {
-            "type": "string",
-            "description": "Required for action=\"purge\". Must contain the literal text "
-                           "\"DELETE <project slug>\", e.g. \"DELETE my-film\". This is the "
-                           "user's call to make — do not supply it unless the user has asked for "
-                           "the deleted entities to be removed permanently."
+            "description": "For restore: one line naming what was restored. For purge: one \
+line the user will read on the approval card, naming what is to be removed for good",
         },
         "older_than_days": {
             "type": "integer",
@@ -154,7 +155,7 @@ def handler(args: dict, **kwargs) -> str:
         if action == "list_deleted":
             return json.dumps(_list_deleted(_resolve(args, root_path), args))
         if action == "purge":
-            return json.dumps(_purge_deleted(args, _resolve(args, root_path)))
+            return json.dumps(_stage_purge(args, _resolve(args, root_path)))
         if action == "restore":
             return json.dumps(_restore_entity(args, _resolve(args, root_path)))
         if action == "list_revisions":
@@ -208,7 +209,7 @@ def _list_projects(root_path: Path) -> dict:
 
 
 def _delete_project(args: dict, root_path: Path) -> dict:
-    """Move a project folder to the trash. Refuses without a typed string.
+    """Move a project folder to the trash.
 
     The folder is moved whole, not copied-from and removed: the database (with
     its WAL files, which only mean something next to it), chat history, memory
@@ -216,25 +217,13 @@ def _delete_project(args: dict, root_path: Path) -> dict:
     move in the other direction (`restore_project`). Deleting used to keep only
     a copy of story.db and `rmtree` the rest.
 
-    `delete_confirm` must contain "DELETE <project slug>". It is kept for now as
-    the explicit "yes, this project" step; the delete is no longer destructive.
+    No confirmation: nothing is lost by it. (It used to demand a typed
+    "DELETE <slug>", which the refusal message printed for the caller to echo
+    back, so it stopped nobody; the only irreversible operation, purge, now needs
+    the person's approval in the app.)
     """
     project_path = _resolve(args, root_path)
     slug = project_path.name
-
-    required = f"DELETE {slug}"
-    given = args.get("delete_confirm", "")
-    if required not in given:
-        return {
-            "error": "Delete refused. It takes the whole project out of the projects "
-                     "list.",
-            "action_required": f'Re-run with delete_confirm="{required}" if the user has '
-                               f"asked for this project to be removed.",
-            "project": str(project_path),
-            "hint": "To keep the project but tidy it up, use action=\"purge\" "
-                    "instead — that only touches entities already soft-deleted. A "
-                    "deleted project can be brought back with restore_project.",
-        }
 
     if not (project_path / ".story" / "story.db").exists():
         return {
@@ -264,11 +253,11 @@ def _delete_project(args: dict, root_path: Path) -> dict:
     trashed = slot / slug
     return {
         "success": True,
-        "message": f"Moved project {slug} to the trash.",
+        "message": f"Moved project {slug} to the trash. Nothing was lost.",
         "project": str(project_path),
         "trash_id": slot.name,
         "trashed_to": str(trashed),
-        "note": 'Bring it back with action="restore_project" and trash_id. To remove it '
+        "note": 'Undo with action="restore_project" and this trash_id. To remove it '
                 "for good, delete the folder under the trash directory by hand.",
     }
 
@@ -331,10 +320,38 @@ def _restore_project(args: dict, root_path: Path) -> dict:
             "slug": entry["slug"], "project": str(dest)}
 
 
-def _purge_cutoff(days: int) -> str:
-    """ISO timestamp: entities deleted at or before it are old enough to purge."""
-    from datetime import datetime, timedelta
-    return (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+def _stage_purge(args: dict, project_path: Path) -> dict:
+    """Propose a purge as a draft. Removes nothing.
+
+    A purge is irreversible, so it is the one admin action that waits for the
+    person. It used to wait for a typed string, which the refusal message printed
+    for the caller to echo back; now it is a draft the person approves on the
+    same card as any other change (core/drafts.py, op "purge"). Approving runs
+    core/trash.purge_deleted, which takes a backup first.
+    """
+    from story_architect.core import drafts
+
+    target = args.get("target")
+    if target is not None and not (isinstance(target, dict) and target.get("entity_type")
+                                   and target.get("id")):
+        return {"error": "purge: `target` needs both entity_type and id."}
+    op = {"op": "purge",
+          "summary": args.get("summary") or ("Permanently remove "
+                                             + (f"{target['entity_type']} {target['id']}"
+                                                if target else "old deleted items"))}
+    if target:
+        op["target"] = {"entity_type": target["entity_type"], "id": target["id"]}
+    if "older_than_days" in args:
+        op["older_than_days"] = args["older_than_days"]
+    try:
+        staged = drafts.stage(project_path, [op], summary=op["summary"])
+    except drafts.DraftError as e:
+        return {"error": str(e)}
+    staged["purged"] = False
+    staged["message"] = ("Nothing has been removed. This waits for the user: they approve "
+                         "it on the card in the app. Relay preview_md verbatim and tell them "
+                         "it cannot be undone.")
+    return staged
 
 
 def _list_deleted(project_path: Path, args: dict) -> dict:
@@ -353,7 +370,7 @@ def _list_deleted(project_path: Path, args: dict) -> dict:
     from story_architect.core.db import get_db
 
     days = args.get("older_than_days", 30)
-    cutoff = _purge_cutoff(days)
+    cutoff = purge_cutoff(days)
 
     conn = get_db(project_path)
     try:
@@ -394,143 +411,6 @@ def _list_deleted(project_path: Path, args: dict) -> dict:
         result["hint"] = ('Bring one back with action="restore" and target '
                           '{entity_type, id}; anything in `includes` comes back with it.')
     return result
-
-
-def _purge_deleted(args: dict, project_path: Path) -> dict:
-    """Permanently remove soft-deleted entities. Irreversible, so two guards.
-
-    Two forms, the same guards:
-
-    * no `target` — everything deleted more than `older_than_days` ago (default
-      30). The age floor means tidying up can never destroy a fresh mistake.
-    * `target` {entity_type, id} — exactly that one entity, plus whatever was
-      deleted along with it. The age floor does not apply: naming one item is
-      the opposite of a sweep. It must already be in the trash; a live entity
-      is refused.
-
-    Guards:
-
-    1. `purge_confirm` must contain the literal "DELETE <project slug>".
-    2. A backup is taken first, so even this is recoverable by hand.
-    """
-    from story_architect.core.backups import create_backup
-    from story_architect.core.db import get_db, transaction
-
-    required = f"DELETE {project_path.name}"
-    given = args.get("purge_confirm", "")
-    if required not in given:
-        return {
-            "error": "Purge refused. It is irreversible and must be the user's call.",
-            "action_required": f'Re-run with purge_confirm="{required}" if you are sure.',
-            "hint": 'To undo a delete instead, use action="restore" — that is exact.',
-        }
-
-    target = args.get("target")
-    days = args.get("older_than_days", 30)
-    cutoff = _purge_cutoff(days)
-
-    conn = get_db(project_path)
-    try:
-        # Selecting what to purge and deleting it are one transaction: the
-        # deletes below must land together, or a stop part-way leaves entities
-        # with no sections, or sections with no entity.
-        with transaction(conn):
-            if target:
-                rows, refusal = _select_one_deletion(conn, target)
-                if refusal:
-                    return refusal
-            else:
-                rows = conn.execute(
-                    "SELECT id, type, deleted_at FROM entities "
-                    "WHERE is_deleted=1 AND deleted_at IS NOT NULL AND deleted_at <= ? "
-                    "ORDER BY type, id", (cutoff,)).fetchall()
-                if not rows:
-                    younger = conn.execute(
-                        "SELECT count(*) FROM entities WHERE is_deleted=1").fetchone()[0]
-                    return {
-                        "success": True,
-                        "purged": [],
-                        "message": (
-                            f"Nothing is old enough to purge ({younger} deleted entities are "
-                            f"younger than {days} days). They stay restorable."),
-                    }
-
-            ids = [r[0] for r in rows]
-            backup = create_backup(project_path, automatic=True)
-            _hard_delete(conn, ids)
-    finally:
-        conn.close()
-
-    return {
-        "success": True,
-        "message": f"Purged {len(ids)} entities permanently.",
-        "purged": [{"id": r[0], "type": r[1], "deleted_at": r[2]} for r in rows],
-        "backup": backup,
-        "note": ("Markdown files for these entities are removed by the next "
-                 "story_export."),
-    }
-
-
-def _select_one_deletion(conn, target: dict):
-    """The rows a targeted purge removes: the entity and what was deleted with it.
-
-    Returns (rows, None), or (None, refusal) when the target is not something
-    that may be purged. "Deleted with it" is the same test list_deleted uses: a
-    child of the target carrying the target's own deletion stamp. A child that
-    was deleted separately keeps its own entry and stays in the trash.
-    """
-    entity_id = target.get("id") or ""
-    entity_type = target.get("entity_type") or ""
-    row = conn.execute(
-        "SELECT id, type, deleted_at, is_deleted FROM entities WHERE id=?",
-        (entity_id,)).fetchone()
-    if not row:
-        return None, {"error": f"Entity not found: {entity_type}/{entity_id}"}
-    if entity_type and entity_type != row[1]:
-        return None, {"error": f"{row[0]} is a {row[1]}, not a {entity_type}. "
-                               f"Nothing was purged."}
-    if not row[3]:
-        return None, {
-            "error": f"{row[0]} is not in the trash — purge only removes entities "
-                     f"that are already deleted. Nothing was purged.",
-            "entity_id": row[0],
-        }
-    return [(row[0], row[1], row[2])] + _deleted_together(conn, row[0], row[2]), None
-
-
-def _deleted_together(conn, entity_id: str, deleted_at) -> list:
-    """The children that were deleted in the same operation as `entity_id`.
-
-    One rule, used by restore, by targeted purge and (as a Python grouping) by
-    list_deleted: a child in the trash whose deletion stamp equals the parent's.
-    A child deleted on its own, earlier or later, carries another stamp and is a
-    separate item in the trash.
-
-    `IS ?` rather than `= ?` so that a row with no deletion time (deleted by an
-    earlier build) still matches its own, equally unstamped, children.
-    Returns (id, type, deleted_at) rows.
-    """
-    return conn.execute(
-        "SELECT id, type, deleted_at FROM entities "
-        "WHERE parent_id=? AND is_deleted=1 AND deleted_at IS ? ORDER BY type, id",
-        (entity_id, deleted_at)).fetchall()
-
-
-def _hard_delete(conn, ids: list) -> None:
-    """Remove entities and everything that hangs off them. Inside a transaction.
-
-    Anything else still pointing at one of them as its parent or location (a
-    trashed child that was deleted separately) loses that link; a link to a row
-    that no longer exists is worse than none.
-    """
-    marks = ",".join("?" * len(ids))
-    conn.execute(f"DELETE FROM sections WHERE entity_id IN ({marks})", ids)
-    conn.execute(f"DELETE FROM revisions WHERE entity_id IN ({marks})", ids)
-    conn.execute(f"DELETE FROM relations WHERE from_id IN ({marks}) "
-                 f"OR to_id IN ({marks})", ids + ids)
-    conn.execute(f"DELETE FROM entities WHERE id IN ({marks})", ids)
-    conn.execute(f"UPDATE entities SET parent_id='' WHERE parent_id IN ({marks})", ids)
-    conn.execute(f"UPDATE entities SET location_id='' WHERE location_id IN ({marks})", ids)
 
 
 def _restore_entity(args: dict, project_path: Path) -> dict:
@@ -582,7 +462,7 @@ def _restore_entity(args: dict, project_path: Path) -> dict:
             # Keyed on `parent_id` for every type rather than a per-type branch: the
             # cascade is one fact (this row owned that row).
             restored_children = sorted(
-                r[0] for r in _deleted_together(conn, entity_id, deleted_at))
+                r[0] for r in deleted_together(conn, entity_id, deleted_at))
             if restored_children:
                 conn.executemany(
                     "UPDATE entities SET is_deleted=0, deleted_at=NULL WHERE id=?",

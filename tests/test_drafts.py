@@ -251,9 +251,10 @@ def test_a_malformed_op_never_reaches_the_drafts_table(fixture_path):
 
 # ─── op vocabulary ───
 
-def test_op_order_is_create_edit_delete_reorder():
+def test_op_order_is_create_edit_delete_reorder_purge():
+    """Purge is last, and (validate_ops) alone in its draft."""
     assert [k for k, _ in sorted(drafts.OP_ORDER.items(), key=lambda kv: kv[1])] == \
-        ["create", "edit", "delete", "reorder"]
+        ["create", "edit", "delete", "reorder", "purge"]
 
 
 def test_a_batch_may_hold_two_ops_on_the_same_entity():

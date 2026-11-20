@@ -136,8 +136,8 @@ def test_failed_purge_removes_nothing(vault):
     _break(vault, "CREATE TRIGGER boom BEFORE DELETE ON entities "
                   "BEGIN SELECT RAISE(ABORT, 'boom'); END")
     with pytest.raises(sqlite3.Error, match="boom"):
-        _call_admin(vault, action="purge", target={"entity_type": "character", "id": "kael"},
-                    purge_confirm="DELETE stc")
+        from story_architect.core.trash import purge_deleted
+        purge_deleted(_project(vault), {"entity_type": "character", "id": "kael"})
 
     assert _snapshot(vault) == before
 

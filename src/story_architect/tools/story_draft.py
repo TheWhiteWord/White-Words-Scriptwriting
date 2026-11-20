@@ -103,6 +103,23 @@ def _op_schemas() -> list[dict]:
             },
             "summary": summary,
         },
+        "purge": {
+            "op": {"type": "string", "enum": ["purge"]},
+            "target": {
+                "type": "object",
+                "description": "One DELETED entity to remove for good, as {entity_type, id}. "
+                               "Omit to remove everything deleted more than older_than_days ago.",
+                "properties": {"entity_type": {"type": "string"}, "id": {"type": "string"}},
+            },
+            "older_than_days": {
+                "type": "integer",
+                "description": "Without a target: only items deleted longer ago than this "
+                               "(default 30). Newer ones stay restorable.",
+            },
+            "summary": {"type": "string",
+                        "description": "One line the user reads on the approval card, naming "
+                                       "what is to be removed for good"},
+        },
     }
     return [
         {

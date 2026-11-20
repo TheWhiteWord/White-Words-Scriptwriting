@@ -30,7 +30,7 @@ def _admin(root, **args):
 
 
 def _delete(root, slug=SLUG):
-    return _admin(root, action="delete_project", project=slug, delete_confirm=f"DELETE {slug}")
+    return _admin(root, action="delete_project", project=slug)
 
 
 def _tree_hashes(folder: Path) -> dict:
@@ -70,12 +70,13 @@ def test_the_trash_is_hidden_and_not_listed_as_a_project(root):
     assert _admin(root, action="list_projects")["projects"] == []
 
 
-def test_a_refused_delete_moves_nothing(root):
+def test_deleting_asks_for_no_confirmation_and_moves_the_whole_folder(root):
+    """It used to refuse without a typed "DELETE <slug>" that its own refusal printed."""
     before = _tree_hashes(root / "projects" / SLUG)
     out = _admin(root, action="delete_project", project=SLUG)
-    assert "error" in out
-    assert _tree_hashes(root / "projects" / SLUG) == before
-    assert not (root / TRASH_DIR).exists()
+    assert out["success"] is True and "action_required" not in out
+    assert not (root / "projects" / SLUG).exists()
+    assert _tree_hashes(Path(out["trashed_to"])) == before, "every byte is in the trash"
 
 
 def test_a_failed_move_leaves_the_project_where_it_was(root, monkeypatch):

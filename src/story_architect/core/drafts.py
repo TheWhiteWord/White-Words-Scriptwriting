@@ -21,7 +21,12 @@ from .constants import ENTITY_SCHEMAS
 # Dispatch order. Creates must land before edits (an edit referencing a staged
 # create), edits before deletes, deletes before reorders. Stable within a kind:
 # Python's sort is stable, so ops the agent wrote in one kind keep their order.
-OP_ORDER = {"create": 0, "edit": 1, "delete": 2, "reorder": 3}
+OP_ORDER = {"create": 0, "edit": 1, "delete": 2, "reorder": 3, "purge": 4}
+
+# `purge` is the one op that cannot be undone, so it is the one op that must be
+# the whole point of its draft: see validate_ops. It is staged by
+# story_admin(action="purge"), not drawn up with the authoring ops, which is why
+# tools/story_draft.py's op schema does not list it.
 
 # Per-kind required keys. Mirrors what the replayed handler needs, so a missing
 # key is reported at stage time rather than escaping the commit loop.
@@ -34,6 +39,7 @@ REQUIRED_OP_KEYS = {
     "edit": ("entity_type", "entity_id", "data", "summary"),
     "delete": ("entity_type", "entity_id", "summary"),
     "reorder": ("entity_type", "ordered_ids", "summary"),
+    "purge": ("summary",),
 }
 
 
@@ -113,6 +119,18 @@ def validate_ops(ops) -> list[dict]:
                 raise DraftError(
                     f"{where}.entity_type: unknown entity_type {op['entity_type']!r}."
                 )
+        if kind == "purge":
+            if len(ops) != 1 and any(o.get("op") != "purge" for o in ops if isinstance(o, dict)):
+                raise DraftError(
+                    f"{where}: a purge cannot be bundled with other changes. Stage it "
+                    "on its own, so what the user approves is exactly the removal.")
+            target = op.get("target")
+            if target is not None and not (
+                    isinstance(target, dict) and target.get("entity_type") and target.get("id")):
+                raise DraftError(f"{where}.target needs both entity_type and id.")
+            days = op.get("older_than_days", 30)
+            if isinstance(days, bool) or not isinstance(days, int) or days < 0:
+                raise DraftError(f"{where}.older_than_days must be a whole number of days, 0 or more.")
         if kind == "edit" and not isinstance(op["data"], dict):
             raise DraftError(f"{where}.data must be an object of field → value.")
         if kind == "reorder" and (
@@ -530,6 +548,13 @@ def _dispatch(project_path: Path, op: dict) -> dict:
             writes.delete_entity, project_path,
             op["entity_type"], op["entity_id"], op["summary"], True,
         )
+    if kind == "purge":
+        # Irreversible, and reached only by the person approving the draft: there
+        # is no confirmation inside purge_deleted because this IS it. A backup is
+        # taken first. See core/trash.py.
+        from .trash import purge_deleted
+        return _call(purge_deleted, project_path, op.get("target"),
+                     op.get("older_than_days", 30))
     return _call(
         writes.reorder, project_path,
         op["entity_type"], op["ordered_ids"], op["summary"],
@@ -615,6 +640,9 @@ def _describe(op: dict) -> str:
     entity_type = op.get("entity_type") or op.get("type", "")
     if kind == "reorder":
         return f"reorder {entity_type} ({len(op.get('ordered_ids') or [])} items)"
+    if kind == "purge":
+        t = op.get("target")
+        return f"purge {t['entity_type']}/{t['id']}" if t else "purge deleted items"
     return f"{kind} {entity_type}/{op.get('entity_id') or op.get('id', '')}"
 
 
@@ -717,6 +745,21 @@ def describe_ops(project_path: Path, ops: list) -> list[dict]:
                 "summary": op["summary"],
                 "detail": detail,
                 "reversible": True,
+            })
+        elif kind == "purge":
+            items, refusal = _purge_items(project_path, op)
+            shown = [f"{i['type']} {i['name']}" for i in items[:8]]
+            if len(items) > 8:
+                shown.append(f"…and {len(items) - 8} more")
+            changes.append({
+                "kind": "delete",
+                "entity_type": "trash",
+                "entity_id": "",
+                "label": (f"{len(items)} deleted item{'s' if len(items) != 1 else ''}"
+                          if not refusal else "nothing (will be refused)"),
+                "summary": op["summary"],
+                "detail": (refusal.get("error") if refusal else "; ".join(shown)),
+                "reversible": False,
             })
         elif kind == "reorder":
             entity_type = op["entity_type"]
@@ -868,7 +911,28 @@ def _render_op(project_path: Path, op: dict) -> list[str]:
         return [f"**🗑 DELETE** · `{op['entity_type']}/{op['entity_id']}`",
                 f"_{op['summary']}_ — reversible; "
                 f"`story_admin(action=\"restore\")` undoes it."]
+    if kind == "purge":
+        return _render_purge(project_path, op)
     return _render_reorder(op)
+
+
+def _purge_items(project_path: Path, op: dict) -> tuple:
+    """What this purge would remove, and the refusal it would meet (or None)."""
+    from .trash import preview_purge
+    found = preview_purge(project_path, op.get("target"), op.get("older_than_days", 30))
+    return found["items"], found["refusal"]
+
+
+def _render_purge(project_path: Path, op: dict) -> list[str]:
+    items, refusal = _purge_items(project_path, op)
+    if refusal:
+        return ["**⚠ PURGE** — will be refused", f"_{refusal.get('error', 'refused')}_"]
+    lines = [f"**⚠ PURGE** · {len(items)} deleted item(s) removed for good",
+             f"_{op['summary']}_ — **cannot be undone.** A backup is taken first."]
+    lines += [f"- `{i['type']}/{i['id']}` — {i['name']}" for i in items[:10]]
+    if len(items) > 10:
+        lines.append(f"- …and {len(items) - 10} more")
+    return lines
 
 
 def _render_create(op: dict) -> list[str]:
