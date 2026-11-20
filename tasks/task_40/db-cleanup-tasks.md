@@ -51,7 +51,7 @@
 ## 2. Baseline (dev @ 10de943)
 
 - `python -m pytest tests -q` → **1329 passed, 1 failed** at `10de943`.
-  After patch 01: 1336 passed. After patch 02: 1353 passed. After patch 03: 1366. After 04: 1372. After 05: 1383. After 06: 1399. After 07: 1420. After 08: 1454. After 09 and 10 together: 1482 (+28 combined; the split per patch was not recorded). After 11: 1495. After 12: 1535. After 13: **1580 passed** (fresh clone of dev @ 9460c54 + patch 13), same 1 failure.
+  After patch 01: 1336 passed. After patch 02: 1353 passed. After patch 03: 1366. After 04: 1372. After 05: 1383. After 06: 1399. After 07: 1420. After 08: 1454. After 09 and 10 together: 1482 (+28 combined; the split per patch was not recorded). After 11: 1495. After 12: 1535. After 13: 1580 (fresh clone of dev @ 9460c54 + patch 13). After 14: **1602 passed** (13 + 14 on a fresh clone of dev), same 1 failure.
 - Known pre-existing failure, unrelated to this work:
   `tests/test_no_hermes_imports.py` (finds the word "hermes" in
   `src/story_architect/app/config.py`). Leave it alone unless asked.
@@ -362,12 +362,43 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   name for a relationship whose other character is deleted (identical to the old
   behaviour, which the twin tests preserve); it could be improved separately.
 
-- [ ] **D2. Rethink the `DELETE <slug>` confirmation strings.** Today the
-  refusal message *prints the required string*, so the agent can supply it
-  itself; it is not a human gate. ⚖ Proposal: remove the two-step `confirm` from
-  entity soft delete (reversible, so just delete and report how to undo);
-  keep a real human step for project delete and purge/empty-trash, ideally as a
-  UI confirmation. Decide how far to go before touching tool schemas.
+- [x] **D2. Drop the typed `DELETE <slug>` confirmation strings; purge waits
+  for the person.** *(patch 14, stacked on 13 — not yet applied)*
+  The two strings (`delete_confirm` for `delete_project`, `purge_confirm` for
+  `purge`) were printed by their own refusal messages, so the agent just echoed
+  them: not a human gate. Done:
+  * **`delete_project`** asks for nothing: the folder goes to `.story-trash` and
+    the reply says how to `restore_project`. Both strings are removed from the
+    tool schema (a stray `delete_confirm`/`purge_confirm` from an old client is
+    ignored and changes nothing).
+  * **`purge` is now a proposal.** `story_admin(action="purge")` STAGES a draft
+    with one `purge` op and removes nothing; the person approves it on the
+    existing draft approval card, which renders it as the *delete* card with
+    `reversible: false` ("This cannot be undone" — the frontend already supported
+    that flag, so **no frontend change**). Approving runs
+    `core.trash.purge_deleted`, which takes a backup first; the 30-day age floor
+    still applies after approval. A purge draft may contain **only** purge ops
+    (`validate_ops`), so approving a batch can never remove anything for good as a
+    side effect. `purge` is also listed in `story_draft`'s op schema (the schema
+    must match the validator, `test_draft_op_schema.py`).
+  * **`core/trash.py` (new):** `deleted_together`, `purge_cutoff`,
+    `select_one_deletion`, `select_for_purge`, `hard_delete`, `preview_purge`,
+    `purge_deleted`, moved out of `tools/story_admin.py` because `core` never
+    imports `tools`. `preview_purge` and `purge_deleted` share one selection, so
+    the card cannot describe a different set from the one that goes.
+  * **Entity delete:** unchanged. The agent reaches it only through a draft (the
+    person's approval IS the confirmation) and the UI; `delete_entity`'s
+    `confirm` argument stays as a dry-run/preview mode, not a typed string.
+  * **Agent-facing docs fixed:** `tasks/task_30/skill/references/mechanics/
+    project-lifecycle.md` taught the typed string and a `delete_project` backup
+    that no longer exist. Older task notes under `tasks/` still describe the old
+    gate and are left as history.
+  * **Not verified:** how the approval card *looks* for a purge (entity type chip
+    "trash", an empty id, a count label) — there is no way to render the web UI
+    here. Please look at one in the app; the data it gets is covered by tests.
+  * **Not done:** permanent removal of a trashed PROJECT is still manual (C5
+    decision); there is no UI for the trash. Both could follow the same
+    draft-card pattern if wanted.
 
 ### Phase E — Consistency / integrity
 
@@ -432,6 +463,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 | 2026-11-17 | C3 | Keep **50** revisions per (entity, section); snapshot only when the text changed (not on empty/identical overwrites). Change `REVISIONS_KEPT` in `core/revisions.py` to alter the cap. |
 | 2026-11-17 | C4 | Keep the newest **20 automatic** backups; **only automatic ones are pruned** (manual and old-named ones never). Restore replaces the whole project in place, takes a `before-restore` automatic backup first, and has no confirm phrase (reversible). Committed draft receipts kept 30 days. |
 | 2026-11-18 | C5 | Trash folder is `<root>/.story-trash` (hidden; `.trash` is used by Obsidian). Permanent removal of a trashed project is manual. `restore_project` never overwrites an existing project. `delete_confirm` stays until D2. |
+| 2026-11-19 | D2 | Typed confirmation strings dropped. `delete_project` unconfirmed (reversible via the project trash). Purge = a draft the person approves on the existing card (a real human step; no new UI), never bundled with other ops, age floor kept, backup kept. Chosen over keeping the string (an agent can read and echo it) and over a new UI-only purge route (the repo has no UI for it and the draft card already exists). |
 | 2026-11-19 | D1 | Verification showed the premise false (see D1). Done as three stacked patches (11/12/13) instead of one. Optional `is_deleted`/`deleted_at` merge **skipped**. Flag-only + filter-at-read chosen over "record what the scrub removed and replay it" (one mechanism, no replay conflicts). `references_purged` renamed `references_hidden`. |
 | 2026-11-18 | C6 | Trigger = opening a project in the web app (dashboard load). At most one automatic backup per 24 h, and only if the project changed since the last one. |
 
@@ -452,6 +484,7 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
 | `11-D1a-delete-restore-same-stamp.patch` | D1a | dev @ 50faebe | yes (e1e6bb0) | +13 tests (1495). core/writes.py (live children only), tools/story_admin.py (`_deleted_together`), tests/test_delete_stamps.py new |
 | `12-D1b-live-relations.patch` | D1b | dev @ e1e6bb0 | yes (9460c54) | +40 tests (1535). View `live_relations` (db.py schema + migration 4); ~25 reader sites; delete keeps relation rows; story_load uses get_db; tests/test_live_relations.py new; 5 older tests rewritten (asserted physical deletion) |
 | `13-D1c-live-references.patch` | D1c | dev @ 9460c54 | NOT YET (user to confirm) | +45 tests (1580). core/references.py new; readers in db.py, story_retrieve, manual_entities, manual_edits, manual_structure, story_export, story_load; `_purge_references` removed; `references_purged` → `references_hidden`; tests/twin_helpers.py + tests/test_live_references.py new; test_delete_cascade / test_manual_entities / test_write_atomicity rewritten to the new contract |
+| `14-D2-purge-waits-for-the-person.patch` | D2 | stacked on 13 (aebeb28) | NOT YET (user to confirm; apply 13 first) | +22 tests net (1602). core/trash.py new; core/drafts.py (`purge` op, card, preview, dispatch); tools/story_admin.py (`_stage_purge`, no typed strings); tools/story_draft.py (purge branch); tests/test_purge_approval.py new (30); test_purge / test_purge_one now test `purge_deleted` directly; skill reference project-lifecycle.md updated |
 
 ## 6. Session notes
 
@@ -538,6 +571,14 @@ Status key: `[ ]` todo · `[~]` in progress · `[x]` done (patch produced) ·
   for a location nested under a location, found only by testing it; (z) an `ALTER
   TABLE ... RENAME` re-validates every view, so create a view only over tables
   that exist.
+- 2026-11-19 — Session 4, D2: done (patch 14). Remaining: **E1–E3, F1, G1**
+  (all larger; ask before starting, with a recommendation). Practical notes:
+  (aa) when a "human gate" can only be a value the agent can read and send back,
+  it is not a gate — route it through something only the person can do (here the
+  existing approval card); (bb) before inventing UI, check whether the existing
+  UI already has the affordance (the card already supported `reversible: false`);
+  (cc) a test that enforces "the schema matches the validator" is a feature:
+  satisfy it (list the new op) rather than exempt it.
 
 ## 7. Things that are fine, leave alone
 
