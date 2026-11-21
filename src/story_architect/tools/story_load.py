@@ -124,8 +124,8 @@ def handler(args: dict, **kwargs) -> str:
     view = args.get("view")
     conn = None
     try:
-        # get_db, not a bare connect: it upgrades an old database first, and the
-        # readers below need what the upgrade creates (the live_relations view).
+        # get_db, not a bare connect: it brings a database one migration behind
+        # (a restored backup) up to date before the readers below use it.
         conn = get_db(project_path)
         if not has_schema(conn):
             return json.dumps({"error": "Database schema not found. Run story_import first."})

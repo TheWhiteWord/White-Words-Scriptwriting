@@ -125,16 +125,25 @@ Steps, in order:
 - Anything that fails for a reason that is not a deleted legacy test is a real regression: stop.
 
 ### Done when
-- [ ] Script exists; run on a copy, then on the live project with `--apply`; live DB at
+- [x] Script exists; run on a copy, then on the live project with `--apply`; live DB at
       version 5, zero orphans, `integrity_check ok`, row counts unchanged. Backup path recorded.
-- [ ] `BASELINE_VERSION`, empty `SCHEMA_MIGRATIONS`, clear error for older databases.
-- [ ] Unstamped-row branches and the stale comments removed.
-- [ ] `test_legacy_db_migration.py` deleted; `test_schema_migrations.py` tests the mechanism;
+- [x] `BASELINE_VERSION`, empty `SCHEMA_MIGRATIONS`, clear error for older databases.
+- [x] Unstamped-row branches and the stale comments removed.
+- [x] `test_legacy_db_migration.py` deleted; `test_schema_migrations.py` tests the mechanism;
       T2's legacy-shape fixtures replaced by normally-built projects.
-- [ ] `git diff --stat` shows **more lines deleted than added**; the new test baseline and the
+- [x] `git diff --stat` shows **more lines deleted than added**; the new test baseline and the
       reason are in the Progress log.
-- [ ] Close-out. Then continue with T3.
+- [x] Close-out. Then continue with T3.
 
 ### If T7 (UTC timestamps) is ever done
 This task makes it simpler: extend the one-off script to convert the live database's stored
 stamps once, and no code needs a "tolerate naive timestamps" path.
+
+### Close-out (2026-11-21)
+Done on branch `e-t2b-baseline`. Suite: **1619 passed, 1 failed** (the pre-existing
+`test_no_hermes_imports`); baseline down from 1629 because legacy-only tests were deleted
+(whole `test_legacy_db_migration.py` + legacy-shape tests in 9 files), replaced by mechanism
+tests. 8 mutations verified caught. Code diff: 342 insertions / 612 deletions. Live DB at
+version 5, zero orphans, `integrity_check ok`; safety backup
+`.story/pre-t2b-upgrade-20261121_132138.db`. Details and surprises: main file, Progress log
+and Discoveries (T2b entries). DB-5 rewritten; T2 marked superseded in part.

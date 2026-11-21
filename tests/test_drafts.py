@@ -361,38 +361,6 @@ def test_restaging_a_committed_draft_id_reopens_it(fixture_path):
     assert "already_committed" not in result
 
 
-def test_a_database_with_the_old_drafts_table_still_works(fixture_path):
-    """The live plugin's database predates `status`. Prove the upgrade, do not assume it.
-
-    Every other test in this file runs against a fixture whose drafts table is
-    copied from disk, so whether the migration path works or is silently unused
-    is not obvious from a green run. This builds the pre-change table by hand and
-    runs the whole cycle over it.
-    """
-    old = "CREATE TABLE drafts (id TEXT PRIMARY KEY, ops JSON NOT NULL, " \
-          "prev_ops JSON, summary TEXT NOT NULL DEFAULT '', " \
-          "created_at TEXT NOT NULL)"
-    conn = sqlite3.connect(str(Path(fixture_path) / ".story" / "story.db"))
-    conn.execute("DROP TABLE IF EXISTS drafts")
-    conn.execute(old)
-    # A database from before schema versioning carries no version stamp. The
-    # fixture was stamped current when it was built, and a stamp is trusted —
-    # so reset it, or this would be an old table in a file claiming to be new,
-    # a state that cannot occur.
-    conn.execute("PRAGMA user_version = 0")
-    conn.commit()
-    conn.close()
-
-    staged = drafts.stage(fixture_path, _batch(), "Mira tells Kael")
-    first = drafts.commit(fixture_path, staged["draft_id"])
-    second = drafts.commit(fixture_path, staged["draft_id"])
-
-    assert first["success"] is True
-    assert second["success"] is True and second["already_committed"] is True
-    cols = {r[1] for r in get_db(fixture_path).execute("PRAGMA table_info(drafts)")}
-    assert "status" in cols
-
-
 # ─── Guard 2: partial failure keeps the draft and names what landed ───
 
 def test_a_failing_batch_keeps_the_draft_and_names_what_landed(fixture_path):

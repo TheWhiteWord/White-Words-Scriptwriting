@@ -118,16 +118,6 @@ def test_purge_eligible_follows_the_age_floor(fixture_path):
     assert _list(fixture_path, older_than_days=100000)["deleted"][0]["purge_eligible"] is False
 
 
-def test_a_row_with_no_deletion_time_is_listed_and_never_eligible(fixture_path):
-    """Deleted by an earlier build, before deleted_at existed: bulk purge cannot see it."""
-    delete_entity(fixture_path, "character", "kael", "t", True)
-    _sql(fixture_path, "UPDATE entities SET deleted_at=NULL WHERE id='kael'")
-    item = _list(fixture_path)["deleted"][0]
-    assert item["id"] == "kael"
-    assert item["deleted_at"] is None
-    assert item["purge_eligible"] is False
-
-
 def test_unknown_project_is_an_error_not_a_crash(fixture_path):
     out = json.loads(handler({"action": "list_deleted", "project": "no-such-project"},
                              root_path=str(fixture_path.parent)))

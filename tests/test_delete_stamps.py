@@ -142,20 +142,6 @@ class TestRestoreBringsBackOnlyWhatThatDeleteFlagged:
         assert _restore(proj, "scene_beats", BEATS)["success"]
         assert _row(p, BEATS) == (0, None)
 
-    def test_rows_with_no_deletion_time_still_restore_together(self, proj):
-        """Deleted by an earlier build: flagged, never stamped."""
-        p, _ = proj
-        _sql(p, "UPDATE entities SET is_deleted=1, deleted_at=NULL WHERE id IN (?, ?)",
-             SCENE, BEATS)
-        assert _restore(proj, "scene", SCENE)["restored_cascade_children"] == [BEATS]
-
-    def test_an_unstamped_child_is_not_taken_along_by_a_stamped_parent(self, proj):
-        p, _ = proj
-        _sql(p, "UPDATE entities SET is_deleted=1, deleted_at=NULL WHERE id=?", BEATS)
-        _sql(p, "UPDATE entities SET is_deleted=1, deleted_at=? WHERE id=?", EARLIER, SCENE)
-        assert _restore(proj, "scene", SCENE)["restored_cascade_children"] == []
-        assert _row(p, BEATS)[0] == 1
-
     def test_restore_and_targeted_purge_agree_on_what_was_deleted_together(self, proj):
         """One rule, two users: what restore would bring back, purge removes, and
         a child trashed earlier is left alone by both."""

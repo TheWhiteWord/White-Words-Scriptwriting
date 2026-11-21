@@ -158,24 +158,6 @@ def test_a_child_deleted_separately_stays_in_the_trash_and_loses_its_dead_link(f
     assert restored["success"] is True
 
 
-def test_a_row_with_no_deletion_time_can_be_purged_this_way(fixture_path):
-    """Bulk purge cannot see rows deleted before deleted_at existed; naming one can."""
-    delete_entity(fixture_path, "character", "kael", "t", True)
-    _sql(fixture_path, "UPDATE entities SET deleted_at=NULL WHERE id='kael'")
-    assert _purge(fixture_path, older_than_days=0)["purged"] == []          # the sweep skips it
-    assert _purge_one(fixture_path, "kael", "character")["success"] is True
-    assert not _exists(fixture_path, "kael")
-
-
-def test_unstamped_children_go_with_an_unstamped_parent(fixture_path):
-    """NULL has to match NULL for 'deleted in the same operation'."""
-    scene, beat = _scene_with_beat(fixture_path)
-    delete_entity(fixture_path, "scene", scene, "t", True)
-    _sql(fixture_path, "UPDATE entities SET deleted_at=NULL WHERE id IN (?, ?)", (scene, beat))
-    out = _purge_one(fixture_path, scene, "scene")
-    assert sorted(p["id"] for p in out["purged"]) == sorted([scene, beat])
-
-
 def test_the_bulk_purge_also_clears_dead_links_on_what_it_leaves_behind(fixture_path):
     scene, beat = _scene_with_beat(fixture_path)
     delete_entity(fixture_path, "scene", scene, "t", True)

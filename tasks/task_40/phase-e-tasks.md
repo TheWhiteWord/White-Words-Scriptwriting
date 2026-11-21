@@ -133,14 +133,21 @@ T3–T5.
 - **A new reader must be added to `tests/twin_helpers.everything_a_reader_can_say()`**
   — that is the only test that covers it.
 
-**DB-5 — Schema changes.** Append a function to `SCHEMA_MIGRATIONS` in `core/db.py`
+**DB-5 — Schema changes.** The schema has a baseline (`BASELINE_VERSION = 5` in
+`core/db.py`; `chat/store.py` has its own `CHAT_BASELINE = 1`). Every change from
+now on is **appended after the baseline**: add a function to `SCHEMA_MIGRATIONS`
 **and** update `SCHEMA_SQL` for fresh databases. Never edit an existing migration
-(it is a frozen record). A migration must **guard for missing tables** (see
-`_m4_live_relations_view`: a view over a missing table breaks every later
-`ALTER TABLE ... RENAME`; an index over a missing table errors at once). Test it on
-(a) a new project, (b) a database stamped one version lower, (c) the legacy partial
-database in `tests/test_schema_migrations.py`. Beware: SQLite re-validates views on
-`ALTER TABLE`, so any table rebuild must drop and recreate `live_relations`.
+(it is a frozen record). Entry *k* upgrades `BASELINE+k → BASELINE+k+1`;
+`LATEST_VERSION = BASELINE_VERSION + len(SCHEMA_MIGRATIONS)`. The live database is
+upgraded by opening it (`get_db`); never edit it by hand. A file below the
+baseline, or one with tables but no version, is refused with a pointer to
+`tasks/task_40/upgrade_live_db.py` — there is no legacy support (T2b). Test a
+migration on (a) a new project and (b) a database stamped one version lower,
+using a test-only migration monkeypatched onto the list (see
+`tests/test_schema_migrations.py`); no legacy shapes. Beware: SQLite re-validates
+views on `ALTER TABLE`, so any table rebuild must drop and recreate
+`live_relations` — a view over a missing table breaks every later
+`ALTER TABLE ... RENAME` (the lesson is kept as a comment in `SCHEMA_SQL`).
 
 **DB-6 — Observable contracts do not change silently** (Part 2.4). If one must, you
 update: the tests, the agent-facing text (`tasks/task_30/skill/references/**`
@@ -413,6 +420,11 @@ must now fail with a `sections` orphan. Restore.
 ## T2 — Indexes (original E3a)
 
 **Size S · Risk low · Schema change: migration 5, additive only.**
+
+> **Superseded in part by T2b (baseline).** `_m5_indexes` and the legacy-shape
+> fixtures no longer exist: the four index statements live in `SCHEMA_SQL` only,
+> and the migration mechanism is tested with a test-only migration. The design,
+> evidence and plan tests below remain the record of what was added and why.
 
 ### Goal
 Add the indexes the query plans show missing, with proof that SQLite uses them.
@@ -979,6 +991,7 @@ Baseline at start: `1602 passed, 1 failed` (expected `1602 passed, 1 failed`).
 |---|---|---|---|---|
 | T1 orphan checker | done | `e-t1-orphan-checker` (branch tip) | 1622 passed, 1 failed | +20 tests, 8 mutations verified; FTS check needs `rank=1`; source-scan exemption owner-approved |
 | T2 indexes | done | `e-t2-indexes` (branch tip) | 1629 passed, 1 failed | +7 tests, 5 mutations verified; owner-approved legacy-shape edits in 3 test files (Discoveries) |
+| T2b baseline (drop legacy support) | done | `e-t2b-baseline` (branch tip) | 1619 passed, 1 failed | −10 net: legacy-only tests deleted, mechanism tests added; 8 mutations verified; live DB upgraded 0→5; code diff 342 insertions / 612 deletions (Discoveries) |
 | T3 connection plumbing | | | | |
 | T4 atomic version checks | | | | |
 | T5 atomic draft commit | | | | |
@@ -1042,6 +1055,39 @@ contradicted this file):
   166.3 → 148.4 ms, while the selective `type='plot'` went 44.3 → 6.8 ms.
   The owner note on the partial index held: the plan test uses the literal
   `is_deleted=1` and the plan names `idx_entities_deleted`.
+- **T2b: live database upgraded once, 0 → 5.** `tasks/task_40/upgrade_live_db.py`
+  run on the live project (`browser-verification-test`) with `--apply`: safety
+  backup `.story/pre-t2b-upgrade-20261121_132138.db` (kept until Phase E ends);
+  rows with `is_deleted=1, deleted_at NULL` got one shared stamp; counts
+  unchanged (entities 42, relations 23, sections 244, revisions 0, drafts 6);
+  `find_orphans` empty, `integrity_check ok`; dashboard loads clean.
+- **T2b: pre-baseline backups kept, now unopenable.** The live `.story/` holds
+  eight old snapshots (`story_20261020_*.db`, `story_20261113_*.db`), all at
+  version 0. Kept, not deleted (owner data); this build refuses them. To use
+  one, run the upgrade script on a copy. The safety backup above is version 0
+  by design — it is the pre-upgrade original.
+- **T2b: the fixture premise held for committed content only.**
+  `tests/fixtures/save-the-children/.story/` had two UNTRACKED local artifacts
+  from Oct 27 (`story.db` at version 0 plus one old snapshot) left by a
+  pre-versioning test run; the baseline refusal turned them into 700+ fixture
+  errors. Removed — every test builds its DB by importing the Markdown;
+  `memory.md` is the only committed `.story` file.
+- **T2b: regression caught and fixed — get_db's new-file path.** The first
+  baseline rewrite dropped `get_db`'s create-schema-on-a-file-with-no-tables
+  branch; `test_transaction` (opens a scratch dir twice) caught it. Restored
+  per the side-task's "keep that path".
+- **T2b: test-only migrations need an explicit stamp.** `create_schema` stamps
+  `LATEST_VERSION` at call time, so a project built under a patched LATEST is
+  current, not one behind: the one-behind tests stamp `BASELINE_VERSION`
+  explicitly after building. Fixture order matters too — `twin.build` opens the
+  DB during import, so a patch applied before the build runs the step early
+  (the reader-loop test undoes that upgrade before calling the reader).
+- **T2b: two mutation checks initially named the wrong tests.** The
+  `purge_eligible` flag is computed in `story_admin` (`r[3] <= cutoff`), not in
+  `trash.select_for_purge` — the age-floor mutation is caught by
+  `test_story_admin.TestPurge`; the stamp-grouping mutation by
+  `test_list_deleted`'s own-entry test, not by restore/purge behaviour. All 8
+  mutations verified caught with the right tests.
 
 ---
 

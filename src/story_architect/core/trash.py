@@ -52,13 +52,11 @@ def deleted_together(conn, entity_id: str, deleted_at) -> list:
     A child deleted on its own, earlier or later, carries another stamp and is a
     separate item in the trash.
 
-    `IS ?` rather than `= ?` so that a row with no deletion time (deleted by an
-    earlier build) still matches its own, equally unstamped, children.
     Returns (id, type, deleted_at) rows.
     """
     return conn.execute(
         "SELECT id, type, deleted_at FROM entities "
-        "WHERE parent_id=? AND is_deleted=1 AND deleted_at IS ? ORDER BY type, id",
+        "WHERE parent_id=? AND is_deleted=1 AND deleted_at = ? ORDER BY type, id",
         (entity_id, deleted_at)).fetchall()
 
 
@@ -89,7 +87,7 @@ def select_for_purge(conn, target: dict | None, older_than_days: int):
         return select_one_deletion(conn, target)
     rows = conn.execute(
         "SELECT id, type, deleted_at FROM entities "
-        "WHERE is_deleted=1 AND deleted_at IS NOT NULL AND deleted_at <= ? "
+        "WHERE is_deleted=1 AND deleted_at <= ? "
         "ORDER BY type, id", (purge_cutoff(older_than_days),)).fetchall()
     return rows, None
 

@@ -156,12 +156,13 @@ def restore_backup(project_path: Path, name: str) -> dict:
     restored data as soon as it commits, and nothing is left behind.
 
     Before anything changes, the backup is checked (a readable SQLite file, no
-    damage, a project database, not from a newer build, same page size) and the
-    current state is saved as an automatic backup — so a restore can itself be
-    undone by restoring that one. Raises ValueError, changing nothing, if a
-    check fails.
+    damage, a project database, not from a newer build nor older than the
+    baseline, same page size) and the current state is saved as an automatic
+    backup — so a restore can itself be undone by restoring that one. Raises
+    ValueError, changing nothing, if a check fails.
     """
-    from .db import SCHEMA_MIGRATIONS, apply_migrations, get_db
+    from .db import (BASELINE_VERSION, LATEST_VERSION, SCHEMA_MIGRATIONS,
+                     apply_migrations, get_db)
 
     # Only names from the listing: that is what keeps a path like ../story.db out.
     if name not in {b["name"] for b in list_backups(project_path)}:
@@ -188,10 +189,15 @@ def restore_backup(project_path: Path, name: str) -> dict:
             raise ValueError(f"{name} is damaged and was not restored.")
         if not has_entities:
             raise ValueError(f"{name} is not a project database (no entities table).")
-        if version > len(SCHEMA_MIGRATIONS):
+        if version > LATEST_VERSION:
             raise ValueError(
                 f"{name} was made by a newer version of Story Architect (schema "
-                f"{version}, this build knows {len(SCHEMA_MIGRATIONS)}). Update the app first.")
+                f"{version}, this build knows {LATEST_VERSION}). Update the app first.")
+        if version < BASELINE_VERSION:
+            raise ValueError(
+                f"{name} is older than this build supports (schema {version}; the "
+                f"baseline is {BASELINE_VERSION}). Run tasks/task_40/upgrade_live_db.py "
+                f"on a copy of it first.")
 
         live = get_db(project_path)
         try:
@@ -200,7 +206,8 @@ def restore_backup(project_path: Path, name: str) -> dict:
                                  f"be restored in place.")
             safety = create_backup(project_path, label="before-restore", automatic=True)
             snap.backup(live)
-            apply_migrations(live, SCHEMA_MIGRATIONS, name=f"{project_path.name}/.story/story.db")
+            apply_migrations(live, SCHEMA_MIGRATIONS, baseline=BASELINE_VERSION,
+                             name=f"{project_path.name}/.story/story.db")
             if live.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                 raise RuntimeError(
                     f"The database failed its integrity check after the restore. The state "

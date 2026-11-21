@@ -1,8 +1,11 @@
-"""Schema versioning: PRAGMA user_version + an ordered list of migration steps.
+"""Schema versioning: the baseline + an append-only list of migration steps.
 
-A database file records how many steps it has run. Opening one that is behind
-runs the missing steps once, in a transaction; opening a current one costs a
-single pragma. Covers story.db (core.db) and chat.db (chat.store).
+A database file records how far it has come (PRAGMA user_version). New files
+are stamped LATEST_VERSION; a file one step behind is upgraded on open, in one
+transaction; a file below the baseline or above the latest is refused. The
+steps are exercised with a test-only migration monkeypatched onto the (empty)
+real list — the mechanism, not history. Covers story.db (core.db) and chat.db
+(chat.store).
 """
 import sqlite3
 import threading
@@ -11,11 +14,10 @@ import time
 import pytest
 
 from story_architect.core import db as core_db
-from story_architect.core.db import (SCHEMA_MIGRATIONS, SchemaTooNewError,
-                                     apply_migrations, create_schema, get_db)
+from story_architect.core.db import (BASELINE_VERSION, LATEST_VERSION,
+                                     SchemaTooNewError, SchemaTooOldError,
+                                     apply_migrations, get_db)
 from story_architect.core.writes import create_project
-
-LATEST = len(SCHEMA_MIGRATIONS)
 
 
 def _version(path_to_db):
@@ -26,111 +28,107 @@ def _version(path_to_db):
         c.close()
 
 
-def _cols(conn, table):
-    return {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
-
-
 def _db_file(project):
     return project / ".story" / "story.db"
 
 
-def _legacy_project(tmp_path, name="legacy"):
-    """A project from before soft delete and before drafts.status: unstamped.
-    Every column but the soft-delete pair is present — migration 5 indexes
-    parent_id, and step 1 adds the pair."""
-    proj = tmp_path / name
-    _db_file(proj).parent.mkdir(parents=True)
-    c = sqlite3.connect(str(_db_file(proj)))
-    c.executescript("""
-        CREATE TABLE entities (id TEXT PRIMARY KEY, type TEXT, name TEXT,
-                               one_sentence TEXT, order_key REAL, status TEXT,
-                               parent_id TEXT, location_id TEXT, extra TEXT);
-        INSERT INTO entities (id, type, name) VALUES ('a1', 'character', 'Old Hero');
-        CREATE TABLE drafts (id TEXT PRIMARY KEY, ops TEXT NOT NULL, prev_ops TEXT,
-                             summary TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
-    """)
+def _stamp(project, version):
+    """Make a built project pretend it was written at an earlier version."""
+    c = sqlite3.connect(str(_db_file(project)))
+    c.execute(f"PRAGMA user_version = {version}")
     c.close()
-    return proj
+
+
+def _new_project(tmp_path):
+    root = tmp_path / "v"
+    (root / "projects").mkdir(parents=True)
+    create_project("stc", {"name": "STC", "logline": "L"}, root)
+    return root / "projects" / "stc"
+
+
+@pytest.fixture
+def one_step(monkeypatch):
+    """A test-only migration after the baseline. LATEST_VERSION is derived at
+    import, so it is patched alongside the list; tests stamp a built project
+    BASELINE_VERSION to make it one step behind."""
+    calls = []
+
+    def step(conn):
+        calls.append(1)
+        conn.execute("CREATE TABLE test_only_step (x)")
+
+    monkeypatch.setattr(core_db, "SCHEMA_MIGRATIONS", [step])
+    monkeypatch.setattr(core_db, "LATEST_VERSION", BASELINE_VERSION + 1)
+    return calls
 
 
 # ─── story.db ───
 
 def test_a_new_project_is_stamped_current(tmp_path):
-    root = tmp_path / "v"
-    (root / "projects").mkdir(parents=True)
-    create_project("stc", {"name": "STC", "logline": "L"}, root)
-    assert _version(_db_file(root / "projects" / "stc")) == LATEST
+    proj = _new_project(tmp_path)
+    assert _version(_db_file(proj)) == LATEST_VERSION
 
 
-def test_a_file_without_tables_is_left_alone_until_the_schema_is_created(tmp_path):
+def test_get_db_creates_the_schema_on_a_file_with_no_tables(tmp_path):
     conn = get_db(tmp_path / "p")
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 0
-    create_schema(conn)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == LATEST
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == LATEST_VERSION
+    assert conn.execute("SELECT 1 FROM sqlite_master WHERE name='entities'").fetchone()
     conn.close()
 
 
-def test_an_unstamped_legacy_database_is_upgraded_and_stamped(tmp_path):
-    proj = _legacy_project(tmp_path)
-    assert _version(_db_file(proj)) == 0
+def test_a_database_one_step_behind_is_upgraded_on_open_and_keeps_its_rows(tmp_path, one_step):
+    proj = _new_project(tmp_path)
+    _stamp(proj, BASELINE_VERSION)         # one behind the patched LATEST
     conn = get_db(proj)
     try:
-        assert {"is_deleted", "deleted_at"} <= _cols(conn, "entities")
-        assert "status" in _cols(conn, "drafts")
-        assert conn.execute("SELECT name FROM entities WHERE is_deleted=0").fetchall() \
-            == [("Old Hero",)]
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == LATEST
+        assert conn.execute("SELECT 1 FROM sqlite_master WHERE name='test_only_step'").fetchone()
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == BASELINE_VERSION + 1
+        assert conn.execute("SELECT count(*) FROM entities").fetchone()[0] >= 1
     finally:
         conn.close()
+    assert one_step == [1]
 
 
-def test_an_unstamped_database_that_is_already_current_in_shape_just_gets_stamped(tmp_path):
-    """Every real database made before this change looks like this."""
-    root = tmp_path / "v"
-    (root / "projects").mkdir(parents=True)
-    create_project("stc", {"name": "STC", "logline": "L"}, root)
-    proj = root / "projects" / "stc"
-    c = sqlite3.connect(str(_db_file(proj)))
-    c.execute("PRAGMA user_version = 0")
-    before = c.execute("SELECT count(*) FROM entities").fetchone()[0]
-    c.close()
-
-    conn = get_db(proj)
-    try:
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == LATEST
-        assert conn.execute("SELECT count(*) FROM entities").fetchone()[0] == before
-    finally:
-        conn.close()
+def test_upgrading_twice_changes_nothing(tmp_path, one_step):
+    proj = _new_project(tmp_path)
+    _stamp(proj, BASELINE_VERSION)
+    get_db(proj).close()
+    get_db(proj).close()
+    assert one_step == [1]
+    assert _version(_db_file(proj)) == BASELINE_VERSION + 1
 
 
 def test_only_the_missing_steps_run(tmp_path):
-    """A file stamped 1 has had step 1: step 2 runs, step 1 does not."""
+    """A file stamped baseline+1 has had step 1: step 2 runs, step 1 does not."""
     calls = []
     steps = [lambda c: calls.append(1), lambda c: calls.append(2),
              lambda c: calls.append(3)]
     conn = sqlite3.connect(str(tmp_path / "x.db"), isolation_level=None)
     conn.execute("PRAGMA user_version = 1")
-    apply_migrations(conn, steps)
+    apply_migrations(conn, steps, baseline=0)
     assert calls == [2, 3]
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
-    apply_migrations(conn, steps)  # current: nothing more
+    apply_migrations(conn, steps, baseline=0)  # current: nothing more
     assert calls == [2, 3]
     conn.close()
 
 
 def test_a_current_database_runs_no_steps_on_open(tmp_path, monkeypatch):
-    root = tmp_path / "v"
-    (root / "projects").mkdir(parents=True)
-    create_project("stc", {"name": "STC", "logline": "L"}, root)
+    proj = _new_project(tmp_path)
+    c = sqlite3.connect(str(_db_file(proj)))
+    c.execute(f"PRAGMA user_version = {BASELINE_VERSION + 1}")
+    c.close()
 
     def boom(conn):
         raise AssertionError("a migration ran on a current database")
-    monkeypatch.setattr(core_db, "SCHEMA_MIGRATIONS", [boom] * LATEST)
-    get_db(root / "projects" / "stc").close()
+    monkeypatch.setattr(core_db, "SCHEMA_MIGRATIONS", [boom])
+    monkeypatch.setattr(core_db, "LATEST_VERSION", BASELINE_VERSION + 1)
+    get_db(proj).close()
 
 
 def test_a_failing_step_changes_nothing(tmp_path):
     conn = sqlite3.connect(str(tmp_path / "x.db"), isolation_level=None)
+    conn.execute(f"PRAGMA user_version = {BASELINE_VERSION}")
 
     def make_table(c):
         c.execute("CREATE TABLE made_by_step_1 (x)")
@@ -139,27 +137,43 @@ def test_a_failing_step_changes_nothing(tmp_path):
         raise RuntimeError("step 2 broke")
 
     with pytest.raises(RuntimeError, match="step 2 broke"):
-        apply_migrations(conn, [make_table, fail])
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 0
+        apply_migrations(conn, [make_table, fail], baseline=BASELINE_VERSION)
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == BASELINE_VERSION
     assert conn.execute("SELECT 1 FROM sqlite_master WHERE name='made_by_step_1'").fetchone() is None
     conn.close()
 
 
-def test_a_database_from_a_newer_build_is_refused_and_untouched(tmp_path):
-    root = tmp_path / "v"
-    (root / "projects").mkdir(parents=True)
-    create_project("stc", {"name": "STC", "logline": "L"}, root)
-    proj = root / "projects" / "stc"
+def test_a_database_below_the_baseline_is_refused_and_untouched(tmp_path):
+    proj = _new_project(tmp_path)
     c = sqlite3.connect(str(_db_file(proj)))
-    c.execute(f"PRAGMA user_version = {LATEST + 5}")
+    c.execute(f"PRAGMA user_version = {BASELINE_VERSION - 1}")
     c.close()
+    with pytest.raises(SchemaTooOldError, match="older than this build supports"):
+        get_db(proj)
+    assert _version(_db_file(proj)) == BASELINE_VERSION - 1
 
+
+def test_a_file_with_tables_but_no_version_is_refused(tmp_path):
+    proj = _new_project(tmp_path)
+    c = sqlite3.connect(str(_db_file(proj)))
+    c.execute("PRAGMA user_version = 0")
+    c.close()
+    with pytest.raises(SchemaTooOldError, match="upgrade_live_db.py"):
+        get_db(proj)
+    assert _version(_db_file(proj)) == 0
+
+
+def test_a_database_from_a_newer_build_is_refused_and_untouched(tmp_path):
+    proj = _new_project(tmp_path)
+    c = sqlite3.connect(str(_db_file(proj)))
+    c.execute(f"PRAGMA user_version = {LATEST_VERSION + 5}")
+    c.close()
     with pytest.raises(SchemaTooNewError, match="newer version"):
         get_db(proj)
-    assert _version(_db_file(proj)) == LATEST + 5
+    assert _version(_db_file(proj)) == LATEST_VERSION + 5
 
 
-def test_two_connections_opening_an_old_database_upgrade_it_once(tmp_path):
+def test_two_connections_opening_a_behind_database_upgrade_it_once(tmp_path):
     """The second one in must find the work done, not repeat it."""
     runs = []
     gate = threading.Barrier(4)
@@ -167,8 +181,8 @@ def test_two_connections_opening_an_old_database_upgrade_it_once(tmp_path):
     def step(c):
         runs.append(1)
         c.execute("CREATE TABLE IF NOT EXISTS t (x)")
-        # Slow enough that every other thread has already read "version 0" and
-        # is queued for the write lock when this one finishes.
+        # Slow enough that every other thread has already read the old version
+        # and is queued for the write lock when this one finishes.
         time.sleep(0.3)
 
     path = tmp_path / "x.db"
@@ -179,7 +193,7 @@ def test_two_connections_opening_an_old_database_upgrade_it_once(tmp_path):
         c = sqlite3.connect(str(path), isolation_level=None, timeout=10)
         try:
             gate.wait()
-            apply_migrations(c, [step])
+            apply_migrations(c, [step], baseline=0)
         except Exception as e:  # pragma: no cover - only on failure
             errors.append(e)
         finally:
@@ -193,21 +207,21 @@ def test_two_connections_opening_an_old_database_upgrade_it_once(tmp_path):
     assert _version(path) == 1
 
 
-def test_a_backup_keeps_its_version_so_an_old_one_is_upgraded_when_opened(tmp_path):
+def test_a_backup_one_step_behind_is_upgraded_when_opened(tmp_path, one_step):
     from story_architect.core.db import backup_database
 
-    proj = _legacy_project(tmp_path)
-    get_db(proj).close()  # now stamped
+    proj = _new_project(tmp_path)
     snap = backup_database(proj)
-    assert _version(snap) == LATEST
-
-    # An older snapshot, as if taken before the last step existed:
-    c = sqlite3.connect(snap)
-    c.execute("PRAGMA user_version = 1")
-    c.execute("ALTER TABLE drafts RENAME TO drafts_old")
-    c.execute("CREATE TABLE drafts (id TEXT PRIMARY KEY, ops TEXT NOT NULL, prev_ops TEXT, "
-              "summary TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)")
+    # backup_database opens through get_db, which may have upgraded the file
+    # under the patched LATEST: stamp the snapshot itself one step behind.
+    c = sqlite3.connect(str(snap))
+    c.execute(f"PRAGMA user_version = {BASELINE_VERSION}")
     c.close()
+    assert _version(snap) == BASELINE_VERSION
+    before = sqlite3.connect(str(snap)).execute("SELECT count(*) FROM entities").fetchone()[0]
+
+    # The snapshot travels with its version; under the patched LATEST it is one
+    # step behind, and opening the project it is restored into brings it forward.
     _db_file(proj).write_bytes(open(snap, "rb").read())
     for ext in ("-wal", "-shm"):
         f = _db_file(proj).with_name("story.db" + ext)
@@ -215,7 +229,9 @@ def test_a_backup_keeps_its_version_so_an_old_one_is_upgraded_when_opened(tmp_pa
             f.unlink()
     conn = get_db(proj)
     try:
-        assert "status" in _cols(conn, "drafts")
+        assert conn.execute("SELECT 1 FROM sqlite_master WHERE name='test_only_step'").fetchone()
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == BASELINE_VERSION + 1
+        assert conn.execute("SELECT count(*) FROM entities").fetchone()[0] == before
     finally:
         conn.close()
 
@@ -225,34 +241,48 @@ def test_a_backup_keeps_its_version_so_an_old_one_is_upgraded_when_opened(tmp_pa
 def test_a_new_chat_db_is_stamped(tmp_path):
     from story_architect.chat import store
     store.connect(tmp_path).close()
-    assert _version(tmp_path / ".story" / "chat.db") == len(store.MIGRATIONS)
+    assert _version(tmp_path / ".story" / "chat.db") == store.CHAT_LATEST
 
 
-def test_a_legacy_chat_db_gains_its_columns_and_keeps_its_messages(tmp_path):
+def test_a_chat_db_one_step_behind_is_upgraded_on_open(tmp_path, monkeypatch):
     from story_architect.chat import store
+    store.connect(tmp_path).close()      # stamped CHAT_BASELINE
     p = tmp_path / ".story" / "chat.db"
-    p.parent.mkdir(parents=True)
     c = sqlite3.connect(str(p))
-    c.executescript("""
-        CREATE TABLE conversations (id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '',
-            created_at TEXT NOT NULL, updated_at TEXT NOT NULL, backend_state TEXT,
-            last_opened INTEGER NOT NULL DEFAULT 0);
-        CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id TEXT NOT NULL,
-            role TEXT NOT NULL, text TEXT NOT NULL DEFAULT '', timestamp TEXT NOT NULL,
-            metadata TEXT, status TEXT NOT NULL DEFAULT 'complete');
-        INSERT INTO conversations (id, created_at, updated_at) VALUES ('c1', 't', 't');
-        INSERT INTO messages (conversation_id, role, text, timestamp) VALUES ('c1', 'user', 'hello', 't');
-    """)
+    c.execute("INSERT INTO conversations (id, created_at, updated_at) VALUES ('c1', 't', 't')")
+    c.execute("INSERT INTO messages (conversation_id, role, text, timestamp) "
+              "VALUES ('c1', 'user', 'hello', 't')")
+    c.commit()
     c.close()
-    assert _version(p) == 0
 
+    calls = []
+
+    def step(conn):
+        calls.append(1)
+        conn.execute("CREATE TABLE chat_test_only (x)")
+
+    monkeypatch.setattr(store, "MIGRATIONS", [step])
+    monkeypatch.setattr(store, "CHAT_LATEST", store.CHAT_BASELINE + 1)
     conn = store.connect(tmp_path)
     try:
-        assert {"tools", "drafts", "attachments", "hidden", "error"} <= _cols(conn, "messages")
-        assert conn.execute("SELECT text, hidden FROM messages").fetchall() == [("hello", 0)]
+        assert conn.execute("SELECT text FROM messages").fetchall() == [("hello",)]
+        assert conn.execute("SELECT 1 FROM sqlite_master WHERE name='chat_test_only'").fetchone()
     finally:
         conn.close()
-    assert _version(p) == len(store.MIGRATIONS)
+    assert calls == [1]
+    assert _version(p) == store.CHAT_BASELINE + 1
+
+
+def test_a_chat_db_below_the_baseline_is_refused(tmp_path):
+    from story_architect.chat import store
+    store.connect(tmp_path).close()
+    p = tmp_path / ".story" / "chat.db"
+    c = sqlite3.connect(str(p))
+    c.execute("PRAGMA user_version = 0")
+    c.close()
+    with pytest.raises(SchemaTooOldError, match="older than this build supports"):
+        store.connect(tmp_path)
+    assert _version(p) == 0
 
 
 def test_chat_db_from_a_newer_build_is_refused(tmp_path):

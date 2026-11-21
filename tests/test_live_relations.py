@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from story_architect.core import db as core_db
-from story_architect.core.db import SCHEMA_MIGRATIONS, apply_migrations, create_schema, get_db
+from story_architect.core.db import create_schema, get_db
 from story_architect.core.writes import create_project, delete_entity
 from story_architect.tools.story_admin import handler as admin
 from story_architect.tools.story_import import handler as import_handler
@@ -37,6 +37,22 @@ def proj(fixture_path, tmp_path):
     shutil.copytree(str(fixture_path), str(p))
     import_handler({"project": SLUG, "confirm": True}, root_path=str(vault))
     return p, vault
+
+
+@pytest.fixture
+def one_step(monkeypatch):
+    """A test-only migration after the baseline. LATEST_VERSION is derived at
+    import, so it is patched alongside the list; tests stamp a built project
+    BASELINE_VERSION to make it one step behind."""
+    calls = []
+
+    def step(conn):
+        calls.append(1)
+        conn.execute("CREATE TABLE test_only_step (x)")
+
+    monkeypatch.setattr(core_db, "SCHEMA_MIGRATIONS", [step])
+    monkeypatch.setattr(core_db, "LATEST_VERSION", core_db.BASELINE_VERSION + 1)
+    return calls
 
 
 def _sql(p, sql, *args):
@@ -76,14 +92,16 @@ class TestTheView:
         finally:
             conn.close()
 
-    def test_an_old_database_gets_it_on_open_and_keeps_its_rows(self, proj):
+    def test_a_database_one_step_behind_is_upgraded_on_open_and_keeps_its_rows(self, proj, one_step):
         p, _ = proj
         before = _raw(p)
-        c = sqlite3.connect(str(p / ".story" / "story.db"))
-        c.execute("DROP VIEW live_relations")
-        c.execute("PRAGMA user_version = 3")
-        c.close()
-        get_db(p).close()
+        _sql(p, f"PRAGMA user_version = {core_db.BASELINE_VERSION}")
+        conn = get_db(p)
+        try:
+            assert conn.execute("SELECT 1 FROM sqlite_master WHERE name='test_only_step'").fetchone()
+        finally:
+            conn.close()
+        assert one_step == [1]
         assert _raw(p) == before
         assert _visible(p) == before  # nothing deleted yet: all visible
 
@@ -99,29 +117,17 @@ class TestTheView:
         assert all("kael" in r[:2] or "the-core-day" in r[:2] for r in hidden)
         assert not any("kael" in r[:2] or "the-core-day" in r[:2] for r in _visible(p))
 
-    def test_it_is_skipped_where_there_is_no_relations_table(self, tmp_path):
-        """A view over a missing table breaks every later ALTER TABLE RENAME."""
-        c = sqlite3.connect(str(tmp_path / "x.db"), isolation_level=None)
-        # Full pre-soft-delete columns: migration 5 indexes parent_id.
-        c.execute("CREATE TABLE entities (id TEXT PRIMARY KEY, type TEXT, name TEXT,"
-                  " one_sentence TEXT, order_key REAL, status TEXT, parent_id TEXT,"
-                  " location_id TEXT, extra TEXT)")
-        apply_migrations(c, SCHEMA_MIGRATIONS)
-        assert c.execute("SELECT 1 FROM sqlite_master WHERE type='view'").fetchone() is None
-        c.execute("ALTER TABLE entities RENAME TO entities_old")  # would raise with a dangling view
-        c.close()
-
-    def test_create_schema_makes_it_once_the_tables_exist(self, tmp_path):
-        c = sqlite3.connect(str(tmp_path / "x.db"), isolation_level=None)
-        # Full pre-soft-delete columns: migration 5 indexes parent_id.
-        c.execute("CREATE TABLE entities (id TEXT PRIMARY KEY, type TEXT, name TEXT,"
-                  " one_sentence TEXT, order_key REAL, status TEXT, parent_id TEXT,"
-                  " location_id TEXT, extra TEXT)")
-        apply_migrations(c, SCHEMA_MIGRATIONS)  # stamped current, no view
-        create_schema(c)
-        assert c.execute("SELECT 1 FROM sqlite_master WHERE type='view' "
-                         "AND name='live_relations'").fetchone()
-        c.close()
+    def test_create_schema_over_an_existing_project_keeps_the_view_and_rows(self, proj):
+        p, _ = proj
+        before = _raw(p)
+        conn = get_db(p)
+        try:
+            create_schema(conn)
+            assert conn.execute("SELECT 1 FROM sqlite_master WHERE type='view' "
+                                "AND name='live_relations'").fetchone()
+        finally:
+            conn.close()
+        assert _raw(p) == before
 
 
 # ─── delete keeps every row ───
@@ -223,20 +229,19 @@ class TestPreviewAndPurge:
         assert [r for r in _raw(p) if "kael" in r[:2]] == []
 
 
-# ─── story_load on an old database ───
+# ─── story_load on a database one step behind ───
 
-def test_story_load_upgrades_an_old_database_instead_of_failing(proj):
-    """It used to open the file with a bare connect, which skips the upgrade."""
+def test_story_load_upgrades_a_database_one_step_behind(proj, one_step):
+    """It opens through get_db, not a bare connect, so a behind database is
+    brought forward before the readers use it."""
     from story_architect.tools.story_load import handler
     p, vault = proj
-    c = sqlite3.connect(str(p / ".story" / "story.db"))
-    c.execute("DROP VIEW live_relations")
-    c.execute("PRAGMA user_version = 3")
-    c.close()
+    _sql(p, f"PRAGMA user_version = {core_db.BASELINE_VERSION}")
     for view in (None, "dramatic_elements", "values"):
         args = {"project": SLUG, **({"view": view} if view else {})}
         out = json.loads(handler(args, root_path=str(vault)))
         assert "no such table" not in json.dumps(out), (view, out)
+    assert one_step == [1]
 
 
 # ─── the rule, enforced ───
@@ -245,9 +250,9 @@ def test_every_read_of_relations_goes_through_the_view():
     """A raw `FROM relations` read would show a deleted entity again.
 
     Writers (INSERT / DELETE / UPDATE) use the table and are not matched. The
-    allowed reads are the view's own definition (SCHEMA_SQL and migration 4)
-    and the integrity oracle: it must see rows the view hides, because a
-    dangling reference whose other end is in the trash is still an orphan.
+    allowed reads are the view's own definition in SCHEMA_SQL and the integrity
+    oracle: it must see rows the view hides, because a dangling reference whose
+    other end is in the trash is still an orphan.
     """
     pattern = re.compile(r"(?<!DELETE )\b(?:FROM|JOIN)\s+relations\b")
     found = {}
@@ -255,7 +260,7 @@ def test_every_read_of_relations_goes_through_the_view():
         n = len(pattern.findall(f.read_text(encoding="utf-8")))
         if n:
             found[str(f.relative_to(SRC))] = n
-    assert found == {"core/db.py": 2, "core/integrity.py": 2}, (
+    assert found == {"core/db.py": 1, "core/integrity.py": 2}, (
         f"raw reads of the relations table: {found}. Read `live_relations` instead.")
 
 

@@ -99,98 +99,24 @@ CREATE INDEX IF NOT EXISTS idx_revisions_section ON revisions(entity_id, heading
 -- The relations that exist for a reader: those with no soft-deleted end.
 -- Deleting an entity only flags it; its relation rows stay, so restore is exact,
 -- and every READ of relations goes through this view. Writers use the table.
+-- The view is created here, with the tables: a view over a missing table is
+-- accepted by SQLite but breaks every later ALTER TABLE ... RENAME (it
+-- re-checks all views).
 CREATE VIEW IF NOT EXISTS live_relations AS
 SELECT * FROM relations
 WHERE from_id NOT IN (SELECT id FROM entities WHERE is_deleted=1)
   AND to_id   NOT IN (SELECT id FROM entities WHERE is_deleted=1);
 """
 
-def _m1_soft_delete_columns(conn: sqlite3.Connection) -> None:
-    """Add is_deleted / deleted_at to an entities table that predates soft delete."""
-    have = {r[1] for r in conn.execute("PRAGMA table_info(entities)")}
-    if not have:
-        return  # no entities table: nothing to repair
-    if "is_deleted" not in have:
-        conn.execute("ALTER TABLE entities ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
-    if "deleted_at" not in have:
-        conn.execute("ALTER TABLE entities ADD COLUMN deleted_at TEXT")
+# The schema baseline. The application has not shipped: every database that
+# exists was either created at this shape or upgraded to it once, by
+# tasks/task_40/upgrade_live_db.py. Files older than the baseline are refused,
+# not repaired — there is no history to repair them from.
+BASELINE_VERSION = 5
 
-
-def _m2_draft_status_column(conn: sqlite3.Connection) -> None:
-    """Add `status` to a drafts table that predates it.
-
-    A commit marks the draft row instead of deleting it, so a repeated commit
-    replays the same success (drafts.commit). The *table* needs no repair —
-    create_schema makes it — only this column.
-    """
-    have = {r[1] for r in conn.execute("PRAGMA table_info(drafts)")}
-    if have and "status" not in have:
-        conn.execute("ALTER TABLE drafts ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
-
-
-def _m3_revisions_table(conn: sqlite3.Connection) -> None:
-    """Version history of section text (core/revisions.py).
-
-    Written out in full rather than shared with SCHEMA_SQL: a migration is a
-    frozen record of what that step did, and SCHEMA_SQL moves on.
-    """
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS revisions ("
-        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        " entity_id TEXT NOT NULL,"
-        " heading TEXT NOT NULL,"
-        " body TEXT NOT NULL,"
-        " replaced_at TEXT NOT NULL,"
-        " summary TEXT NOT NULL DEFAULT '')")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_revisions_section "
-        "ON revisions(entity_id, heading, id)")
-
-
-def _m4_live_relations_view(conn: sqlite3.Connection) -> None:
-    """The `live_relations` view (see SCHEMA_SQL): relations with no deleted end.
-
-    Written out in full, like step 3: a migration is a frozen record.
-
-    Guarded on the tables it reads. A view over a table that does not exist is
-    accepted by SQLite but breaks every later ``ALTER TABLE ... RENAME`` (it
-    re-checks all views), which a table-rebuild step would hit. A file that has
-    no `relations` is no project yet; `create_schema` makes the view with the
-    tables (it is in SCHEMA_SQL), so skipping here loses nothing.
-    """
-    have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    if not {"entities", "relations"} <= have:
-        return
-    conn.execute(
-        "CREATE VIEW IF NOT EXISTS live_relations AS "
-        "SELECT * FROM relations "
-        "WHERE from_id NOT IN (SELECT id FROM entities WHERE is_deleted=1) "
-        "AND to_id NOT IN (SELECT id FROM entities WHERE is_deleted=1)")
-
-
-def _m5_indexes(conn: sqlite3.Connection) -> None:
-    """The four lookup indexes (see SCHEMA_SQL): relations by to_id, entities
-    by type and by parent_id, and the deleted-id set the hiding layer reads.
-
-    Written out in full, like steps 3 and 4: a migration is a frozen record.
-    Guarded on the tables it indexes: an index over a missing table errors at
-    once, and a file with no `relations` is no project yet; `create_schema`
-    makes the indexes with the tables (they are in SCHEMA_SQL), so skipping
-    here loses nothing.
-    """
-    have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    if "relations" in have:
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_id, kind)")
-    if "entities" in have:
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type, is_deleted)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_parent ON entities(parent_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_deleted "
-                     "ON entities(id) WHERE is_deleted=1")
-
-
-# Schema history of story.db: one function per change, oldest first. The number
-# of entries is the schema version, stored in the file itself (PRAGMA
-# user_version); a database that has run entry N never runs it again.
+# Schema history AFTER the baseline: one function per change, oldest first.
+# Empty today; the next real change is appended here and takes a database from
+# version 5 to 6. PRAGMA user_version records how far a file has come.
 #
 #   * APPEND ONLY. Editing or reordering an entry that has shipped silently
 #     skips it for every database already past it.
@@ -198,21 +124,19 @@ def _m5_indexes(conn: sqlite3.Connection) -> None:
 #     new database is created with) and a new entry here (what an existing one
 #     is upgraded with).
 #   * Steps run inside a transaction: use conn.execute(), never executescript().
-#   * The first two are guarded ("only if missing") because they also run on
-#     databases made before versioning existed, which carry no version number
-#     and can be in any state. Later entries may assume the shape the earlier
-#     ones leave.
-SCHEMA_MIGRATIONS = [
-    _m1_soft_delete_columns,
-    _m2_draft_status_column,
-    _m3_revisions_table,
-    _m4_live_relations_view,
-    _m5_indexes,
-]
+#   * Entry at position k upgrades BASELINE_VERSION+k to BASELINE_VERSION+k+1
+#     and may assume the shape the earlier ones leave.
+SCHEMA_MIGRATIONS: list = []
+
+LATEST_VERSION = BASELINE_VERSION + len(SCHEMA_MIGRATIONS)
 
 
 class SchemaTooNewError(RuntimeError):
     """The database was written by a newer build than the one running."""
+
+
+class SchemaTooOldError(RuntimeError):
+    """The database predates the baseline this build supports."""
 
 
 def _user_version(conn: sqlite3.Connection) -> int:
@@ -220,33 +144,38 @@ def _user_version(conn: sqlite3.Connection) -> int:
 
 
 def apply_migrations(conn: sqlite3.Connection, migrations: list, *,
-                     name: str = "database") -> None:
+                     baseline: int, name: str = "database") -> None:
     """Bring a database up to date with an ordered list of migration steps.
 
-    ``migrations[i]`` upgrades version i to i+1; ``PRAGMA user_version`` (an
-    integer in the file's header, 0 for a file that was never stamped) says how
-    many have run. All pending steps and the new version number are one
-    transaction, so a failing step leaves the database exactly as it was.
+    ``migrations[k]`` upgrades version baseline+k to baseline+k+1; ``PRAGMA
+    user_version`` (an integer in the file's header) says how far the file has
+    come. All pending steps and the new version number are one transaction, so
+    a failing step leaves the database exactly as it was.
 
     The version is read again once the write lock is held: when two processes
-    open an old database together, the second finds it already upgraded and
+    open a behind database together, the second finds it already upgraded and
     does nothing, instead of running every step twice.
 
-    Refuses a database whose version is higher than this build knows. That file
-    was written by a newer release, and carrying on would run old code against
-    a schema it does not understand.
+    Refuses a file below the baseline — older than this build supports, run
+    tasks/task_40/upgrade_live_db.py on it — and a file above the latest
+    version, which was written by a newer build: carrying on would run old
+    code against a schema it does not understand.
     """
-    target = len(migrations)
+    target = baseline + len(migrations)
     version = _user_version(conn)
     if version == target:
         return
     if version > target:
         raise _too_new(name, version, target)
+    if version < baseline:
+        raise _too_old(name, version, baseline)
     with transaction(conn):
         version = _user_version(conn)
         if version > target:
             raise _too_new(name, version, target)
-        for step in migrations[version:]:
+        if version < baseline:
+            raise _too_old(name, version, baseline)
+        for step in migrations[version - baseline:]:
             step(conn)
         conn.execute(f"PRAGMA user_version = {target}")
 
@@ -258,6 +187,12 @@ def _too_new(name: str, version: int, target: int) -> SchemaTooNewError:
         f"update the app, or restore an older backup.")
 
 
+def _too_old(name: str, version: int, baseline: int) -> SchemaTooOldError:
+    return SchemaTooOldError(
+        f"{name} is older than this build supports (version {version}; the "
+        f"baseline is {baseline}). Run tasks/task_40/upgrade_live_db.py on it.")
+
+
 def get_db(project_path: Path) -> sqlite3.Connection:
     """Open a short-lived connection with WAL mode and busy_timeout.
 
@@ -266,10 +201,11 @@ def get_db(project_path: Path) -> sqlite3.Connection:
     statement in ``with transaction(conn):`` (below) — never issue BEGIN /
     COMMIT / ROLLBACK by hand.
 
-    Also upgrades a database made by an earlier build (see SCHEMA_MIGRATIONS):
-    every caller reaches this first — read-only tools never call
-    create_schema() — so this is where an old database is brought forward. Once
-    it is current, that costs one ``PRAGMA user_version`` per connection.
+    Also upgrades a database one migration behind (a restored backup, see
+    SCHEMA_MIGRATIONS): every caller reaches this first — read-only tools never
+    call create_schema() — so this is where a behind database is brought
+    forward. Once it is current, that costs one ``PRAGMA user_version`` per
+    connection. A file below the baseline is refused, not repaired.
     """
     db_path = project_path / ".story" / "story.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -277,10 +213,13 @@ def get_db(project_path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=3000")
     conn.execute("PRAGMA foreign_keys=ON")
-    # A file with no tables yet has nothing to upgrade; create_schema stamps it.
-    if (_user_version(conn) != len(SCHEMA_MIGRATIONS)
-            and conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1").fetchone()):
-        apply_migrations(conn, SCHEMA_MIGRATIONS, name=f"{project_path.name}/.story/story.db")
+    if _user_version(conn) != LATEST_VERSION:
+        if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1").fetchone():
+            apply_migrations(conn, SCHEMA_MIGRATIONS, baseline=BASELINE_VERSION,
+                             name=f"{project_path.name}/.story/story.db")
+        else:
+            # A file with no tables is a new project: create the schema, stamped.
+            create_schema(conn)
     return conn
 
 
@@ -412,9 +351,9 @@ def create_schema(conn: sqlite3.Connection) -> None:
     ).fetchone() is None
     conn.executescript(SCHEMA_SQL)
     if is_new:
-        conn.execute(f"PRAGMA user_version = {len(SCHEMA_MIGRATIONS)}")
+        conn.execute(f"PRAGMA user_version = {LATEST_VERSION}")
     else:
-        apply_migrations(conn, SCHEMA_MIGRATIONS)
+        apply_migrations(conn, SCHEMA_MIGRATIONS, baseline=BASELINE_VERSION)
 
 
 def has_schema(conn: sqlite3.Connection) -> bool:

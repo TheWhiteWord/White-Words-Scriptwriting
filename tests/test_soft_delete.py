@@ -233,36 +233,6 @@ class TestSchema:
         cols = {r[1] for r in _q(vault, "PRAGMA table_info(entities)")}
         assert {"is_deleted", "deleted_at"} <= cols
 
-    def test_an_older_database_is_migrated(self, tmp_path):
-        """CREATE TABLE IF NOT EXISTS leaves an old table alone; the readers
-        filter on these columns, so an un-migrated project would break them."""
-        import sqlite3 as sq
-        old = tmp_path / "old.db"
-        conn = sq.connect(str(old))
-        conn.executescript(
-            "CREATE TABLE entities (id TEXT PRIMARY KEY, type TEXT, name TEXT,"
-            " one_sentence TEXT, order_key REAL, status TEXT, parent_id TEXT,"
-            " location_id TEXT, extra TEXT);"
-            "CREATE TABLE relations (from_id TEXT, to_id TEXT, kind TEXT,"
-            " note TEXT, \"order\" INTEGER);"
-            "CREATE TABLE sections (rowid_ INTEGER, entity_id TEXT,"
-            " heading TEXT, body TEXT);")
-        conn.commit()
-        conn.close()
-
-        # get_db is where the repair lives, and the path every caller takes.
-        proj = tmp_path / "legacy"
-        (proj / ".story").mkdir(parents=True)
-        (proj / ".story" / "story.db").write_bytes(old.read_bytes())
-
-        from story_architect.core.db import get_db
-        conn = get_db(proj)
-        try:
-            cols = {r[1] for r in conn.execute("PRAGMA table_info(entities)")}
-        finally:
-            conn.close()
-        assert {"is_deleted", "deleted_at"} <= cols
-
     def test_migration_is_idempotent(self, vault):
         """Opening twice adds nothing twice — get_db runs on every connection."""
         from story_architect.core.db import get_db

@@ -1,18 +1,15 @@
-"""The four lookup indexes (migration 5).
+"""The four lookup indexes.
 
 On a populated database the plans for the lookups every reader runs —
 relations by `to_id`, entities by `parent_id` and by `type` — are full scans,
 and so is the deleted-id set the hiding layer reads constantly. These tests
-pin the indexes on both schema paths (fresh create and migration from a
-file stamped 4), the guard for a file with no `relations`, and that SQLite
-actually uses each index.
+pin the indexes on a fresh project and that SQLite actually uses each index.
 """
 import sqlite3
 
 import pytest
 
-from story_architect.core.db import (SCHEMA_MIGRATIONS, create_schema, get_db,
-                                     transaction)
+from story_architect.core.db import create_schema, transaction
 from story_architect.core.writes import create_project
 
 INDEXES = {"idx_relations_to", "idx_entities_type", "idx_entities_parent",
@@ -34,64 +31,13 @@ def _new_project(tmp_path):
     return root / "projects" / "stc"
 
 
-# ─── presence on both schema paths ───
+# ─── presence ───
 
 def test_a_new_project_has_all_four_indexes(tmp_path):
     proj = _new_project(tmp_path)
     conn = sqlite3.connect(str(_db_file(proj)))
     try:
         assert INDEXES <= _index_names(conn)
-    finally:
-        conn.close()
-
-
-def test_a_database_stamped_4_gains_the_indexes_on_open_and_keeps_its_rows(tmp_path):
-    proj = _new_project(tmp_path)
-    c = sqlite3.connect(str(_db_file(proj)))
-    c.execute("INSERT INTO entities (id, type, name) VALUES ('kael', 'character', 'Kael')")
-    c.execute("INSERT INTO entities (id, type, name) VALUES ('s1', 'scene', 'One')")
-    c.execute("INSERT INTO relations (from_id, to_id, kind) VALUES ('kael', 's1', 'character_scene')")
-    before = {t: c.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
-              for t in ("entities", "relations")}
-    for name in INDEXES:
-        c.execute(f"DROP INDEX IF EXISTS {name}")
-    c.execute("PRAGMA user_version = 4")  # as written before migration 5 existed
-    c.commit()
-    c.close()
-
-    conn = get_db(proj)
-    try:
-        assert INDEXES <= _index_names(conn)
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == len(SCHEMA_MIGRATIONS)
-        for table, count in before.items():
-            assert conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == count
-    finally:
-        conn.close()
-
-
-def test_a_legacy_database_without_relations_still_migrates(tmp_path):
-    """The legacy shape (full pre-soft-delete columns, no relations table):
-    the guard skips the relations index instead of erroring on a missing table."""
-    proj = tmp_path / "legacy"
-    _db_file(proj).parent.mkdir(parents=True)
-    c = sqlite3.connect(str(_db_file(proj)))
-    c.executescript("""
-        CREATE TABLE entities (id TEXT PRIMARY KEY, type TEXT, name TEXT,
-                               one_sentence TEXT, order_key REAL, status TEXT,
-                               parent_id TEXT, location_id TEXT, extra TEXT);
-        INSERT INTO entities (id, type, name) VALUES ('a1', 'character', 'Old Hero');
-        CREATE TABLE drafts (id TEXT PRIMARY KEY, ops TEXT NOT NULL, prev_ops TEXT,
-                             summary TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
-    """)
-    c.close()
-    conn = get_db(proj)
-    try:
-        names = _index_names(conn)
-        assert INDEXES - {"idx_relations_to"} <= names
-        assert "idx_relations_to" not in names
-        assert conn.execute("SELECT name FROM entities WHERE is_deleted=0").fetchall() \
-            == [("Old Hero",)]
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == len(SCHEMA_MIGRATIONS)
     finally:
         conn.close()
 

@@ -17,6 +17,7 @@ import sqlite3
 import pytest
 
 import twin_helpers as twin
+from story_architect.core import db as core_db
 from story_architect.core.manual_entities import load_entity
 from story_architect.core.references import (REFERENCE_COLUMNS, REFERENCE_LISTS,
                                              REFERENCE_MAPS, dead_ids, live_column,
@@ -280,11 +281,27 @@ def test_a_delete_changes_no_row_but_the_flags(fixture_path, tmp_path):
         assert changed <= flag_cols, (eid, [cols[i] for i in changed - flag_cols])
 
 
-# ─── an old database ───
+# ─── a database one step behind ───
 
-def test_every_reader_opens_a_database_that_has_not_been_upgraded_yet(fixture_path, tmp_path):
+@pytest.fixture
+def one_step(monkeypatch):
+    """A test-only migration after the baseline. LATEST_VERSION is derived at
+    import, so it is patched alongside the list; tests stamp a built project
+    BASELINE_VERSION to make it one step behind."""
+    calls = []
+
+    def step(conn):
+        calls.append(1)
+        conn.execute("CREATE TABLE test_only_step (x)")
+
+    monkeypatch.setattr(core_db, "SCHEMA_MIGRATIONS", [step])
+    monkeypatch.setattr(core_db, "LATEST_VERSION", core_db.BASELINE_VERSION + 1)
+    return calls
+
+
+def test_every_reader_opens_a_database_one_step_behind(fixture_path, tmp_path, one_step):
     """The readers use the live_relations view. None of them may be the first
-    thing to open an old file and meet a database without it."""
+    thing to open a behind file without bringing it forward."""
     from story_architect.app import services
     from story_architect.core import db, manual_edits, manual_entities, manual_structure, track
     from story_architect.tools import story_export, story_load, story_retrieve
@@ -305,10 +322,13 @@ def test_every_reader_opens_a_database_that_has_not_been_upgraded_yet(fixture_pa
         "export": lambda p, v: story_export.handler({"project": SLUG}, root_path=str(v)),
     }
     for name, call in calls.items():
-        p, v = twin.build(fixture_path, tmp_path, f"old-{name}")
+        p, v = twin.build(fixture_path, tmp_path, f"behind-{name}")
+        # twin.build already opened the file under the patched LATEST: undo that
+        # upgrade so the reader is the first to open a genuinely behind file.
         c = sqlite3.connect(str(p / ".story" / "story.db"))
-        c.execute("DROP VIEW live_relations")
-        c.execute("PRAGMA user_version = 3")
+        c.execute("DROP TABLE IF EXISTS test_only_step")
+        c.execute(f"PRAGMA user_version = {core_db.BASELINE_VERSION}")
         c.close()
         result = call(p, v)
         assert "no such table" not in json.dumps(result, default=str), name
+    assert one_step  # readers that open through get_db brought their file forward

@@ -258,8 +258,7 @@ def test_bad_requests_are_errors_not_crashes(fixture_path, args, fragment):
 
 # ─── schema ───
 
-def test_a_new_project_has_the_table_and_an_old_one_gains_it(tmp_path):
-    from story_architect.core.db import SCHEMA_MIGRATIONS, get_db
+def test_a_new_project_has_the_table_and_index(tmp_path):
     from story_architect.core.writes import create_project
 
     root = tmp_path / "v"
@@ -267,14 +266,4 @@ def test_a_new_project_has_the_table_and_an_old_one_gains_it(tmp_path):
     create_project("stc", {"name": "STC", "logline": "L"}, root)
     proj = root / "projects" / "stc"
     assert _sql(proj, "SELECT 1 FROM sqlite_master WHERE name='revisions'")
-
-    # as built before this step existed: stamped 2, no revisions table
-    _sql(proj, "DROP TABLE revisions")
-    _sql(proj, "PRAGMA user_version = 2")
-    conn = get_db(proj)
-    try:
-        assert conn.execute("SELECT 1 FROM sqlite_master WHERE name='revisions'").fetchone()
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == len(SCHEMA_MIGRATIONS)
-        assert conn.execute("SELECT 1 FROM sqlite_master WHERE name='idx_revisions_section'").fetchone()
-    finally:
-        conn.close()
+    assert _sql(proj, "SELECT 1 FROM sqlite_master WHERE name='idx_revisions_section'")

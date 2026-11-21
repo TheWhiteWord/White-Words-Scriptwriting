@@ -364,8 +364,7 @@ def _list_deleted(project_path: Path, args: dict) -> dict:
     its own entry.
 
     `purge_eligible` says whether a purge with the current age floor would
-    remove it. Rows with no `deleted_at` (deleted by an earlier build) are listed
-    too, and never eligible: bulk purge cannot see them.
+    remove it.
     """
     from story_architect.core.db import get_db
 
@@ -385,7 +384,7 @@ def _list_deleted(project_path: Path, args: dict) -> dict:
     entries, includes = {}, {}
     for row in rows:
         parent = by_id.get(row[4])
-        if parent is not None and row[3] is not None and parent[3] == row[3]:
+        if parent is not None and parent[3] == row[3]:
             # Same deletion stamp as its parent: deleted in the same operation.
             includes.setdefault(parent[0], []).append(
                 {"type": row[1], "id": row[0], "name": row[2] or row[0]})
@@ -398,7 +397,7 @@ def _list_deleted(project_path: Path, args: dict) -> dict:
             "id": r[0],
             "name": r[2] or r[0],
             "deleted_at": r[3],
-            "purge_eligible": r[3] is not None and r[3] <= cutoff,
+            "purge_eligible": r[3] <= cutoff,
             "includes": includes.get(r[0], []),
         }
         for r in entries.values()

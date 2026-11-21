@@ -195,19 +195,38 @@ def test_restore_covers_every_table(fixture_path):
                                    "entity_id='central-room-day' AND heading='Content'")[0][0]
 
 
-def test_restoring_an_older_snapshot_upgrades_it(fixture_path):
-    """The version number travels with the backup; a snapshot from before the
-    last schema step is brought forward after it is restored."""
-    from story_architect.core.db import SCHEMA_MIGRATIONS
+def test_restoring_a_backup_one_step_behind_upgrades_it(fixture_path, monkeypatch):
+    """The version number travels with the backup; a snapshot one step behind
+    is brought forward after it is restored."""
+    from story_architect.core import db as core_db
+    from story_architect.core.db import BASELINE_VERSION
+
+    def step(conn):
+        conn.execute("CREATE TABLE test_only_step (x)")
+
     snap = Path(create_backup(fixture_path)).name
     c = sqlite3.connect(str(fixture_path / ".story" / snap))
-    c.execute("DROP TABLE revisions")
-    c.execute("PRAGMA user_version = 2")
+    c.execute(f"PRAGMA user_version = {BASELINE_VERSION}")   # one behind the patched LATEST
     c.commit()
     c.close()
+    monkeypatch.setattr(core_db, "SCHEMA_MIGRATIONS", [step])
+    monkeypatch.setattr(core_db, "LATEST_VERSION", BASELINE_VERSION + 1)
     restore_backup(fixture_path, snap)
-    assert _sql(fixture_path, "PRAGMA user_version")[0][0] == len(SCHEMA_MIGRATIONS)
-    assert _sql(fixture_path, "SELECT 1 FROM sqlite_master WHERE name='revisions'")
+    assert _sql(fixture_path, "PRAGMA user_version")[0][0] == BASELINE_VERSION + 1
+    assert _sql(fixture_path, "SELECT 1 FROM sqlite_master WHERE name='test_only_step'")
+
+
+def test_a_backup_below_the_baseline_is_refused(fixture_path):
+    from story_architect.core.db import BASELINE_VERSION
+    snap = Path(create_backup(fixture_path)).name
+    c = sqlite3.connect(str(fixture_path / ".story" / snap))
+    c.execute(f"PRAGMA user_version = {BASELINE_VERSION - 1}")
+    c.commit()
+    c.close()
+    before = _name(fixture_path)
+    with pytest.raises(ValueError, match="older than this build supports"):
+        restore_backup(fixture_path, snap)
+    assert _name(fixture_path) == before
 
 
 def test_other_open_connections_see_the_restore_and_the_watcher_fires(fixture_path):
