@@ -23,7 +23,6 @@ must present it, and a mismatch (the agent committed in between) is refused.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
@@ -36,6 +35,7 @@ from .entity import (ENTITY_COLUMN_MAP, REVERSED_RELATION_KINDS, _RELATION_FIELD
                      PlotRoleError, coerce_number, standard_sections,
                      validate_scene_plot_roles)
 from .scene_script import scene_heading
+from .versions import token
 
 # What the form can edit today. The spec builder is generic; this is the gate,
 # so a type goes live when its form has been exercised, not when its schema exists.
@@ -638,8 +638,7 @@ def _persp_storage(form: dict) -> dict:
 
 
 def _version(values: dict, sections: dict) -> str:
-    blob = json.dumps({"v": values, "s": sections}, sort_keys=True, ensure_ascii=False)
-    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+    return token({"v": values, "s": sections})
 
 
 def load_entity(project_path: Path, entity_type: str, entity_id: str, *, conn=None) -> dict:
@@ -1165,8 +1164,10 @@ def _write_sheet(project_path: Path, scene_id: str, new: dict, old: dict, saved_
                           {"scene": scene_id, **{k: v for k, v in new.items() if v not in ("", [], None)}}, {},
                           conn=conn)
     except ValueError as e:
-        raise EntityInvalid({"_form": (("The scene was saved, but the beats were not: " if saved_scene else "")
-                                       + str(e))})
+        # saved_scene is only True on the create path, which is not one transaction;
+        # an edit rolls the scene back with the beats, so nothing was saved.
+        raise EntityInvalid({"_form": (("The scene was saved, but the beats were not: " if saved_scene
+                                        else "Nothing was saved: ") + str(e))})
 
 
 def _refuse_singleton(entity_type: str, creating: bool = False, deleting: bool = False) -> None:
@@ -1234,44 +1235,50 @@ def create_form_entity(project_path: Path, entity_type: str, payload: dict, *, c
 
 def edit_form_entity(project_path: Path, entity_type: str, entity_id: str, payload: dict,
                      *, conn=None) -> dict:
+    from .db import transaction
     from .writes import edit_entity
 
     _require_type(entity_type)
-    current = load_entity(project_path, entity_type, entity_id, conn=conn)
-    entity_id = current["id"]
-    if (payload or {}).get("base_version") != current["version"]:
-        raise EntityConflict(current["version"])
-
-    values, errors = _clean(entity_type, (payload or {}).get("values") or {})
-    sections = _clean_sections(entity_type, (payload or {}).get("sections"), errors)
     own_conn = conn is None
-    block_conn = conn if conn is not None else get_db(project_path)
+    if own_conn:
+        conn = get_db(project_path)
     try:
-        warnings, _ = _validate(block_conn, entity_type, entity_id, values, errors, baseline=current["values"])
+        # The write lock is held from before the token compare until after the
+        # write, so nobody can commit between the check and the save — and a
+        # failure anywhere (beats included) rolls the whole save back.
+        with transaction(conn):
+            current = load_entity(project_path, entity_type, entity_id, conn=conn)
+            entity_id = current["id"]
+            if (payload or {}).get("base_version") != current["version"]:
+                raise EntityConflict(current["version"])
+
+            values, errors = _clean(entity_type, (payload or {}).get("values") or {})
+            sections = _clean_sections(entity_type, (payload or {}).get("sections"), errors)
+            warnings, _ = _validate(conn, entity_type, entity_id, values, errors, baseline=current["values"])
+            if errors:
+                raise EntityInvalid(errors, warnings)
+
+            # Only what changed is written: a field the person never touched is not
+            # rewritten, so an agent edit to it elsewhere is not clobbered by a stale copy.
+            changed = {k: v for k, v in values.items() if current["values"].get(k) != v}
+            changed.update({h: b for h, b in sections.items() if current["sections"].get(h, "") != b})
+            sheet = changed.pop(SHEET_KEY, None)
+            if not changed and sheet is None:
+                return {**current, "unchanged": True, "warnings": warnings}
+            if changed:
+                try:
+                    edit_entity(project_path, entity_type, entity_id, _to_storage(entity_type, changed), SUMMARY,
+                                conn=conn)
+                except ValueError as e:
+                    raise _write_error(e)
+            if sheet is not None:
+                _write_sheet(project_path, entity_id, sheet, current["values"].get(SHEET_KEY) or BLANK_SHEET,
+                             saved_scene=False, conn=conn)
+            return {**load_entity(project_path, entity_type, entity_id, conn=conn), "unchanged": False,
+                    "warnings": warnings}
     finally:
         if own_conn:
-            block_conn.close()
-    if errors:
-        raise EntityInvalid(errors, warnings)
-
-    # Only what changed is written: a field the person never touched is not
-    # rewritten, so an agent edit to it elsewhere is not clobbered by a stale copy.
-    changed = {k: v for k, v in values.items() if current["values"].get(k) != v}
-    changed.update({h: b for h, b in sections.items() if current["sections"].get(h, "") != b})
-    sheet = changed.pop(SHEET_KEY, None)
-    if not changed and sheet is None:
-        return {**current, "unchanged": True, "warnings": warnings}
-    if changed:
-        try:
-            edit_entity(project_path, entity_type, entity_id, _to_storage(entity_type, changed), SUMMARY,
-                        conn=conn)
-        except ValueError as e:
-            raise _write_error(e)
-    if sheet is not None:
-        _write_sheet(project_path, entity_id, sheet, current["values"].get(SHEET_KEY) or BLANK_SHEET,
-                     saved_scene=bool(changed), conn=conn)
-    return {**load_entity(project_path, entity_type, entity_id, conn=conn), "unchanged": False,
-            "warnings": warnings}
+            conn.close()
 
 
 # ─── Delete ──────────────────────────────────────────────────────────────────

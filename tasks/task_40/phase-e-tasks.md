@@ -750,10 +750,12 @@ changes it → save with the old token → `EntityConflict` (HTTP 409 with `curr
   changes, you went too far.
 
 ### Done when
-- [ ] `core/versions.py` used by all three. · [ ] The three saves run in one transaction
-      with the check inside. · [ ] One "nobody can commit in between" test per path, each
-      mutation-checked. · [ ] Partial-save wording and tests updated. · [ ] 409 bodies unchanged.
-      · [ ] Close-out.
+- [x] `core/versions.py` used by all three. · [x] The three saves run in one transaction
+      with the check inside. · [x] One "nobody can commit in between" test per path, each
+      mutation-checked. *(Plus a structure rollback test; 5 mutations, exact failure sets —
+      Progress log.)* · [x] Partial-save wording and tests updated. *(The create path keeps
+      its still-true partial message — see Discoveries.)* · [x] 409 bodies unchanged.
+      · [x] Close-out.
 
 ---
 
@@ -1020,7 +1022,7 @@ Baseline at start: `1602 passed, 1 failed` (expected `1602 passed, 1 failed`).
 | T2 indexes | done | `e-t2-indexes` (branch tip) | 1629 passed, 1 failed | +7 tests, 5 mutations verified; owner-approved legacy-shape edits in 3 test files (Discoveries) |
 | T2b baseline (drop legacy support) | done | `e-t2b-baseline` (branch tip) | 1619 passed, 1 failed | −10 net: legacy-only tests deleted, mechanism tests added; 8 mutations verified; live DB upgraded 0→5; code diff 342 insertions / 612 deletions (Discoveries) |
 | T3 connection plumbing | done | `e-t3-connection-plumbing` (branch tip) | 1625 passed, 1 failed | +6 tests (uncommitted-row visibility ×3 parametrized, hidden-connection, ownership, rollback); 6 mutations verified (M1→[location], M2→[plot], M3→[value-turns], M4→all 6, M5→rollback+ownership+hidden, M6→5); 4 stub signatures updated owner-approved; `plan`/`delete_form_entity` added to the worklist (Discoveries) |
-| T4 atomic version checks | | | | |
+| T4 atomic version checks | done | `e-t4-atomic-version-checks` (branch tip) | 1629 passed, 1 failed | +4 tests (3 race guarantees, 1 structure rollback); 1 partial-landing test rewritten (TR-6a); 5 mutations verified (M1→[form-race, beats], M2→[structure-race, structure-rollback], M3→[script-race], M4→[structure-rollback], M5→[beats]); create path keeps its partial message (Discoveries) |
 | T5 atomic draft commit | | | | |
 | T6 draft status | | | | |
 | T7 UTC (optional) | | | | |
@@ -1158,6 +1160,35 @@ contradicted this file):
   reported M1's failures. With bytecode writing disabled all six mutations
   attributed correctly (worktree at HEAD + plumbed sources, restored after
   each run; worktree removed afterwards).
+- **T4: the token values did not change.** Entity and script tokens already
+  used `token`'s exact serialization; the structure token moved from
+  `json.dumps(flat)` to `sort_keys=True, ensure_ascii=False`, which is
+  byte-identical for lists of ASCII slugs. Grep confirmed no test pins a token
+  value or length — they pin equality/inequality and conflict behaviour.
+- **T4: `create_form_entity` is still create-then-beats (two transactions).**
+  It has no version token to make atomic and is not one of T4's three paths,
+  so it was left alone (scope discipline). Its "The scene was saved, but the
+  beats were not" message is still TRUE there, which is why `_write_sheet`
+  keeps the `saved_scene` parameter: the edit path now passes `False` and says
+  "Nothing was saved: …". A future atomicity pass could wrap the create path
+  and delete the parameter.
+- **T4: one partial-landing test rewritten, not deleted (TR-6a).**
+  `test_manual_scene_editors.py::test_scene_saved_but_beats_failed_says_which`
+  pinned the old behaviour twice — the partial message AND the scene edit
+  surviving the beats failure (`one_sentence == "Saved."`). T4 step 5 directs
+  updating these tests. It is now `test_beats_failure_saves_nothing`: message
+  says nothing was saved, the scene edit is rolled back, no beats record
+  exists, and the version token is unchanged.
+- **T4: the fixture has one act and one sequence.** A pure within-sequence
+  reorder only calls `reorder`, so the structure race test creates a second
+  sequence and moves a scene ACROSS sequences — that move goes through
+  `edit_entity`, the same seam the other two race tests watch. The structure
+  rollback test moves two scenes and fails the second `edit_entity` call: the
+  first move must not survive it.
+- **T4: `edit_entity`'s validation-before-transaction order was left alone**,
+  as briefed: with the caller's transaction already open its internal
+  `with transaction` is a savepoint, so the read-then-write gap is closed
+  without restructuring it.
 
 ---
 

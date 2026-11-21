@@ -18,7 +18,6 @@ person decides, rather than one side's work silently overwriting the other's.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
@@ -28,6 +27,7 @@ from .db import get_db
 from .references import dead_ids, live_column, live_extra
 from .entity import ENTITY_COLUMN_MAP, unfilled_fields
 from .fountain_lexer import SCENE_HEADING_RE
+from .versions import token
 
 
 class ScriptError(ValueError):
@@ -106,7 +106,7 @@ def _registry(conn) -> tuple[list[dict], dict]:
 
 def content_hash(state: dict) -> str:
     """The change token: what the editor sees, and what a save overwrites."""
-    blob = json.dumps({
+    return token({
         "content": state["raw_content"],
         "int_ext": state["int_ext"],
         "place": state["place"],
@@ -114,8 +114,7 @@ def content_hash(state: dict) -> str:
         "time_of_day": state["time_of_day"],
         "forced_heading": state["forced_heading"],
         "characters": sorted(state["characters"]),
-    }, sort_keys=True, ensure_ascii=False)
-    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+    })
 
 
 def _adhoc_elsewhere(conn, characters: list[dict], skip: str) -> list[dict]:
@@ -331,6 +330,7 @@ def save_scene_script(project_path: Path, scene_id: str, payload: dict, *, conn=
     cast together, so the heading composed at assembly and the scene's fields
     cannot disagree. Does not change `status`.
     """
+    from .db import transaction
     from .writes import edit_entity
 
     if not isinstance(payload, dict):
@@ -341,42 +341,46 @@ def save_scene_script(project_path: Path, scene_id: str, payload: dict, *, conn=
         raise ScriptError("`heading` must be an object.")
 
     own_conn = conn is None
-    block_conn = conn if conn is not None else get_db(project_path)
+    if own_conn:
+        conn = get_db(project_path)
     try:
-        st = _scene_state(block_conn, scene_id)
-        characters, locations = _registry(block_conn)
+        # The write lock is held from before the hash compare until after the
+        # write, so nobody can commit between the check and the save.
+        with transaction(conn):
+            st = _scene_state(conn, scene_id)
+            characters, locations = _registry(conn)
+
+            if payload.get("base_hash") != content_hash(st):
+                raise ScriptConflict(content_hash(st))
+            if st["status"] == "locked":
+                raise ScriptLocked("This scene is locked. Unlock it before editing.")
+
+            fields = _heading_fields(hd, locations)
+
+            # Cast: who the script names (registered), plus whoever is added by hand.
+            by_id = {c["id"]: c for c in characters}
+            extra_cast = payload.get("extra_cast") or []
+            bad = [c for c in extra_cast if c not in by_id]
+            if bad:
+                raise ScriptError(f"Character not found: {', '.join(bad)}")
+            cast_ids = [c["id"] for c in ss.script_cast(blocks, characters) if c["id"]]
+            cast = list(dict.fromkeys(cast_ids + list(extra_cast)))
+
+            data = {"Content": ss.serialize_blocks(blocks), **fields, "characters": cast}
+            previous = st["raw_content"]
+            try:
+                result = edit_entity(
+                    project_path, "scene", scene_id, data,
+                    "Script edited by hand in the script editor", conn=conn)
+            except ValueError as e:
+                # The write boundary refuses a scene whose merged state has no heading.
+                raise ScriptError(str(e))
+            if result.get("success") is False or result.get("error"):
+                raise ScriptError(result.get("error") or result.get("message") or "Save failed.")
+
+            fresh = load_scene_script(project_path, scene_id, conn=conn)
+            fresh["previous_content"] = previous  # lets the client offer an in-session undo
+            return fresh
     finally:
         if own_conn:
-            block_conn.close()
-
-    if payload.get("base_hash") != content_hash(st):
-        raise ScriptConflict(content_hash(st))
-    if st["status"] == "locked":
-        raise ScriptLocked("This scene is locked. Unlock it before editing.")
-
-    fields = _heading_fields(hd, locations)
-
-    # Cast: who the script names (registered), plus whoever is added by hand.
-    by_id = {c["id"]: c for c in characters}
-    extra_cast = payload.get("extra_cast") or []
-    bad = [c for c in extra_cast if c not in by_id]
-    if bad:
-        raise ScriptError(f"Character not found: {', '.join(bad)}")
-    cast_ids = [c["id"] for c in ss.script_cast(blocks, characters) if c["id"]]
-    cast = list(dict.fromkeys(cast_ids + list(extra_cast)))
-
-    data = {"Content": ss.serialize_blocks(blocks), **fields, "characters": cast}
-    previous = st["raw_content"]
-    try:
-        result = edit_entity(
-            project_path, "scene", scene_id, data,
-            "Script edited by hand in the script editor", conn=conn)
-    except ValueError as e:
-        # The write boundary refuses a scene whose merged state has no heading.
-        raise ScriptError(str(e))
-    if result.get("success") is False or result.get("error"):
-        raise ScriptError(result.get("error") or result.get("message") or "Save failed.")
-
-    fresh = load_scene_script(project_path, scene_id, conn=conn)
-    fresh["previous_content"] = previous  # lets the client offer an in-session undo
-    return fresh
+            conn.close()

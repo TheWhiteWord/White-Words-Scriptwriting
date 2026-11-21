@@ -19,12 +19,12 @@ Nothing is invented: a move is `edit_entity`, a renumber is `reorder`.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
 from .db import get_db
 from .scene_script import scene_heading
+from .versions import token
 
 SUMMARY = "Reordered by hand"
 
@@ -79,7 +79,7 @@ def _shape(acts, seqs, scenes) -> dict:
 def _version(tree: dict) -> str:
     flat = [[a["id"], [[q["id"], [s["id"] for s in q["scenes"]]] for q in a["sequences"]]] for a in tree["acts"]]
     flat.append([s["id"] for s in tree["unassigned"]])
-    return hashlib.sha256(json.dumps(flat).encode()).hexdigest()[:16]
+    return token(flat)
 
 
 def load_tree(project_path: Path, *, conn=None) -> dict:
@@ -246,53 +246,59 @@ def plan(project_path: Path, payload: dict, *, conn=None) -> dict:
 
 def apply(project_path: Path, payload: dict, *, conn=None) -> dict:
     """Write a planned shape. Everything is validated first; the writes then go in an
-    order that keeps acts, sequences and scenes agreeing with each other."""
+    order that keeps acts, sequences and scenes agreeing with each other.
+
+    One transaction: the write lock is held from before the token compare until
+    after the last write, so nobody can commit in between, and a failure anywhere
+    rolls every step back — nothing is changed.
+    """
+    from .db import transaction
     from .writes import edit_entity, reorder
 
-    p = plan(project_path, payload, conn=conn)
-    if p["unchanged"]:
-        return {"applied": 0, "tree": p["current"], "version": p["current"]["version"]}
-    cur, target = p["current"], p["target"]
-    old = _index(cur)
-    new_act_of_seq = {q["id"]: a["id"] for a in target["acts"] for q in a["sequences"]}
-    steps = 0
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db(project_path)
     try:
-        # 1. Sequences into their new acts.
-        for q, act in new_act_of_seq.items():
-            if old[q][0] != act:
-                edit_entity(project_path, "sequence", q, {"act_id": act}, SUMMARY, conn=conn); steps += 1
-        # 2. Scenes into their new sequence — and the act that sequence is now in.
-        own_conn = conn is None
-        block_conn = conn if conn is not None else get_db(project_path)
-        try:
-            cur_act = {sid: (json.loads(ex) if ex else {}).get("act_id", "")
-                       for sid, ex in block_conn.execute("SELECT id, extra FROM entities WHERE type='scene' AND is_deleted=0")}
-        finally:
-            if own_conn:
-                block_conn.close()
-        for a in target["acts"]:
-            for q in a["sequences"]:
-                for sid in q["scenes"]:
-                    if old[sid][0] != q["id"] or cur_act.get(sid) != a["id"]:
-                        edit_entity(project_path, "scene", sid,
-                                    {"sequence_id": q["id"], "act_id": a["id"]}, SUMMARY, conn=conn); steps += 1
-        # 3. Renumber every list whose membership or order changed.
-        for a in target["acts"]:
-            ids = [q["id"] for q in a["sequences"]]
-            if ids and ids != [q["id"] for ca in cur["acts"] if ca["id"] == a["id"] for q in ca["sequences"]]:
-                reorder(project_path, "sequence", ids, SUMMARY, conn=conn); steps += 1
-            for q in a["sequences"]:
-                before = [s["id"] for ca in cur["acts"] for cq in ca["sequences"] if cq["id"] == q["id"]
-                          for s in cq["scenes"]]
-                if q["scenes"] and q["scenes"] != before:
-                    reorder(project_path, "scene", q["scenes"], SUMMARY, conn=conn); steps += 1
-        # 4. Acts have no parent, so `reorder` does not cover them: number them directly.
-        act_ids = [a["id"] for a in target["acts"]]
-        if act_ids != [a["id"] for a in cur["acts"]]:
-            for i, aid in enumerate(act_ids, 1):
-                edit_entity(project_path, "act", aid, {"order": i}, SUMMARY, conn=conn); steps += 1
-    except ValueError as e:
-        raise StructureError(f"Stopped after {steps} change{'s' if steps != 1 else ''}: {e} "
-                             f"Reload to see where things stand.")
-    tree = load_tree(project_path, conn=conn)
-    return {"applied": len(p["changes"]), "tree": tree, "version": tree["version"]}
+        with transaction(conn):
+            p = plan(project_path, payload, conn=conn)
+            if p["unchanged"]:
+                return {"applied": 0, "tree": p["current"], "version": p["current"]["version"]}
+            cur, target = p["current"], p["target"]
+            old = _index(cur)
+            new_act_of_seq = {q["id"]: a["id"] for a in target["acts"] for q in a["sequences"]}
+            try:
+                # 1. Sequences into their new acts.
+                for q, act in new_act_of_seq.items():
+                    if old[q][0] != act:
+                        edit_entity(project_path, "sequence", q, {"act_id": act}, SUMMARY, conn=conn)
+                # 2. Scenes into their new sequence — and the act that sequence is now in.
+                cur_act = {sid: (json.loads(ex) if ex else {}).get("act_id", "")
+                           for sid, ex in conn.execute("SELECT id, extra FROM entities WHERE type='scene' AND is_deleted=0")}
+                for a in target["acts"]:
+                    for q in a["sequences"]:
+                        for sid in q["scenes"]:
+                            if old[sid][0] != q["id"] or cur_act.get(sid) != a["id"]:
+                                edit_entity(project_path, "scene", sid,
+                                            {"sequence_id": q["id"], "act_id": a["id"]}, SUMMARY, conn=conn)
+                # 3. Renumber every list whose membership or order changed.
+                for a in target["acts"]:
+                    ids = [q["id"] for q in a["sequences"]]
+                    if ids and ids != [q["id"] for ca in cur["acts"] if ca["id"] == a["id"] for q in ca["sequences"]]:
+                        reorder(project_path, "sequence", ids, SUMMARY, conn=conn)
+                    for q in a["sequences"]:
+                        before = [s["id"] for ca in cur["acts"] for cq in ca["sequences"] if cq["id"] == q["id"]
+                                  for s in cq["scenes"]]
+                        if q["scenes"] and q["scenes"] != before:
+                            reorder(project_path, "scene", q["scenes"], SUMMARY, conn=conn)
+                # 4. Acts have no parent, so `reorder` does not cover them: number them directly.
+                act_ids = [a["id"] for a in target["acts"]]
+                if act_ids != [a["id"] for a in cur["acts"]]:
+                    for i, aid in enumerate(act_ids, 1):
+                        edit_entity(project_path, "act", aid, {"order": i}, SUMMARY, conn=conn)
+            except ValueError as e:
+                raise StructureError(f"Nothing was changed: {e}")
+            tree = load_tree(project_path, conn=conn)
+            return {"applied": len(p["changes"]), "tree": tree, "version": tree["version"]}
+    finally:
+        if own_conn:
+            conn.close()

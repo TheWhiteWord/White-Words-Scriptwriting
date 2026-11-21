@@ -258,7 +258,10 @@ class TestBeatSheet:
                                                           "values": {**cur["values"], "one_sentence": "x"}})
         assert me.load_entity(project, "scene", "sc1")["values"]["beat_sheet"]["turning_point"] == "Agent rewrote this."
 
-    def test_scene_saved_but_beats_failed_says_which(self, project, monkeypatch):
+    def test_beats_failure_saves_nothing(self, project, monkeypatch):
+        # T4 rewrote this: the save is one transaction now, so a beats failure
+        # rolls the scene edit back with it. The old test pinned the partial
+        # landing ("scene was saved, beats were not") that no longer exists.
         from story_architect.core import writes
         real = writes.create_entity
         def boom(p, t, i, fm, sec=None, conn=None):
@@ -270,8 +273,13 @@ class TestBeatSheet:
         with pytest.raises(me.EntityInvalid) as e:
             me.edit_form_entity(project, "scene", "sc1", {"base_version": cur["version"], "values": {
                 **cur["values"], "one_sentence": "Saved.", "beat_sheet": SHEET}})
-        assert "The scene was saved, but the beats were not: beats exploded" in e.value.errors["_form"]
-        assert me.load_entity(project, "scene", "sc1")["values"]["one_sentence"] == "Saved."
+        assert "Nothing was saved" in e.value.errors["_form"]
+        assert "beats exploded" in e.value.errors["_form"]
+        after = me.load_entity(project, "scene", "sc1")
+        assert after["values"]["one_sentence"] == cur["values"]["one_sentence"]
+        assert after["values"]["beat_sheet"] == me.BLANK_SHEET
+        assert _extra(project, "sc1-beats") is None
+        assert after["version"] == cur["version"]
 
     def test_deleting_the_scene_takes_its_beats_and_says_so(self, project):
         _save(project, beat_sheet=SHEET)
