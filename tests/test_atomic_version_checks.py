@@ -4,6 +4,8 @@ The old race (check on one connection, write on another) cannot be produced
 reliably with threads, so these tests hold the guarantee that removes it:
 while a save is between its check and its write, nobody else can commit.
 A competitor connection that tries to write mid-save must be locked out.
+The create path has no token, but the same all-or-nothing rule: a new scene
+and its beats record land together or not at all.
 """
 import sqlite3
 
@@ -94,6 +96,33 @@ def test_script_save_nobody_commits_between_check_and_write(fixture_path, monkey
     out = manual_edits.save_scene_script(p, sid, payload)
     assert "locked" in seen["outcome"]
     assert "Still." in out["content"]
+    twin.assert_no_orphans(p)
+
+
+def test_create_failure_lands_nothing(fixture_path, monkeypatch):
+    """A new scene and its beats record land together or not at all: the beats
+    create refuses, and the scene must not survive it."""
+    p = fixture_path
+    seq_id = twin.sql(p, "SELECT id FROM entities WHERE type='sequence' AND is_deleted=0 LIMIT 1")[0][0]
+    before = twin.snapshot(p)
+    real = writes.create_entity
+
+    def boom(p_, t, i, fm, sec=None, conn=None):
+        if t == "scene_beats":
+            raise ValueError("beats exploded")
+        return real(p_, t, i, fm, sec or {}, conn=conn)
+
+    monkeypatch.setattr(writes, "create_entity", boom)
+    with pytest.raises(manual_entities.EntityInvalid) as e:
+        manual_entities.create_form_entity(p, "scene", {"values": {
+            "title": "T4 Create", "sequence_id": seq_id,
+            "beat_sheet": {"driver": "kael", "turning_point": "", "true_character": [],
+                           "changes": [], "beats": [
+                               {"action": {"by": "kael", "surface": "x", "subtext": ""},
+                                "reaction": {"by": "", "surface": "", "subtext": ""}, "gap": ""}]}}})
+    assert "Nothing was saved" in e.value.errors["_form"]
+    assert "beats exploded" in e.value.errors["_form"]
+    assert twin.snapshot(p) == before
     twin.assert_no_orphans(p)
 
 

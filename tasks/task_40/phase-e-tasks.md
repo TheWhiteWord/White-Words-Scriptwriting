@@ -752,9 +752,9 @@ changes it → save with the old token → `EntityConflict` (HTTP 409 with `curr
 ### Done when
 - [x] `core/versions.py` used by all three. · [x] The three saves run in one transaction
       with the check inside. · [x] One "nobody can commit in between" test per path, each
-      mutation-checked. *(Plus a structure rollback test; 5 mutations, exact failure sets —
-      Progress log.)* · [x] Partial-save wording and tests updated. *(The create path keeps
-      its still-true partial message — see Discoveries.)* · [x] 409 bodies unchanged.
+      mutation-checked. *(Plus structure and create rollback tests; 6 mutations, exact failure
+      sets — Progress log.)* · [x] Partial-save wording and tests updated. *(Owner-approved
+      follow-up wrapped the create path too — see Discoveries.)* · [x] 409 bodies unchanged.
       · [x] Close-out.
 
 ---
@@ -1022,7 +1022,7 @@ Baseline at start: `1602 passed, 1 failed` (expected `1602 passed, 1 failed`).
 | T2 indexes | done | `e-t2-indexes` (branch tip) | 1629 passed, 1 failed | +7 tests, 5 mutations verified; owner-approved legacy-shape edits in 3 test files (Discoveries) |
 | T2b baseline (drop legacy support) | done | `e-t2b-baseline` (branch tip) | 1619 passed, 1 failed | −10 net: legacy-only tests deleted, mechanism tests added; 8 mutations verified; live DB upgraded 0→5; code diff 342 insertions / 612 deletions (Discoveries) |
 | T3 connection plumbing | done | `e-t3-connection-plumbing` (branch tip) | 1625 passed, 1 failed | +6 tests (uncommitted-row visibility ×3 parametrized, hidden-connection, ownership, rollback); 6 mutations verified (M1→[location], M2→[plot], M3→[value-turns], M4→all 6, M5→rollback+ownership+hidden, M6→5); 4 stub signatures updated owner-approved; `plan`/`delete_form_entity` added to the worklist (Discoveries) |
-| T4 atomic version checks | done | `e-t4-atomic-version-checks` (branch tip) | 1629 passed, 1 failed | +4 tests (3 race guarantees, 1 structure rollback); 1 partial-landing test rewritten (TR-6a); 5 mutations verified (M1→[form-race, beats], M2→[structure-race, structure-rollback], M3→[script-race], M4→[structure-rollback], M5→[beats]); create path keeps its partial message (Discoveries) |
+| T4 atomic version checks | done | `e-t4-atomic-version-checks` (branch tip) | 1630 passed, 1 failed | +5 tests (3 race guarantees, structure rollback, create rollback); 1 partial-landing test rewritten (TR-6a); 6 mutations verified (M1→[form-race, beats], M2→[structure-race, structure-rollback], M3→[script-race], M4→[structure-rollback], M5→[beats, create], M6→[create]); owner-approved follow-up wrapped the create path too, deleting `saved_scene` (Discoveries) |
 | T5 atomic draft commit | | | | |
 | T6 draft status | | | | |
 | T7 UTC (optional) | | | | |
@@ -1165,13 +1165,21 @@ contradicted this file):
   `json.dumps(flat)` to `sort_keys=True, ensure_ascii=False`, which is
   byte-identical for lists of ASCII slugs. Grep confirmed no test pins a token
   value or length — they pin equality/inequality and conflict behaviour.
-- **T4: `create_form_entity` is still create-then-beats (two transactions).**
-  It has no version token to make atomic and is not one of T4's three paths,
-  so it was left alone (scope discipline). Its "The scene was saved, but the
-  beats were not" message is still TRUE there, which is why `_write_sheet`
-  keeps the `saved_scene` parameter: the edit path now passes `False` and says
-  "Nothing was saved: …". A future atomicity pass could wrap the create path
-  and delete the parameter.
+- **T4 follow-up (owner-approved): `create_form_entity` is now one transaction
+  too.** Asked whether a hidden reason kept it create-then-beats; a probe on a
+  throwaway project found none: (A) crash after create inside an outer
+  transaction rolls scene+beats back; (B) a beats refusal rolls the scene back;
+  (C) the one real hazard — `create_schema`'s `executescript` silently commits
+  a pending transaction — is unreachable, because `get_db` already creates the
+  schema on a table-less file, so `has_schema` is always True inside
+  `create_entity`; (D) the success path commits normally. `value_focus` (the
+  one own-connection reader left in the final load) is read-only, and its
+  stale-snapshot read is vacuous on creates: a new plot/act/sequence cannot
+  have value turns yet, and `project` cannot be created from the form. The
+  wrap deleted the `saved_scene` parameter and the last partial-save message:
+  `_write_sheet` now always says "Nothing was saved: …". One new test
+  (`test_create_failure_lands_nothing`), mutation M6 verified; the wording
+  mutation M5 now covers both beats tests.
 - **T4: one partial-landing test rewritten, not deleted (TR-6a).**
   `test_manual_scene_editors.py::test_scene_saved_but_beats_failed_says_which`
   pinned the old behaviour twice — the partial message AND the scene edit

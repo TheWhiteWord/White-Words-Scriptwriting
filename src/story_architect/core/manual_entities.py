@@ -1140,8 +1140,7 @@ def check_entity(project_path: Path, entity_type: str, payload: dict,
 SUMMARY = "Edited by hand in the entity form"
 
 
-def _write_sheet(project_path: Path, scene_id: str, new: dict, old: dict, saved_scene: bool,
-                 *, conn=None) -> None:
+def _write_sheet(project_path: Path, scene_id: str, new: dict, old: dict, *, conn=None) -> None:
     """The scene's beats record: edit what changed, or make it on first use. Its own entity
     (`<scene>-beats`), written after the scene it belongs to."""
     from .writes import create_entity, edit_entity
@@ -1164,10 +1163,9 @@ def _write_sheet(project_path: Path, scene_id: str, new: dict, old: dict, saved_
                           {"scene": scene_id, **{k: v for k, v in new.items() if v not in ("", [], None)}}, {},
                           conn=conn)
     except ValueError as e:
-        # saved_scene is only True on the create path, which is not one transaction;
-        # an edit rolls the scene back with the beats, so nothing was saved.
-        raise EntityInvalid({"_form": (("The scene was saved, but the beats were not: " if saved_scene
-                                        else "Nothing was saved: ") + str(e))})
+        # Both callers are one transaction: the scene write rolls back with the
+        # beats, so a failure here saved nothing.
+        raise EntityInvalid({"_form": "Nothing was saved: " + str(e)})
 
 
 def _refuse_singleton(entity_type: str, creating: bool = False, deleting: bool = False) -> None:
@@ -1188,6 +1186,7 @@ def _write_error(e: ValueError) -> EntityInvalid:
 
 
 def create_form_entity(project_path: Path, entity_type: str, payload: dict, *, conn=None) -> dict:
+    from .db import transaction
     from .writes import create_entity
 
     _require_type(entity_type)
@@ -1195,42 +1194,40 @@ def create_form_entity(project_path: Path, entity_type: str, payload: dict, *, c
     values, errors = _clean(entity_type, (payload or {}).get("values") or {})
     sections = _clean_sections(entity_type, (payload or {}).get("sections"), errors)
     own_conn = conn is None
-    block_conn = conn if conn is not None else get_db(project_path)
+    if own_conn:
+        conn = get_db(project_path)
     try:
-        warnings, new_id = _validate(block_conn, entity_type, None, values, errors)
+        # One transaction: the entity and its beats record land together or not
+        # at all, the same guarantee as the edit path.
+        with transaction(conn):
+            warnings, new_id = _validate(conn, entity_type, None, values, errors)
+            if errors or not new_id:
+                raise EntityInvalid(errors or {"_form": "Could not make an id from that name."}, warnings)
+
+            if entity_type in ("scene", "act"):
+                if entity_type == "scene":                  # a scene's act is its sequence's act
+                    r = conn.execute("SELECT parent_id FROM entities WHERE id=?", (values["sequence_id"],)).fetchone()
+                    values["act_id"] = r[0] if r else ""
+                else:                                       # acts are not auto-numbered by the write path
+                    r = conn.execute("SELECT COALESCE(MAX(order_key), 0) FROM entities WHERE type='act' "
+                                     "AND is_deleted=0").fetchone()
+                    values["order"] = int(r[0]) + 1
+            if entity_type == "relationship":               # one card per character, even if never opened
+                values["perspectives"] = {c: (values.get("perspectives") or {}).get(c) or _persp_form({c: {}})[c]
+                                          for c in values.get("characters") or []}
+            fm = {k: v for k, v in _to_storage(entity_type, values).items() if v not in ("", [], None)}
+            sheet = fm.pop(SHEET_KEY, None)
+            try:
+                create_entity(project_path, entity_type, new_id, fm,
+                              {h: b for h, b in sections.items() if b}, conn=conn)
+            except ValueError as e:
+                raise _write_error(e)
+            if sheet is not None:
+                _write_sheet(project_path, new_id, sheet, BLANK_SHEET, conn=conn)
+            return {**load_entity(project_path, entity_type, new_id, conn=conn), "created": True, "warnings": warnings}
     finally:
         if own_conn:
-            block_conn.close()
-    if errors or not new_id:
-        raise EntityInvalid(errors or {"_form": "Could not make an id from that name."}, warnings)
-
-    if entity_type in ("scene", "act"):
-        own_conn = conn is None
-        block_conn = conn if conn is not None else get_db(project_path)
-        try:
-            if entity_type == "scene":                  # a scene's act is its sequence's act
-                r = block_conn.execute("SELECT parent_id FROM entities WHERE id=?", (values["sequence_id"],)).fetchone()
-                values["act_id"] = r[0] if r else ""
-            else:                                       # acts are not auto-numbered by the write path
-                r = block_conn.execute("SELECT COALESCE(MAX(order_key), 0) FROM entities WHERE type='act' "
-                                       "AND is_deleted=0").fetchone()
-                values["order"] = int(r[0]) + 1
-        finally:
-            if own_conn:
-                block_conn.close()
-    if entity_type == "relationship":               # one card per character, even if never opened
-        values["perspectives"] = {c: (values.get("perspectives") or {}).get(c) or _persp_form({c: {}})[c]
-                                  for c in values.get("characters") or []}
-    fm = {k: v for k, v in _to_storage(entity_type, values).items() if v not in ("", [], None)}
-    sheet = fm.pop(SHEET_KEY, None)
-    try:
-        create_entity(project_path, entity_type, new_id, fm,
-                      {h: b for h, b in sections.items() if b}, conn=conn)
-    except ValueError as e:
-        raise _write_error(e)
-    if sheet is not None:
-        _write_sheet(project_path, new_id, sheet, BLANK_SHEET, saved_scene=True, conn=conn)
-    return {**load_entity(project_path, entity_type, new_id, conn=conn), "created": True, "warnings": warnings}
+            conn.close()
 
 
 def edit_form_entity(project_path: Path, entity_type: str, entity_id: str, payload: dict,
@@ -1273,7 +1270,7 @@ def edit_form_entity(project_path: Path, entity_type: str, entity_id: str, paylo
                     raise _write_error(e)
             if sheet is not None:
                 _write_sheet(project_path, entity_id, sheet, current["values"].get(SHEET_KEY) or BLANK_SHEET,
-                             saved_scene=False, conn=conn)
+                             conn=conn)
             return {**load_entity(project_path, entity_type, entity_id, conn=conn), "unchanged": False,
                     "warnings": warnings}
     finally:
