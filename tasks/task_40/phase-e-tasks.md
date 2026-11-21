@@ -937,34 +937,50 @@ Known to matter: `deleted_at` (written in `delete_entity`; **compared** by `purg
 30-day receipt pruning, revision `replaced_at`, backups. The chat store already uses UTC.
 
 ### Design
-`core/clock.py`:
+Two moves, in this order (T2b made this simple: one starting point, no mixed
+formats in code):
+
+1. **Convert the stored stamps once.** Extend `tasks/task_40/upgrade_live_db.py`
+   (the T2b one-off script): every naive stamp in the columns the inventory
+   names (`deleted_at`, draft `created_at`, revision `replaced_at`, …) is read
+   as local time and rewritten as aware UTC. Same procedure as T2b — backup
+   first, dry run on a copy, row counts unchanged — and the safety backup path
+   recorded.
+2. **One producer**, `core/clock.py`:
 ```python
 def now_iso() -> str:
     """UTC, whole seconds, with an explicit offset: '2026-11-20T09:15:00+00:00'."""
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 def parse(ts: str) -> datetime:
-    """Parse a stored timestamp. A naive one (written by an older build) is local time."""
+    """Parse a stored stamp. A naive one raises: the conversion already ran,
+    so naive input means unconverted data, not a format to tolerate."""
+    dt = datetime.fromisoformat(ts)
+    if dt.tzinfo is None:
+        raise ValueError(f"naive timestamp in the database: {ts!r}")
+    return dt
 ```
-Python is 3.11+, so `datetime.fromisoformat` accepts offsets.
+Every stored stamp is produced by `now_iso()`; every date arithmetic goes
+through `parse`. Python is 3.11+, so `fromisoformat` accepts offsets.
 
 ### Rules that keep it safe
-- Same-format strings compare correctly as text. A legacy **naive** stamp vs a new
-  **aware** stamp compares by its date/time prefix, i.e. wrong by at most the UTC offset
-  (hours) — harmless against a 30-day floor, but write a test that pins the behaviour.
-- **Never subtract an aware datetime from a naive one** (`TypeError`). Everything that does
-  date arithmetic goes through `clock.parse`.
-- `deleted_together` equality must still hold: all rows of one delete get the **same**
-  `now_iso()` string — compute it once per delete, as the code does now.
-- Do **not** rewrite existing rows. Tolerate both formats forever.
+- All stamps share one format, so text comparison and `deleted_together`
+  equality are exact. Compute `now_iso()` **once per delete**, as the code does
+  now, so all rows of one delete carry the same string.
+- Run the conversion on the live project before the new producer lands there;
+  after it, no code path tolerates a naive stamp — `parse` raises instead.
+- The chat store already uses UTC; leave it alone.
 
 ### Tests
-`now_iso` shape; `parse` of aware, of naive (assume local), of garbage; purge cutoff works
-with a mix of legacy and new stamps; "deleted together" still groups.
+`now_iso` shape; `parse` of an aware stamp, of garbage, and of a naive stamp
+(raises); purge cutoff and receipt pruning on converted stamps; "deleted
+together" still groups. The conversion itself: run the script on a copy and
+verify every stamp parses aware and the row counts are unchanged.
 
 ### Done when
-- [ ] Inventory table in the commit message. · [ ] One producer helper, all stored stamps
-      use it. · [ ] Mixed-format tests. · [ ] Close-out.
+- [ ] Inventory table in the commit message. · [ ] Conversion run on the live
+      project (backup path recorded), then one producer helper for all stored
+      stamps. · [ ] No naive-tolerance path anywhere. · [ ] Close-out.
 
 ---
 
@@ -1061,11 +1077,12 @@ contradicted this file):
   rows with `is_deleted=1, deleted_at NULL` got one shared stamp; counts
   unchanged (entities 42, relations 23, sections 244, revisions 0, drafts 6);
   `find_orphans` empty, `integrity_check ok`; dashboard loads clean.
-- **T2b: pre-baseline backups kept, now unopenable.** The live `.story/` holds
-  eight old snapshots (`story_20261020_*.db`, `story_20261113_*.db`), all at
-  version 0. Kept, not deleted (owner data); this build refuses them. To use
-  one, run the upgrade script on a copy. The safety backup above is version 0
-  by design — it is the pre-upgrade original.
+- **T2b: pre-baseline snapshots deleted with owner approval.** The live `.story/`
+  held seven old snapshots (`story_20261020_*.db`, `story_20261113_*.db`), all at
+  version 0 and unopenable by this build; the owner approved deletion and they
+  are gone (first recorded as eight — a miscount, corrected). The safety backup
+  above is version 0 by design — it is the pre-upgrade original, kept until
+  Phase E ends.
 - **T2b: the fixture premise held for committed content only.**
   `tests/fixtures/save-the-children/.story/` had two UNTRACKED local artifacts
   from Oct 27 (`story.db` at version 0 plus one old snapshot) left by a
@@ -1088,6 +1105,13 @@ contradicted this file):
   `test_story_admin.TestPurge`; the stamp-grouping mutation by
   `test_list_deleted`'s own-entry test, not by restore/purge behaviour. All 8
   mutations verified caught with the right tests.
+- **T2b close-out audit: T3–T7 checked for the legacy trap.** T3–T6 carry no
+  legacy-tolerance instructions (T5's purge-only "old path" is current
+  behaviour, not legacy support). T7 did — "tolerate both formats forever",
+  naive-stamp parsing, mixed-format tests — and was rewritten: the one-off
+  script converts stored stamps once, `clock.parse` raises on naive input, no
+  mixed-format code path. T2's historical section stays under its superseded
+  banner.
 
 ---
 
