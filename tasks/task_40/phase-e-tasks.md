@@ -403,9 +403,10 @@ Make `hard_delete` (in `core/trash.py`) skip the `sections` delete; the purge sc
 must now fail with a `sections` orphan. Restore.
 
 ### Done when
-- [ ] `core/integrity.py` + `tests/test_integrity.py` (clean, six categories, grandchild
-      case, scenario matrix) pass.
-- [ ] Mutation check done. · [ ] Close-out.
+- [x] `core/integrity.py` + `tests/test_integrity.py` (clean, six categories, grandchild
+      case, scenario matrix) pass. *(FTS check kept, with `rank=1` — see Discoveries.)*
+- [x] Mutation check done. · [x] Close-out. *(DB-4 source scan needed a named exemption
+      for the checker's raw reads — owner approved; see Discoveries.)*
 
 ---
 
@@ -469,6 +470,19 @@ The last is a **partial index**: it holds only the (few) deleted rows, so
 - `CREATE INDEX` on a populated table takes a moment and a write lock; migrations
   already run inside the open path, which is fine at this size.
 - Do not index `live_relations` (a view cannot be indexed; it uses the table's indexes).
+
+### Owner notes (added after T1)
+
+- The partial index only works with a literal. `idx_entities_deleted` (`WHERE is_deleted=1`)
+  is used only when the query contains the literal `is_deleted=1`. A parameterised
+  `is_deleted = ?` cannot use it. `dead_ids()` and the `live_relations` view use the literal,
+  so they will benefit. If the query-plan test shows the index isn't used, check the query's
+  wording before suspecting the index.
+- Test the plan on a realistic table. Run the plan tests on a table with a few thousand rows.
+  On a tiny table SQLite sometimes prefers a scan even when an index exists, which can make
+  a plan test flaky.
+- Number the migration 5. Use `_m5_indexes` with the table-exists guard, and add the same
+  statements to `SCHEMA_SQL`.
 
 ### Mutation check
 Delete one statement from `SCHEMA_SQL`: the "new project has the index" test fails.
@@ -824,6 +838,15 @@ def commit(project_path, draft_id):
 7. Backups: `story_import`/`create_backup` are not part of a normal draft; do not add one
    here.
 
+### Owner clarification (added after T1)
+
+The T1 finding that `commit()` returns `committed: True` on success but a truthy list on
+partial failure is a real inconsistency. In T5, keep the success shape as it is, and make
+a failure return `committed == []`. Don't try to unify the two shapes unless the approve
+route needs it. The route keys off `failed` and `success`, and the frontend contract
+matters more than tidying the key. The trap about asserting only that `committed` is
+truthy is worth keeping in T5's tests: assert `success` and the exact `applied` list.
+
 ### Done when
 - [ ] Atomic path + purge path + idempotence kept. · [ ] Report shape per Part 2.4; message
       says nothing changed. · [ ] Old partial-landing tests rewritten (not deleted) with
@@ -949,11 +972,11 @@ with a mix of legacy and new stamps; "deleted together" still groups.
 
 # Part 6 — Progress log and discoveries (the agent fills this in)
 
-Baseline at start: `____ passed, 1 failed` (expected `1602 passed, 1 failed`).
+Baseline at start: `1602 passed, 1 failed` (expected `1602 passed, 1 failed`).
 
 | Task | Status | Commit | Tests after | Notes |
 |---|---|---|---|---|
-| T1 orphan checker | | | | |
+| T1 orphan checker | done | `e-t1-orphan-checker` (branch tip) | 1622 passed, 1 failed | +20 tests, 8 mutations verified; FTS check needs `rank=1`; source-scan exemption owner-approved |
 | T2 indexes | | | | |
 | T3 connection plumbing | | | | |
 | T4 atomic version checks | | | | |
@@ -964,7 +987,41 @@ Baseline at start: `____ passed, 1 failed` (expected `1602 passed, 1 failed`).
 **Discoveries** (anything surprising, any bug you saw but did not fix, any place the code
 contradicted this file):
 
--
+- **T1: the FTS snippet in this file is inert as written.** For an external-content
+  FTS5 table, `INSERT INTO sections_fts(sections_fts) VALUES('integrity-check')` only
+  checks the index's internal structure; the comparison against `sections` happens
+  only with `rank=1` (sqlite.org/fts5.html §6.7). Probed all three desync classes
+  (missing index entry, stale entry, token mismatch): the bare form reads clean on
+  all three, `rank=1` raises on all three. The checker uses
+  `INSERT INTO sections_fts(sections_fts, rank) VALUES('integrity-check', 1)`;
+  mutation M5 pins it. Not flaky — kept. Version history (checked against the
+  SQLite source, not memory): the rank opt-in arrived in **3.34.0** (check-in
+  `7548ab20e6`, 2020-09-21), not 3.44 — 3.44.0 is when PRAGMA integrity_check
+  gained `xIntegrity`. Before 3.34 the rank value is ignored and the check
+  ALWAYS compares content, so the rank=1 statement is safe on older SQLite too
+  (no false `fts` report possible); no version gate needed.
+- **T1: DB-4's source scan contradicted T1's design.** `test_live_relations.py::
+  test_every_read_of_relations_goes_through_the_view` whitelisted only `core/db.py`
+  for raw `FROM relations` reads, which the checker's design requires. Reading via
+  `live_relations` would miss a dangling reference whose other end is in the trash
+  (the view hides that row). Owner approved a named exemption: the whitelist now
+  includes `core/integrity.py` (2 reads) with the reason in the docstring; the guard
+  is unchanged for every other file.
+- **T1: the checker is deliberately outside the hiding layer and the twin battery.**
+  `find_orphans` is an oracle over the raw tables, not a data reader: it must see
+  flagged-deleted rows as existing. It is not added to `everything_a_reader_can_say`
+  (DB-4's reader rule targets readers that hide references).
+- **T1: a partial draft landing reads as success.** `drafts.commit` returns
+  `committed: True` + `applied: [...]` on success but `committed: [landed ops]` +
+  `failed: {...}` on a mid-way stop — a truthy-`committed` assert passes on both.
+  The draft scenario first used `status` in a character edit (copied from a
+  shape-only op in `test_purge_approval.py`); commit refused it and only the create
+  landed. Fixed to a valid field and `assert success and len(applied) == 3`.
+  Owner ruling for T5: keep the success shape, failure returns `committed == []`,
+  no unification (see T5's owner clarification).
+- **T1: no orphans in any scenario.** All ten write scenarios (delete+restore of
+  character/scene/plot/location/world, targeted purge, bulk purge `older_than_days=0`,
+  create-edit-delete, draft commit, full re-import) leave the database clean.
 
 ---
 
