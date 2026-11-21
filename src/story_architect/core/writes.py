@@ -9,6 +9,11 @@ the dict directly.
 point — the delete consent gate, the structural-children refusal — returns a
 dict, because the caller needs the thing it is being refused *with*. A fault
 raises `ValueError`, with the actionable detail in the message.
+
+Every write function takes `conn=None`: pass an open connection to run inside
+the caller's transaction (its uncommitted rows are then visible to every
+validator — see core.db.use_connection); otherwise the function opens and
+closes its own, exactly as before.
 """
 import json
 import re
@@ -118,7 +123,8 @@ def _scene_heading_guard(state: dict) -> str:
 # ─── create ───
 
 def create_entity(project_path: Path, entity_type: str, slug: str,
-                  frontmatter_data: dict, sections: dict | None = None) -> dict:
+                  frontmatter_data: dict, sections: dict | None = None,
+                  *, conn=None) -> dict:
     """Insert an entity, its standard sections, and its relation rows.
 
     `sections` fills the standard section bodies. The section set is closed: a
@@ -182,7 +188,9 @@ def create_entity(project_path: Path, entity_type: str, slug: str,
             f"inside another key. story_describe lists the valid fields."
         )
 
-    conn = get_db(project_path)
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db(project_path)
     try:
         if not has_schema(conn):
             create_schema(conn)
@@ -214,7 +222,7 @@ def create_entity(project_path: Path, entity_type: str, slug: str,
         # A value is validated on its own terms before anything is written:
         # a refused create leaves no row, no sections, no relations.
         if entity_type == "value":
-            validate_value(project_path, slug, merged)
+            validate_value(project_path, slug, merged, conn=conn)
 
         # Parent validation for scene (act_id consistency, location exists)
         if entity_type == "scene":
@@ -227,13 +235,13 @@ def create_entity(project_path: Path, entity_type: str, slug: str,
             if sequence_id:
                 _validate_sequence_exists(conn, sequence_id)
                 if act_id:
-                    validate_scene_act_id(project_path, sequence_id, act_id)
-            validate_scene_location(project_path, merged.get("location", ""))
+                    validate_scene_act_id(project_path, sequence_id, act_id, conn=conn)
+            validate_scene_location(project_path, merged.get("location", ""), conn=conn)
             validate_scene_plot_roles(project_path, merged.get("plot_roles", []),
                                       scene_id=slug, conn=conn)
             validate_scene_dramatic_role(merged.get("dramatic_role", ""),
                                          merged.get("plot_roles", []))
-            check_references(project_path, entity_type, merged)
+            check_references(project_path, entity_type, merged, conn=conn)
             # The heading guard, on the merged state. It returns body-only
             # Content: an agent-written heading line is replaced by the heading
             # composed at assembly, never stored beside it.
@@ -243,14 +251,14 @@ def create_entity(project_path: Path, entity_type: str, slug: str,
         # Validate plot characters reference existing entities
         if entity_type == "plot":
             from .entity import check_references
-            check_references(project_path, entity_type, merged)
+            check_references(project_path, entity_type, merged, conn=conn)
 
         # The scene_beats rules the schema cannot express: the scene exists and
         # has no other record, every reference resolves, a beat has content.
         # Merged state, so this is what will be stored.
         if entity_type == "scene_beats":
             from .entity import validate_scene_beats
-            validate_scene_beats(project_path, merged)
+            validate_scene_beats(project_path, merged, conn=conn)
 
         # Auto-order if not provided
         if entity_type in ("scene", "sequence") and merged.get("order", 0) == 0 and columns["parent_id"]:
@@ -309,10 +317,12 @@ def create_entity(project_path: Path, entity_type: str, slug: str,
             if entity_type == "scene":
                 from .entity import validate_scene_value_turns
                 validate_scene_value_turns(project_path,
-                                           merged.get("value_turns", []))
+                                           merged.get("value_turns", []),
+                                           conn=conn)
 
     finally:
-        conn.close()
+        if own_conn:
+            conn.close()
 
     return {
         "success": True,
@@ -324,7 +334,7 @@ def create_entity(project_path: Path, entity_type: str, slug: str,
 # ─── edit ───
 
 def edit_entity(project_path: Path, entity_type: str, slug: str,
-                data: dict, summary: str) -> dict:
+                data: dict, summary: str, *, conn=None) -> dict:
     """Edit entity fields, section prose and relations. Single transaction.
 
     Schema fields route to entity columns or `extra`, section names to the
@@ -332,7 +342,9 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
     """
     from .db import get_db, transaction
 
-    conn = get_db(project_path)
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db(project_path)
     try:
         entity_id = _find_entity_id_db(conn, entity_type, slug)
         if not entity_id:
@@ -446,7 +458,7 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
             value_turns = (json.loads(stored[0]) if stored and stored[0]
                            else {}).get("value_turns", [])
         from .entity import validate_scene_value_turns
-        validate_scene_value_turns(project_path, value_turns)
+        validate_scene_value_turns(project_path, value_turns, conn=conn)
 
         # ── A value, checked on its MERGED state ──
         # The id is fixed at create (there is no id-rename path), so an edit
@@ -462,7 +474,7 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
             merged_value = {**stored_extra, "name": stored[1] if stored else "",
                             **{k: v for k, v in data.items()
                                if k in ENTITY_SCHEMAS["value"]}}
-            validate_value(project_path, entity_id, merged_value)
+            validate_value(project_path, entity_id, merged_value, conn=conn)
 
         # ── Reject a self-contradicting scene BEFORE writing anything ──
         # Checked against the MERGED state, not just `data`: an edit that sets
@@ -550,10 +562,10 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
             merged_sb = {"scene": stored_parent, **stored_extra,
                          **{k: v for k, v in data.items()
                             if k in ENTITY_SCHEMAS["scene_beats"]}}
-            check_references(project_path, "scene_beats", merged_sb)
+            check_references(project_path, "scene_beats", merged_sb, conn=conn)
             validate_beat_references(project_path, merged_sb.get("beats", []),
                                      merged_sb.get("true_character", []),
-                                     merged_sb.get("changes", []))
+                                     merged_sb.get("changes", []), conn=conn)
             _validate_beat_content(merged_sb.get("beats", []))
             # The one-record rule, only when the scene link moves: re-validating
             # a record that still points at its own scene is checking it against
@@ -604,7 +616,7 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
             # turns land together or not at all. Validated before BEGIN above.
             if entity_type == "scene" and value_turns:
                 from .entity import validate_scene_value_turns
-                validate_scene_value_turns(project_path, value_turns)
+                validate_scene_value_turns(project_path, value_turns, conn=conn)
 
             # Create/update relation rows for all _RELATION_FIELDS of this entity type
             for field, (kind, is_list) in rel_fields.items():
@@ -671,7 +683,7 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
                 validate_scene_plot_roles(project_path, data["plot_roles"],
                                           scene_id=entity_id, conn=conn)
                 check_references(project_path, entity_type,
-                                 {"plot_roles": data["plot_roles"]})
+                                 {"plot_roles": data["plot_roles"]}, conn=conn)
                 conn.execute(
                     "DELETE FROM relations WHERE to_id=? AND kind LIKE 'plot_%'",
                     (entity_id,),
@@ -697,7 +709,8 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
                 applied_sections.append(heading)
 
     finally:
-        conn.close()
+        if own_conn:
+            conn.close()
 
     response = {
         "success": True,
@@ -724,7 +737,7 @@ def edit_entity(project_path: Path, entity_type: str, slug: str,
 
 
 def current_values(project_path: Path, entity_type: str, slug: str,
-                   data: dict) -> dict:
+                   data: dict, *, conn=None) -> dict:
     """What an edit would change, per field: where it lives, from, to.
 
     Reads only; touches nothing. Draft previews render from this.
@@ -732,7 +745,9 @@ def current_values(project_path: Path, entity_type: str, slug: str,
     from .db import get_db
     from .entity import ENTITY_COLUMN_MAP, standard_sections
 
-    conn = get_db(project_path)
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db(project_path)
     try:
         entity_id = _find_entity_id_db(conn, entity_type, slug)
         if not entity_id:
@@ -770,13 +785,14 @@ def current_values(project_path: Path, entity_type: str, slug: str,
             "message": f"Nothing was changed. {len(changes)} field(s) would change.",
         }
     finally:
-        conn.close()
+        if own_conn:
+            conn.close()
 
 
 # ─── delete ───
 
 def delete_entity(project_path: Path, entity_type: str, slug: str,
-                  summary: str, confirm=None) -> dict:
+                  summary: str, confirm=None, *, conn=None) -> dict:
     """Soft-delete an entity and its dependencies. Requires explicit consent.
 
     Rows are flagged `is_deleted=1` rather than removed, so no prose and no
@@ -790,7 +806,9 @@ def delete_entity(project_path: Path, entity_type: str, slug: str,
 
     from .db import get_db, transaction
 
-    conn = get_db(project_path)
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db(project_path)
     try:
         # One transaction around the checks *and* the writes. The checks (does it
         # have structural children?) must still hold when the flags are written,
@@ -890,7 +908,8 @@ def delete_entity(project_path: Path, entity_type: str, slug: str,
             # gone from those entities.
             hidden_in, detached = references_to(conn, deleted_ids)
     finally:
-        conn.close()
+        if own_conn:
+            conn.close()
 
     return {
         "success": True,
@@ -913,7 +932,7 @@ REORDERABLE_TYPES = ("scene", "sequence")
 
 
 def reorder(project_path: Path, entity_type: str, ordered_ids: list,
-            summary: str) -> dict:
+            summary: str, *, conn=None) -> dict:
     """Renumber scenes/sequences within their parent.
 
     The caller provides the complete new ordering. All items must exist and
@@ -927,7 +946,9 @@ def reorder(project_path: Path, entity_type: str, ordered_ids: list,
     if not ordered_ids:
         raise ValueError("ordered_ids required for reorder")
 
-    conn = get_db(project_path)
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db(project_path)
     try:
         # Verify all entities exist and belong to the same parent
         parent_id = None
@@ -954,7 +975,8 @@ def reorder(project_path: Path, entity_type: str, ordered_ids: list,
                     (i, item_id),
                 )
     finally:
-        conn.close()
+        if own_conn:
+            conn.close()
 
     return {
         "success": True,
@@ -976,7 +998,7 @@ def _slug_of(name: str) -> str:
     return re.sub(r"[\s_]+", "-", slug).strip("-")
 
 
-def validate_value(project_path, entity_id: str, fm: dict) -> None:
+def validate_value(project_path, entity_id: str, fm: dict, *, conn=None) -> None:
     """Raise ValueError if this value does not hold the shape a value needs.
 
     One entity per value, so the rules are the ones that make a value
@@ -1006,10 +1028,9 @@ def validate_value(project_path, entity_id: str, fm: dict) -> None:
             f"'{_slug_of(name)}', got '{entity_id}'. A turn names the value "
             f"by that slug, so the id and the name cannot drift apart.")
 
-    from .db import get_db
-    conn = get_db(project_path)
-    try:
-        for row in conn.execute(
+    from .db import use_connection
+    with use_connection(project_path, conn) as c:
+        for row in c.execute(
                 "SELECT id, name FROM entities WHERE type='value' AND is_deleted=0"
         ).fetchall():
             if row[0] == entity_id:
@@ -1019,8 +1040,6 @@ def validate_value(project_path, entity_id: str, fm: dict) -> None:
                     f"A value named '{name}' already exists ({row[0]}). A value "
                     f"has one schema wherever it is used — a different meaning "
                     f"needs a different value (loyalty rather than trust).")
-    finally:
-        conn.close()
 
 
 def _check_slug(slug: str) -> None:

@@ -197,7 +197,7 @@ class TestBeatSheet:
         sent = []
         from story_architect.core import writes
         real = writes.edit_entity
-        monkeypatch.setattr(writes, "edit_entity", lambda p, t, i, d, s: sent.append((t, i, d)) or real(p, t, i, d, s))
+        monkeypatch.setattr(writes, "edit_entity", lambda p, t, i, d, s, conn=None: sent.append((t, i, d)) or real(p, t, i, d, s, conn=conn))
         cur = me.load_entity(project, "scene", "sc1")["values"]["beat_sheet"]
         cur["turning_point"] = "The door swings wide."
         _save(project, beat_sheet=cur)
@@ -208,7 +208,7 @@ class TestBeatSheet:
         sent = []
         from story_architect.core import writes
         real = writes.edit_entity
-        monkeypatch.setattr(writes, "edit_entity", lambda p, t, i, d, s: sent.append(t) or real(p, t, i, d, s))
+        monkeypatch.setattr(writes, "edit_entity", lambda p, t, i, d, s, conn=None: sent.append(t) or real(p, t, i, d, s, conn=conn))
         _save(project, one_sentence="Only the scene.")
         assert sent == ["scene"]
 
@@ -261,10 +261,10 @@ class TestBeatSheet:
     def test_scene_saved_but_beats_failed_says_which(self, project, monkeypatch):
         from story_architect.core import writes
         real = writes.create_entity
-        def boom(p, t, i, fm, sec=None):
+        def boom(p, t, i, fm, sec=None, conn=None):
             if t == "scene_beats":
                 raise ValueError("beats exploded")
-            return real(p, t, i, fm, sec or {})
+            return real(p, t, i, fm, sec or {}, conn=conn)
         monkeypatch.setattr(writes, "create_entity", boom)
         cur = me.load_entity(project, "scene", "sc1")
         with pytest.raises(me.EntityInvalid) as e:

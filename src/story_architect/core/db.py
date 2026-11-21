@@ -223,6 +223,25 @@ def get_db(project_path: Path) -> sqlite3.Connection:
     return conn
 
 
+@contextmanager
+def use_connection(project_path: Path, conn: sqlite3.Connection | None = None):
+    """Yield `conn` if the caller supplied one — the caller owns it, so do not
+    close it and do not commit or roll it back here — otherwise open one with
+    get_db and close it on exit. This is how a write joins the caller's
+    transaction: every read and write inside it must go through the ONE
+    connection, or a validator cannot see rows the transaction has written
+    but not committed (WAL gives a second connection an older snapshot).
+    """
+    if conn is not None:
+        yield conn
+        return
+    own = get_db(project_path)
+    try:
+        yield own
+    finally:
+        own.close()
+
+
 _savepoint_ids = itertools.count(1)
 
 

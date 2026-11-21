@@ -200,15 +200,21 @@ def _view_from_blocks(st, characters, locations, *, blocks, content,
     }
 
 
-def load_scene_script(project_path: Path, scene_id: str) -> dict:
-    """Everything the editor needs to open one scene."""
-    conn = get_db(project_path)
+def load_scene_script(project_path: Path, scene_id: str, *, conn=None) -> dict:
+    """Everything the editor needs to open one scene.
+
+    `conn` joins the caller's transaction; when None, opens its own connection.
+    """
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db(project_path)
     try:
         st = _scene_state(conn, scene_id)
         characters, locations = _registry(conn)
         adhoc = _adhoc_elsewhere(conn, characters, scene_id)
     finally:
-        conn.close()
+        if own_conn:
+            conn.close()
 
     raw = st["raw_content"]
     placeholder = ss.is_placeholder(raw)
@@ -263,7 +269,7 @@ def _heading_fields(hd: dict, locations: dict) -> dict:
             "forced_heading": forced, "location": slug}
 
 
-def check_scene_script(project_path: Path, scene_id: str, payload: dict) -> dict:
+def check_scene_script(project_path: Path, scene_id: str, payload: dict, *, conn=None) -> dict:
     """What the findings, cast and stats WOULD be for an unsaved draft.
 
     Writes nothing. The editor calls this (debounced) while a person types so
@@ -276,12 +282,15 @@ def check_scene_script(project_path: Path, scene_id: str, payload: dict) -> dict
     hd = payload.get("heading") or {}
     if not isinstance(hd, dict):
         raise ScriptError("`heading` must be an object.")
-    conn = get_db(project_path)
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db(project_path)
     try:
         st = _scene_state(conn, scene_id)
         characters, locations = _registry(conn)
     finally:
-        conn.close()
+        if own_conn:
+            conn.close()
 
     fields = _heading_fields(hd, locations)
     extra_cast = [c for c in (payload.get("extra_cast") or [])
@@ -308,7 +317,7 @@ def _validate_blocks(blocks) -> list[dict]:
     return clean
 
 
-def save_scene_script(project_path: Path, scene_id: str, payload: dict) -> dict:
+def save_scene_script(project_path: Path, scene_id: str, payload: dict, *, conn=None) -> dict:
     """Save a person's edit of one scene's script. One transaction.
 
     payload = {
@@ -331,12 +340,14 @@ def save_scene_script(project_path: Path, scene_id: str, payload: dict) -> dict:
     if not isinstance(hd, dict):
         raise ScriptError("`heading` must be an object.")
 
-    conn = get_db(project_path)
+    own_conn = conn is None
+    block_conn = conn if conn is not None else get_db(project_path)
     try:
-        st = _scene_state(conn, scene_id)
-        characters, locations = _registry(conn)
+        st = _scene_state(block_conn, scene_id)
+        characters, locations = _registry(block_conn)
     finally:
-        conn.close()
+        if own_conn:
+            block_conn.close()
 
     if payload.get("base_hash") != content_hash(st):
         raise ScriptConflict(content_hash(st))
@@ -359,13 +370,13 @@ def save_scene_script(project_path: Path, scene_id: str, payload: dict) -> dict:
     try:
         result = edit_entity(
             project_path, "scene", scene_id, data,
-            "Script edited by hand in the script editor")
+            "Script edited by hand in the script editor", conn=conn)
     except ValueError as e:
         # The write boundary refuses a scene whose merged state has no heading.
         raise ScriptError(str(e))
     if result.get("success") is False or result.get("error"):
         raise ScriptError(result.get("error") or result.get("message") or "Save failed.")
 
-    fresh = load_scene_script(project_path, scene_id)
+    fresh = load_scene_script(project_path, scene_id, conn=conn)
     fresh["previous_content"] = previous  # lets the client offer an in-session undo
     return fresh

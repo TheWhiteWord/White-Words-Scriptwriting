@@ -690,12 +690,15 @@ def relations_for_insert(entity_type: str, slug: str, fm: dict) -> list[dict]:
     return relations
 
 
-def validate_scene_act_id(project_path, sequence_id: str, act_id: str) -> None:
-    """Raise ValueError if sequence's act_id doesn't match the provided act_id."""
-    from story_architect.core.db import get_db
-    conn = get_db(project_path)
-    try:
-        row = conn.execute(
+def validate_scene_act_id(project_path, sequence_id: str, act_id: str, *, conn=None) -> None:
+    """Raise ValueError if sequence's act_id doesn't match the provided act_id.
+
+    `conn` joins the caller's transaction, so rows it has written but not
+    committed are visible; when None, opens its own connection.
+    """
+    from story_architect.core.db import use_connection
+    with use_connection(project_path, conn) as c:
+        row = c.execute(
             "SELECT parent_id FROM entities WHERE id=? AND type='sequence'",
             (sequence_id,),
         ).fetchone()
@@ -703,11 +706,9 @@ def validate_scene_act_id(project_path, sequence_id: str, act_id: str) -> None:
             raise ValueError(
                 f"Sequence {sequence_id} belongs to act {row[0]}, not {act_id}"
             )
-    finally:
-        conn.close()
 
 
-def validate_scene_location(project_path, location: str) -> None:
+def validate_scene_location(project_path, location: str, *, conn=None) -> None:
     """Raise ValueError if a scene names a location that doesn't exist.
 
     A scene may carry free text in `location` while the story is still being
@@ -716,23 +717,20 @@ def validate_scene_location(project_path, location: str) -> None:
     scenes cannot reach anything it has. An empty location is a scene
     deliberately placed nowhere, and is left alone.
 
-    Reads committed state, so a location created in the same draft is visible:
-    commit applies a draft's ops one at a time, creates before edits, each
-    committed before the next.
+    `conn` joins the caller's transaction, so a location created earlier in
+    the same transaction is visible; when None, reads committed state (a
+    draft's creates land before its edits).
     """
     if not location:
         return
-    from story_architect.core.db import get_db
-    conn = get_db(project_path)
-    try:
-        row = conn.execute(
+    from story_architect.core.db import use_connection
+    with use_connection(project_path, conn) as c:
+        row = c.execute(
             "SELECT id FROM entities WHERE id=? AND type='location'",
             (location,),
         ).fetchone()
         if not row:
             raise ValueError(f"Location not found: {location}")
-    finally:
-        conn.close()
 
 
 def _collect_refs(meta: dict, value, path: str, refs: list) -> None:
@@ -772,7 +770,7 @@ def _collect_refs_entry(sub_fields: dict, entry: dict, path: str, refs: list) ->
             refs.append((key_meta["ref"], str(entry[key]), at))
 
 
-def check_references(project_path, entity_type: str, frontmatter: dict) -> None:
+def check_references(project_path, entity_type: str, frontmatter: dict, *, conn=None) -> None:
     """Raise ValueError on the first `ref` that names no existing record.
 
     Reads the database, so this is write-time only — the same constraint
@@ -784,8 +782,11 @@ def check_references(project_path, entity_type: str, frontmatter: dict) -> None:
     Two declaration forms: a field-level `ref` (a flat list of slugs, like
     `plot.characters`) and a sub-field `ref` (nested inside entries, like
     `plot_roles.plot`).
+
+    `conn` joins the caller's transaction, so records created earlier in it
+    resolve; when None, opens its own connection.
     """
-    from story_architect.core.db import get_db
+    from story_architect.core.db import use_connection
     from .constants import ENTITY_SCHEMAS
 
     refs = []
@@ -803,19 +804,16 @@ def check_references(project_path, entity_type: str, frontmatter: dict) -> None:
             _collect_refs(meta, value, field, refs)
     if not refs:
         return
-    conn = get_db(project_path)
-    try:
+    with use_connection(project_path, conn) as c:
         for ref_type, target, path in refs:
-            if not conn.execute(
+            if not c.execute(
                     "SELECT 1 FROM entities WHERE id=? AND type=?",
                     (target, ref_type)).fetchone():
                 raise ValueError(f"{ref_type.capitalize()} not found: {target} "
                                  f"(at {path})")
-    finally:
-        conn.close()
 
 
-def validate_scene_beats(project_path, merged: dict) -> None:
+def validate_scene_beats(project_path, merged: dict, *, conn=None) -> None:
     """Raise ValueError on the rules a `scene_beats` record has to obey.
 
     The schema cannot say any of these, which is why they live here rather than
@@ -829,33 +827,32 @@ def validate_scene_beats(project_path, merged: dict) -> None:
     Called on the MERGED state, on create and on edit, so an edit that moves a
     record to another scene is checked against the state that will be stored
     rather than against the keys the caller happened to send.
+
+    `conn` joins the caller's transaction; when None, opens its own connection.
     """
-    from story_architect.core.db import get_db
+    from story_architect.core.db import use_connection
 
     scene_id = str(merged.get("scene") or "")
     if not scene_id:
         raise ValueError("scene_beats requires a scene")
-    conn = get_db(project_path)
-    try:
-        if not conn.execute(
+    with use_connection(project_path, conn) as c:
+        if not c.execute(
                 "SELECT id FROM entities WHERE id=? AND type='scene' AND is_deleted=0",
                 (scene_id,)).fetchone():
             raise ValueError(f"Scene not found: {scene_id}")
         # A record may already exist for this scene; on create that is a
         # refusal, on edit it is this very record being edited, which is why
         # the caller skips this check for the row it is writing.
-        if conn.execute(
+        if c.execute(
                 "SELECT id FROM entities WHERE type='scene_beats' "
                 "AND parent_id=? AND is_deleted=0", (scene_id,)).fetchone():
             raise ValueError(f"Scene '{scene_id}' already has scene_beats. "
                              f"Edit it instead of creating another.")
-        check_references(project_path, "scene_beats", merged)
+        check_references(project_path, "scene_beats", merged, conn=conn)
         validate_beat_references(project_path, merged.get("beats", []),
                                  merged.get("true_character", []),
-                                 merged.get("changes", []))
+                                 merged.get("changes", []), conn=conn)
         _validate_beat_content(merged.get("beats", []))
-    finally:
-        conn.close()
 
 
 # Who may act, and what a change may land on. The asymmetry is the point: a
@@ -872,7 +869,7 @@ def _resolve_any(conn, slug: str, types) -> bool:
         f"({','.join('?' * len(types))})", (slug, *types)).fetchone())
 
 
-def validate_beat_references(project_path, beats, true_character, changes=None) -> None:
+def validate_beat_references(project_path, beats, true_character, changes=None, *, conn=None) -> None:
     """Raise ValueError on a `by` or `changes[].entity` that resolves to nothing.
 
     `check_references` resolves a `ref` against exactly one type, and these two
@@ -883,13 +880,14 @@ def validate_beat_references(project_path, beats, true_character, changes=None) 
     `changes` moved from the beat to the top level of the record (it is the
     scene's closing state, not one exchange's), so it is passed separately
     rather than read out of each beat.
+
+    `conn` joins the caller's transaction; when None, opens its own connection.
     """
-    from story_architect.core.db import get_db
+    from story_architect.core.db import use_connection
 
     if not isinstance(beats, list):
         return
-    conn = get_db(project_path)
-    try:
+    with use_connection(project_path, conn) as c:
         for i, beat in enumerate(beats):
             if not isinstance(beat, dict):
                 continue
@@ -899,7 +897,7 @@ def validate_beat_references(project_path, beats, true_character, changes=None) 
                 if not isinstance(entry, dict):
                     continue
                 slug = str(entry.get("by") or "")
-                if slug and not _resolve_any(conn, slug, _BY_TYPES):
+                if slug and not _resolve_any(c, slug, _BY_TYPES):
                     raise ValueError(
                         f"{at}.{side}.by '{slug}' is not a character, "
                         f"location or world")
@@ -909,12 +907,10 @@ def validate_beat_references(project_path, beats, true_character, changes=None) 
             if not isinstance(change, dict):
                 continue
             slug = str(change.get("entity") or "")
-            if slug and not _resolve_any(conn, slug, _CHANGE_TYPES):
+            if slug and not _resolve_any(c, slug, _CHANGE_TYPES):
                 raise ValueError(
                     f"changes[{j}].entity '{slug}' is not a "
                     f"character, relationship, location or world")
-    finally:
-        conn.close()
 
 
 def _validate_beat_content(beats) -> None:
@@ -1066,7 +1062,7 @@ def validate_scene_dramatic_role(dramatic_role, plot_roles) -> None:
     return
 
 
-def validate_scene_value_turns(project_path, value_turns) -> None:
+def validate_scene_value_turns(project_path, value_turns, *, conn=None) -> None:
     """Raise ValueError on the first value turn that breaks a rule.
 
     A turn is one shift of a value plus how it lands on each protagonist, and
@@ -1086,14 +1082,18 @@ def validate_scene_value_turns(project_path, value_turns) -> None:
     that a rule was broken.
 
     Runs on write only: it reads the plots and the value entities from the
-    database, so entities created in the same draft are visible here.
+    database, so entities created in the same draft are visible here. `conn`
+    joins the caller's transaction, so entities created earlier in the SAME
+    transaction are visible too; when None, opens its own connection.
     """
     from .db import get_db
 
     if not isinstance(value_turns, list):
         return
 
-    conn = get_db(project_path)
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db(project_path)
     try:
         plots = {row[0]: json.loads(row[1]) if row[1] else {}
                  for row in conn.execute(
@@ -1211,7 +1211,8 @@ def validate_scene_value_turns(project_path, value_turns) -> None:
                             f"the shift does to {character} at the "
                             f"{conflict_level} level")
     finally:
-        conn.close()
+        if own_conn:
+            conn.close()
 
 
 def _schema_words(words) -> str:

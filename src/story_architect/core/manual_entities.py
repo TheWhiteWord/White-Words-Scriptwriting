@@ -642,15 +642,19 @@ def _version(values: dict, sections: dict) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
-def load_entity(project_path: Path, entity_type: str, entity_id: str) -> dict:
+def load_entity(project_path: Path, entity_type: str, entity_id: str, *, conn=None) -> dict:
     """The stored state of one entity, in the shape the form edits.
 
     Read from the database rather than the dashboard payload: the dashboard is
     normalised for display (a character's `knowledge` is joined into one string),
     and a form built from that would write the display form back.
+
+    `conn` joins the caller's transaction; when None, opens its own connection.
     """
     _require_type(entity_type)
-    conn = get_db(project_path)
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db(project_path)
     try:
         row = _row(conn, entity_type, entity_id)
         entity_id = row[0]
@@ -708,7 +712,8 @@ def load_entity(project_path: Path, entity_type: str, entity_id: str) -> dict:
             "version": _version(values, sections),
         }
     finally:
-        conn.close()
+        if own_conn:
+            conn.close()
 
 
 # ─── Validation ──────────────────────────────────────────────────────────────
@@ -1109,22 +1114,25 @@ def _clean_sections(entity_type: str, raw, errors: dict) -> dict:
 
 
 def check_entity(project_path: Path, entity_type: str, payload: dict,
-                 entity_id: str | None = None) -> dict:
+                 entity_id: str | None = None, *, conn=None) -> dict:
     """What a save WOULD say. Writes nothing; the form calls it while typing."""
     _require_type(entity_type)
     _refuse_singleton(entity_type, entity_id is None)
     values, errors = _clean(entity_type, (payload or {}).get("values") or {})
     _clean_sections(entity_type, (payload or {}).get("sections"), errors)
-    conn = get_db(project_path)
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db(project_path)
     try:
         baseline = None
         if entity_id is not None:
             row = _row(conn, entity_type, entity_id)
             entity_id = row[0]
-            baseline = load_entity(project_path, entity_type, entity_id)["values"]   # same bar as save
+            baseline = load_entity(project_path, entity_type, entity_id, conn=conn)["values"]   # same bar as save
         warnings, new_id = _validate(conn, entity_type, entity_id, values, errors, baseline=baseline)
     finally:
-        conn.close()
+        if own_conn:
+            conn.close()
     return {"ok": not errors, "errors": errors, "warnings": warnings, "id": new_id}
 
 
@@ -1133,25 +1141,29 @@ def check_entity(project_path: Path, entity_type: str, payload: dict,
 SUMMARY = "Edited by hand in the entity form"
 
 
-def _write_sheet(project_path: Path, scene_id: str, new: dict, old: dict, saved_scene: bool) -> None:
+def _write_sheet(project_path: Path, scene_id: str, new: dict, old: dict, saved_scene: bool,
+                 *, conn=None) -> None:
     """The scene's beats record: edit what changed, or make it on first use. Its own entity
     (`<scene>-beats`), written after the scene it belongs to."""
     from .writes import create_entity, edit_entity
 
-    conn = get_db(project_path)
+    own_conn = conn is None
+    block_conn = conn if conn is not None else get_db(project_path)
     try:
-        rec_id, _ = _beats_row(conn, scene_id)
-        free_id = None if rec_id else _unique_id(conn, f"{scene_id}-beats")
+        rec_id, _ = _beats_row(block_conn, scene_id)
+        free_id = None if rec_id else _unique_id(block_conn, f"{scene_id}-beats")
     finally:
-        conn.close()
+        if own_conn:
+            block_conn.close()
     try:
         if rec_id:
             diff = {k: v for k, v in new.items() if old.get(k) != v}
             if diff:
-                edit_entity(project_path, "scene_beats", rec_id, diff, SUMMARY)
+                edit_entity(project_path, "scene_beats", rec_id, diff, SUMMARY, conn=conn)
         elif any(new.get(k) not in ("", [], None) for k in new):
             create_entity(project_path, "scene_beats", free_id,
-                          {"scene": scene_id, **{k: v for k, v in new.items() if v not in ("", [], None)}}, {})
+                          {"scene": scene_id, **{k: v for k, v in new.items() if v not in ("", [], None)}}, {},
+                          conn=conn)
     except ValueError as e:
         raise EntityInvalid({"_form": (("The scene was saved, but the beats were not: " if saved_scene else "")
                                        + str(e))})
@@ -1174,33 +1186,37 @@ def _write_error(e: ValueError) -> EntityInvalid:
     return EntityInvalid({"_form": str(e)})
 
 
-def create_form_entity(project_path: Path, entity_type: str, payload: dict) -> dict:
+def create_form_entity(project_path: Path, entity_type: str, payload: dict, *, conn=None) -> dict:
     from .writes import create_entity
 
     _require_type(entity_type)
     _refuse_singleton(entity_type, creating=True)
     values, errors = _clean(entity_type, (payload or {}).get("values") or {})
     sections = _clean_sections(entity_type, (payload or {}).get("sections"), errors)
-    conn = get_db(project_path)
+    own_conn = conn is None
+    block_conn = conn if conn is not None else get_db(project_path)
     try:
-        warnings, new_id = _validate(conn, entity_type, None, values, errors)
+        warnings, new_id = _validate(block_conn, entity_type, None, values, errors)
     finally:
-        conn.close()
+        if own_conn:
+            block_conn.close()
     if errors or not new_id:
         raise EntityInvalid(errors or {"_form": "Could not make an id from that name."}, warnings)
 
     if entity_type in ("scene", "act"):
-        conn = get_db(project_path)
+        own_conn = conn is None
+        block_conn = conn if conn is not None else get_db(project_path)
         try:
             if entity_type == "scene":                  # a scene's act is its sequence's act
-                r = conn.execute("SELECT parent_id FROM entities WHERE id=?", (values["sequence_id"],)).fetchone()
+                r = block_conn.execute("SELECT parent_id FROM entities WHERE id=?", (values["sequence_id"],)).fetchone()
                 values["act_id"] = r[0] if r else ""
             else:                                       # acts are not auto-numbered by the write path
-                r = conn.execute("SELECT COALESCE(MAX(order_key), 0) FROM entities WHERE type='act' "
-                                 "AND is_deleted=0").fetchone()
+                r = block_conn.execute("SELECT COALESCE(MAX(order_key), 0) FROM entities WHERE type='act' "
+                                       "AND is_deleted=0").fetchone()
                 values["order"] = int(r[0]) + 1
         finally:
-            conn.close()
+            if own_conn:
+                block_conn.close()
     if entity_type == "relationship":               # one card per character, even if never opened
         values["perspectives"] = {c: (values.get("perspectives") or {}).get(c) or _persp_form({c: {}})[c]
                                   for c in values.get("characters") or []}
@@ -1208,30 +1224,33 @@ def create_form_entity(project_path: Path, entity_type: str, payload: dict) -> d
     sheet = fm.pop(SHEET_KEY, None)
     try:
         create_entity(project_path, entity_type, new_id, fm,
-                      {h: b for h, b in sections.items() if b})
+                      {h: b for h, b in sections.items() if b}, conn=conn)
     except ValueError as e:
         raise _write_error(e)
     if sheet is not None:
-        _write_sheet(project_path, new_id, sheet, BLANK_SHEET, saved_scene=True)
-    return {**load_entity(project_path, entity_type, new_id), "created": True, "warnings": warnings}
+        _write_sheet(project_path, new_id, sheet, BLANK_SHEET, saved_scene=True, conn=conn)
+    return {**load_entity(project_path, entity_type, new_id, conn=conn), "created": True, "warnings": warnings}
 
 
-def edit_form_entity(project_path: Path, entity_type: str, entity_id: str, payload: dict) -> dict:
+def edit_form_entity(project_path: Path, entity_type: str, entity_id: str, payload: dict,
+                     *, conn=None) -> dict:
     from .writes import edit_entity
 
     _require_type(entity_type)
-    current = load_entity(project_path, entity_type, entity_id)
+    current = load_entity(project_path, entity_type, entity_id, conn=conn)
     entity_id = current["id"]
     if (payload or {}).get("base_version") != current["version"]:
         raise EntityConflict(current["version"])
 
     values, errors = _clean(entity_type, (payload or {}).get("values") or {})
     sections = _clean_sections(entity_type, (payload or {}).get("sections"), errors)
-    conn = get_db(project_path)
+    own_conn = conn is None
+    block_conn = conn if conn is not None else get_db(project_path)
     try:
-        warnings, _ = _validate(conn, entity_type, entity_id, values, errors, baseline=current["values"])
+        warnings, _ = _validate(block_conn, entity_type, entity_id, values, errors, baseline=current["values"])
     finally:
-        conn.close()
+        if own_conn:
+            block_conn.close()
     if errors:
         raise EntityInvalid(errors, warnings)
 
@@ -1244,13 +1263,14 @@ def edit_form_entity(project_path: Path, entity_type: str, entity_id: str, paylo
         return {**current, "unchanged": True, "warnings": warnings}
     if changed:
         try:
-            edit_entity(project_path, entity_type, entity_id, _to_storage(entity_type, changed), SUMMARY)
+            edit_entity(project_path, entity_type, entity_id, _to_storage(entity_type, changed), SUMMARY,
+                        conn=conn)
         except ValueError as e:
             raise _write_error(e)
     if sheet is not None:
         _write_sheet(project_path, entity_id, sheet, current["values"].get(SHEET_KEY) or BLANK_SHEET,
-                     saved_scene=bool(changed))
-    return {**load_entity(project_path, entity_type, entity_id), "unchanged": False,
+                     saved_scene=bool(changed), conn=conn)
+    return {**load_entity(project_path, entity_type, entity_id, conn=conn), "unchanged": False,
             "warnings": warnings}
 
 
@@ -1294,11 +1314,13 @@ def _beat_refs(extra: dict) -> set:
     return refs
 
 
-def delete_preview(project_path: Path, entity_type: str, entity_id: str) -> dict:
+def delete_preview(project_path: Path, entity_type: str, entity_id: str, *, conn=None) -> dict:
     """What a delete takes with it and what stops it. Changes nothing."""
     _require_type(entity_type)
     _refuse_singleton(entity_type, deleting=True)
-    conn = get_db(project_path)
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db(project_path)
     try:
         row = _row(conn, entity_type, entity_id)
         label = ENTITY_LABELS[entity_type]
@@ -1420,25 +1442,26 @@ def delete_preview(project_path: Path, entity_type: str, entity_id: str) -> dict
             "effects": effects, "blockers": blockers, "can_delete": not blockers,
         }
     finally:
-        conn.close()
+        if own_conn:
+            conn.close()
 
 
-def delete_form_entity(project_path: Path, entity_type: str, entity_id: str) -> dict:
+def delete_form_entity(project_path: Path, entity_type: str, entity_id: str, *, conn=None) -> dict:
     from .writes import delete_entity
 
     _require_type(entity_type)
     _refuse_singleton(entity_type, deleting=True)
-    prev = delete_preview(project_path, entity_type, entity_id)
+    prev = delete_preview(project_path, entity_type, entity_id, conn=conn)
     if prev["blockers"]:
         raise EntityBlocked("This can't be deleted yet.", prev["blockers"])
     # Relationships first: once the character is flagged deleted, the agent-path
     # purge would otherwise strip the character out of them and leave a husk.
     for rel in prev["relationships"]:
         res = delete_entity(project_path, "relationship", rel["id"],
-                            f"Deleted with {entity_id}", confirm=True)
+                            f"Deleted with {entity_id}", confirm=True, conn=conn)
         if res.get("error"):
             raise EntityBlocked(res["error"], [res["error"]])
-    res = delete_entity(project_path, entity_type, entity_id, SUMMARY, confirm=True)
+    res = delete_entity(project_path, entity_type, entity_id, SUMMARY, confirm=True, conn=conn)
     if res.get("error"):
         raise EntityBlocked(res["error"], [res["error"]])
     return {

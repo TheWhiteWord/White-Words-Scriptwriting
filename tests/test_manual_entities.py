@@ -218,7 +218,7 @@ class TestEdit:
         from story_architect.core import writes
         real = writes.edit_entity
         monkeypatch.setattr(writes, "edit_entity",
-                            lambda p, t, i, data, summary: sent.update(data) or real(p, t, i, data, summary))
+                            lambda p, t, i, data, summary, conn=None: sent.update(data) or real(p, t, i, data, summary, conn=conn))
         cur = self._load(project)
         me.edit_form_entity(project, "character", "mara",
                             {"base_version": cur["version"],

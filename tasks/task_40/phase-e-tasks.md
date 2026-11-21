@@ -624,9 +624,20 @@ and make sure callers pass it.
   add it and note it in Discoveries.
 
 ### Done when
-- [ ] Every function in Part 3.2 takes `conn=None`; behaviour unchanged; **no existing test
-      edited**. · [ ] The four new tests pass and are mutation-checked (e.g. make
-      `validate_scene_location` ignore `conn`: test 1 or 2 fails). · [ ] Close-out.
+- [x] Every function in Part 3.2 takes `conn=None`; behaviour unchanged. **Deviation
+      (owner-approved 2026-11-21):** four stubs pinned the old write signatures and broke
+      on the `conn` keyword (TypeError, not an assertion) — `test_manual_entities.py:221`,
+      `test_manual_scene_editors.py:200/211/266`; their signatures now accept and forward
+      `conn=None`, every assertion untouched (Discoveries).
+- [x] The four new tests pass and are mutation-checked: six mutations, each caught by the
+      expected test(s) — location validator ignores conn → `[location]`; `check_references`
+      ignores conn → `[plot]`; value-turn validator ignores conn → `[value-turns]`;
+      `create_entity`/`edit_entity` ignore conn → rollback + hidden-connection;
+      `use_connection` closes the supplied conn → ownership. Full table in the Progress log.
+- [x] Close-out: full suite **1625 passed + 1 failed** (baseline 1619 + 6 new; the same
+      known `test_no_hermes_imports` env failure); grep proves every `get_db(` in
+      writes/entity sits behind `own_conn`/`use_connection` (or is `create_project`);
+      stale-text sweep clean; commit on `e-t3-connection-plumbing`.
 
 ---
 
@@ -1008,7 +1019,7 @@ Baseline at start: `1602 passed, 1 failed` (expected `1602 passed, 1 failed`).
 | T1 orphan checker | done | `e-t1-orphan-checker` (branch tip) | 1622 passed, 1 failed | +20 tests, 8 mutations verified; FTS check needs `rank=1`; source-scan exemption owner-approved |
 | T2 indexes | done | `e-t2-indexes` (branch tip) | 1629 passed, 1 failed | +7 tests, 5 mutations verified; owner-approved legacy-shape edits in 3 test files (Discoveries) |
 | T2b baseline (drop legacy support) | done | `e-t2b-baseline` (branch tip) | 1619 passed, 1 failed | −10 net: legacy-only tests deleted, mechanism tests added; 8 mutations verified; live DB upgraded 0→5; code diff 342 insertions / 612 deletions (Discoveries) |
-| T3 connection plumbing | | | | |
+| T3 connection plumbing | done | `e-t3-connection-plumbing` (branch tip) | 1625 passed, 1 failed | +6 tests (uncommitted-row visibility ×3 parametrized, hidden-connection, ownership, rollback); 6 mutations verified (M1→[location], M2→[plot], M3→[value-turns], M4→all 6, M5→rollback+ownership+hidden, M6→5); 4 stub signatures updated owner-approved; `plan`/`delete_form_entity` added to the worklist (Discoveries) |
 | T4 atomic version checks | | | | |
 | T5 atomic draft commit | | | | |
 | T6 draft status | | | | |
@@ -1112,6 +1123,41 @@ contradicted this file):
   script converts stored stamps once, `clock.parse` raises on naive input, no
   mixed-format code path. T2's historical section stays under its superseded
   banner.
+- **T3: four test stubs pinned the old write signatures (owner-approved edit,
+  2026-11-21).** `test_manual_entities.py:221` and
+  `test_manual_scene_editors.py:200/211/266` monkeypatch `writes.edit_entity` /
+  `writes.create_entity` with fixed-arity lambdas; the uniform `conn=conn`
+  threading broke them with `TypeError: unexpected keyword argument 'conn'` —
+  a signature pin, not a behaviour assertion. Owner chose updating the four
+  stub signatures (accept + forward `conn=None`) over conditional `**kwargs`
+  at the call sites (a compatibility shim the repo rules forbid). Every
+  assertion is untouched; the full suite confirms no behaviour change.
+- **T3: the worklist missed two functions on the call chains.**
+  `manual_structure.apply` calls `plan`, and `manual_entities.delete_form_entity`
+  calls `delete_preview` + `delete_entity`; both now take `conn=None` too
+  (the gotcha "add it and note it in Discoveries" clause).
+- **T3: the briefed relationship example cannot fail pre-plumbing.** Creating
+  a relationship does not validate its character references at all — a
+  relationship naming two nonexistent characters was created both before and
+  after the plumbing (that gap is DB-2 / T4's, untouched here). The
+  visibility test therefore uses three scenarios whose validators DO read
+  references: scene→location, plot→character, scene value-turn→value entity.
+  Pre-plumbing probes: the location and plot creates were REFUSED
+  ("Location not found: newloc", "Character not found: newchar"); post-plumbing
+  on one connection both succeed.
+- **T3: multi-block functions keep the parameter intact.** Where a function
+  reads on its own connection in an early block and writes later
+  (`create_form_entity`, `edit_form_entity`, `_write_sheet`,
+  `save_scene_script`, `apply`), the read block uses a block-local connection
+  (`block_conn`) so the original `conn` argument — None or the caller's —
+  flows unchanged into the downstream write calls. Reassigning and closing
+  the parameter would hand a CLOSED connection to the next callee.
+- **T3: mutation runs need `PYTHONDONTWRITEBYTECODE=1`.** A same-length source
+  mutation written within the same mtime second as the previous restore
+  reuses the stale `.pyc`: M2's first run actually executed M1's bytecode and
+  reported M1's failures. With bytecode writing disabled all six mutations
+  attributed correctly (worktree at HEAD + plumbed sources, restored after
+  each run; worktree removed afterwards).
 
 ---
 
