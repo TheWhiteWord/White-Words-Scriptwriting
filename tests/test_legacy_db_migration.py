@@ -31,11 +31,11 @@ def test_get_db_migrates_a_legacy_database(tmp_path):
     legacy.executescript(
         """
         CREATE TABLE entities (
-            id TEXT PRIMARY KEY,
-            type TEXT NOT NULL,
-            name TEXT
+            id TEXT PRIMARY KEY, type TEXT, name TEXT,
+            one_sentence TEXT, order_key REAL, status TEXT,
+            parent_id TEXT, location_id TEXT, extra TEXT
         );
-        INSERT INTO entities VALUES ('a1', 'character', 'Old Hero');
+        INSERT INTO entities (id, type, name) VALUES ('a1', 'character', 'Old Hero');
         """
     )
     legacy.commit()

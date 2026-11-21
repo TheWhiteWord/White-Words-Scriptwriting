@@ -35,13 +35,17 @@ def _db_file(project):
 
 
 def _legacy_project(tmp_path, name="legacy"):
-    """A project from before soft delete and before drafts.status: unstamped."""
+    """A project from before soft delete and before drafts.status: unstamped.
+    Every column but the soft-delete pair is present — migration 5 indexes
+    parent_id, and step 1 adds the pair."""
     proj = tmp_path / name
     _db_file(proj).parent.mkdir(parents=True)
     c = sqlite3.connect(str(_db_file(proj)))
     c.executescript("""
-        CREATE TABLE entities (id TEXT PRIMARY KEY, type TEXT NOT NULL, name TEXT);
-        INSERT INTO entities VALUES ('a1', 'character', 'Old Hero');
+        CREATE TABLE entities (id TEXT PRIMARY KEY, type TEXT, name TEXT,
+                               one_sentence TEXT, order_key REAL, status TEXT,
+                               parent_id TEXT, location_id TEXT, extra TEXT);
+        INSERT INTO entities (id, type, name) VALUES ('a1', 'character', 'Old Hero');
         CREATE TABLE drafts (id TEXT PRIMARY KEY, ops TEXT NOT NULL, prev_ops TEXT,
                              summary TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
     """)

@@ -102,7 +102,10 @@ class TestTheView:
     def test_it_is_skipped_where_there_is_no_relations_table(self, tmp_path):
         """A view over a missing table breaks every later ALTER TABLE RENAME."""
         c = sqlite3.connect(str(tmp_path / "x.db"), isolation_level=None)
-        c.execute("CREATE TABLE entities (id TEXT PRIMARY KEY, type TEXT NOT NULL, name TEXT)")
+        # Full pre-soft-delete columns: migration 5 indexes parent_id.
+        c.execute("CREATE TABLE entities (id TEXT PRIMARY KEY, type TEXT, name TEXT,"
+                  " one_sentence TEXT, order_key REAL, status TEXT, parent_id TEXT,"
+                  " location_id TEXT, extra TEXT)")
         apply_migrations(c, SCHEMA_MIGRATIONS)
         assert c.execute("SELECT 1 FROM sqlite_master WHERE type='view'").fetchone() is None
         c.execute("ALTER TABLE entities RENAME TO entities_old")  # would raise with a dangling view
@@ -110,7 +113,10 @@ class TestTheView:
 
     def test_create_schema_makes_it_once_the_tables_exist(self, tmp_path):
         c = sqlite3.connect(str(tmp_path / "x.db"), isolation_level=None)
-        c.execute("CREATE TABLE entities (id TEXT PRIMARY KEY, type TEXT NOT NULL, name TEXT)")
+        # Full pre-soft-delete columns: migration 5 indexes parent_id.
+        c.execute("CREATE TABLE entities (id TEXT PRIMARY KEY, type TEXT, name TEXT,"
+                  " one_sentence TEXT, order_key REAL, status TEXT, parent_id TEXT,"
+                  " location_id TEXT, extra TEXT)")
         apply_migrations(c, SCHEMA_MIGRATIONS)  # stamped current, no view
         create_schema(c)
         assert c.execute("SELECT 1 FROM sqlite_master WHERE type='view' "

@@ -34,6 +34,12 @@ CREATE TABLE IF NOT EXISTS entities (
     extra JSON NOT NULL DEFAULT '{}'
 );
 
+CREATE INDEX IF NOT EXISTS idx_entities_type    ON entities(type, is_deleted);
+CREATE INDEX IF NOT EXISTS idx_entities_parent  ON entities(parent_id);
+-- Partial: holds only the few deleted rows, so the hiding layer's deleted-id
+-- set (the literal `is_deleted=1`) is a tiny covering scan.
+CREATE INDEX IF NOT EXISTS idx_entities_deleted ON entities(id) WHERE is_deleted=1;
+
 CREATE TABLE IF NOT EXISTS relations (
     from_id TEXT NOT NULL,
     to_id TEXT NOT NULL,
@@ -42,6 +48,10 @@ CREATE TABLE IF NOT EXISTS relations (
     "order" INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (from_id, to_id, kind)
 );
+
+-- The primary key serves lookups by from_id; reverse lookups (a scene's cast,
+-- a location's scenes) key on to_id, which it cannot serve.
+CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_id, kind);
 
 CREATE TABLE IF NOT EXISTS sections (
     entity_id TEXT NOT NULL,
@@ -158,6 +168,26 @@ def _m4_live_relations_view(conn: sqlite3.Connection) -> None:
         "AND to_id NOT IN (SELECT id FROM entities WHERE is_deleted=1)")
 
 
+def _m5_indexes(conn: sqlite3.Connection) -> None:
+    """The four lookup indexes (see SCHEMA_SQL): relations by to_id, entities
+    by type and by parent_id, and the deleted-id set the hiding layer reads.
+
+    Written out in full, like steps 3 and 4: a migration is a frozen record.
+    Guarded on the tables it indexes: an index over a missing table errors at
+    once, and a file with no `relations` is no project yet; `create_schema`
+    makes the indexes with the tables (they are in SCHEMA_SQL), so skipping
+    here loses nothing.
+    """
+    have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "relations" in have:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_id, kind)")
+    if "entities" in have:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type, is_deleted)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_parent ON entities(parent_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_deleted "
+                     "ON entities(id) WHERE is_deleted=1")
+
+
 # Schema history of story.db: one function per change, oldest first. The number
 # of entries is the schema version, stored in the file itself (PRAGMA
 # user_version); a database that has run entry N never runs it again.
@@ -177,6 +207,7 @@ SCHEMA_MIGRATIONS = [
     _m2_draft_status_column,
     _m3_revisions_table,
     _m4_live_relations_view,
+    _m5_indexes,
 ]
 
 

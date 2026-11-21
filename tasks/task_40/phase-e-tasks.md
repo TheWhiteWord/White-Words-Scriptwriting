@@ -489,8 +489,9 @@ Delete one statement from `SCHEMA_SQL`: the "new project has the index" test fai
 Delete one from `_m5`: the "old database gains it" test fails.
 
 ### Done when
-- [ ] Migration 5 + `SCHEMA_SQL` + the four tests above. · [ ] Query-plan tests name the
-      indexes. · [ ] Timing noted in the commit message. · [ ] Close-out.
+- [x] Migration 5 + `SCHEMA_SQL` + the four tests above. *(Legacy-shape fixtures edited —
+      owner-approved; see Discoveries.)* · [x] Query-plan tests name the
+      indexes. · [x] Timing noted in the commit message. · [x] Close-out.
 
 ---
 
@@ -977,7 +978,7 @@ Baseline at start: `1602 passed, 1 failed` (expected `1602 passed, 1 failed`).
 | Task | Status | Commit | Tests after | Notes |
 |---|---|---|---|---|
 | T1 orphan checker | done | `e-t1-orphan-checker` (branch tip) | 1622 passed, 1 failed | +20 tests, 8 mutations verified; FTS check needs `rank=1`; source-scan exemption owner-approved |
-| T2 indexes | | | | |
+| T2 indexes | done | `e-t2-indexes` (branch tip) | 1629 passed, 1 failed | +7 tests, 5 mutations verified; owner-approved legacy-shape edits in 3 test files (Discoveries) |
 | T3 connection plumbing | | | | |
 | T4 atomic version checks | | | | |
 | T5 atomic draft commit | | | | |
@@ -1022,6 +1023,25 @@ contradicted this file):
 - **T1: no orphans in any scenario.** All ten write scenarios (delete+restore of
   character/scene/plot/location/world, targeted purge, bulk purge `older_than_days=0`,
   create-edit-delete, draft commit, full re-import) leave the database clean.
+- **T2: "SCHEMA_SQL only runs on fresh databases" is false.** `create_schema`
+  executes it unconditionally, also over pre-existing tables, and three
+  existing tests pinned a legacy `entities` with only `(id, type, name)`:
+  that shape cannot carry the new indexes (probed: `create_schema` raises
+  `no such column: is_deleted`; `_m5` raises `no such column: parent_id`).
+  Owner ruling: keep the briefed layout (four statements in SCHEMA_SQL +
+  table-exists-guarded `_m5`) and give the legacy fixtures the full
+  pre-soft-delete column set — the shape `test_soft_delete.py` already used.
+  Edited: `test_schema_migrations._legacy_project`, `test_live_relations`
+  (two sites), and `test_legacy_db_migration` (a third site of the same
+  shape, found by grep — same approved class). No assertion loosened; `_m5`
+  keeps the briefed table guard, no column guard.
+- **T2: the type index barely helps when the queried type dominates the
+  table.** On the synthetic 5000-entity / 15000-relation DB (300 runs each,
+  before → after): relations by to_id 121.6 → 1.6 ms; parent_id 39.8 →
+  1.6 ms; deleted-id set 37.4 → 3.2 ms; `type='scene'` (half the rows)
+  166.3 → 148.4 ms, while the selective `type='plot'` went 44.3 → 6.8 ms.
+  The owner note on the partial index held: the plan test uses the literal
+  `is_deleted=1` and the plan names `idx_entities_deleted`.
 
 ---
 
