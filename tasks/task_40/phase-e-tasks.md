@@ -923,8 +923,8 @@ conversation is served to the frontend — find it with `grep -rn "drafts" src/s
 - The frontend only reads `status` and `error`; do not rename them.
 
 ### Done when
-- [ ] Overlay function + six table-row tests. · [ ] Conversation load uses it. · [ ] No route
-      contract change. · [ ] Close-out.
+- [x] Overlay function + six table-row tests. · [x] Conversation load uses it. · [x] No route
+      contract change. · [x] Close-out.
 
 ---
 
@@ -1024,7 +1024,7 @@ Baseline at start: `1602 passed, 1 failed` (expected `1602 passed, 1 failed`).
 | T3 connection plumbing | done | `e-t3-connection-plumbing` (branch tip) | 1625 passed, 1 failed | +6 tests (uncommitted-row visibility ×3 parametrized, hidden-connection, ownership, rollback); 6 mutations verified (M1→[location], M2→[plot], M3→[value-turns], M4→all 6, M5→rollback+ownership+hidden, M6→5); 4 stub signatures updated owner-approved; `plan`/`delete_form_entity` added to the worklist (Discoveries) |
 | T4 atomic version checks | done | `e-t4-atomic-version-checks` (branch tip) | 1630 passed, 1 failed | +5 tests (3 race guarantees, structure rollback, create rollback); 1 partial-landing test rewritten (TR-6a); 6 mutations verified (M1→[form-race, beats], M2→[structure-race, structure-rollback], M3→[script-race], M4→[structure-rollback], M5→[beats, create], M6→[create]); owner-approved follow-up wrapped the create path too, deleting `saved_scene` (Discoveries) |
 | T5 atomic draft commit | done | `e-t5-atomic-draft-commit` (branch tip) | 1650 passed, 1 failed | +20 tests (`test_draft_atomic.py`); 4 partial-landing tests rewritten (TR-6a); 11 mutations verified (M1→15 tests, M2→9, M3→crash test, M4→11, M4b→success-False, M5→4 incl. `database is locked`, M6→2, M7→2, M8→2, M9→crash test, M10→purge test); purge-only drafts keep the per-op path; non-op failures also returned as reports (Discoveries) |
-| T6 draft status | | | | |
+| T6 draft status | done | `e-t6-draft-status` (branch tip) | 1675 passed, 1 failed | +25 tests (`test_draft_status_overlay.py`: 12 rule cases, 8 against a real DB, 4 through the routes); 9 mutations verified (a→6, b→4, c→2, d→3, e→query-count, f→query-count, g→input-not-mutated, h→2, i→2); no route contract change; no schema change |
 | T7 UTC (optional) | | | | |
 
 **Discoveries** (anything surprising, any bug you saw but did not fix, any place the code
@@ -1247,6 +1247,31 @@ contradicted this file):
   path) make every failing test wait out the 3 s lock timeout; run them one per
   call under `timeout`. A run killed mid-mutation can leave a mutated source file:
   keep a known-good copy and `cmp` after every run.
+- **T6: where snapshots live.** Written: created with status `open` in
+  `app/mcp_server.py` (on a clean dry run), carried by `DraftEvent` and stored on
+  the chat message's `drafts` column by `chat/service.py`; rewritten by the approve
+  and reject routes in `app/routes/drafts.py` (`committed`, `failed` + `error`,
+  `discarded`). Read: `chat/store.get_conversation`, whose callers are the UI route
+  `routes/chat.py::get_conv`, the approve/reject routes (which REWRITE cards), the
+  retry route and `chat/service.py`.
+- **T6: the overlay is at serve time in the route, not in the store.** Putting it in
+  `get_conversation` would have leaked display values into the approve/reject
+  rewrite path. `reconcile_snapshots` returns copies and never writes; a test pins
+  that the stored card is still `open` after the conversation is served.
+- **T6: the rule is `drafts.reconcile_status` (pure); `reconcile_snapshots` is the
+  thin lookup.** One `SELECT … WHERE id IN (…)` for all cards, none when no card is
+  `open`/`failed`. Only `status` is replaced; `error` and everything else survive.
+  Two cards of one id (a re-stage can leave two) each follow their own snapshot.
+  A status the rule does not know, and an unknown table value, are left as they are.
+- **T6: known limit of the briefed table — a stale `open` card plus a pruned
+  receipt reads `discarded`.** If the agent commits through the tool and the
+  conversation is not loaded again until after `RECEIPT_DAYS` (30), the row is gone
+  and the card cannot be told from a discarded one. The table has no better answer;
+  an approve through the UI writes `committed` into the card and is unaffected.
+- **T6: status only.** A re-staged draft keeps its id, so an older card for it can
+  show stale `changes`/`summary`; T6 corrects status, as briefed, not content.
+- **T6: not fixed, seen in passing.** `app/mcp_server.py` writes
+  `/tmp/draft_debug.txt` on every staged draft (a leftover debug line).
 
 ---
 

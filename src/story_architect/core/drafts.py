@@ -354,6 +354,59 @@ def discard(project_path: Path, draft_id: str) -> dict:
     return {"success": True, "discarded": draft_id}
 
 
+def reconcile_status(snapshot_status, table_status):
+    """The status a draft card should SHOW — the one rule, no I/O.
+
+    The `drafts` table is the truth; the chat message keeps a display copy (a
+    snapshot) that goes stale when the agent commits through the tool or a
+    draft is discarded. Only the two states that can go stale are corrected:
+
+        snapshot says        table row     show
+        open | failed        open          the snapshot's value (failed keeps its error)
+        open | failed        committed     committed
+        open | failed        no row        discarded
+        committed|discarded  anything      the snapshot's value (terminal)
+
+    `table_status` is None when there is no row. A committed card never needs
+    its row (receipts are pruned after RECEIPT_DAYS), so a missing row there is
+    normal. A status this rule does not know is returned as it came.
+    """
+    if snapshot_status not in ("open", "failed"):
+        return snapshot_status
+    if table_status == "committed":
+        return "committed"
+    if table_status is None:
+        return "discarded"
+    return snapshot_status
+
+
+def reconcile_snapshots(project_path: Path, snapshots: list) -> list:
+    """Return copies of `snapshots` with each `status` taken from the table.
+
+    One lookup for the whole list, and none when no card can be stale. Only
+    `status` is replaced — a failed card keeps its `error`. The input is not
+    modified: callers that go on to REWRITE stored cards (approve, reject) must
+    see what was stored, so this is for serving a conversation, never for
+    saving one.
+    """
+    ids = sorted({s["id"] for s in snapshots
+                  if s.get("status") in ("open", "failed") and s.get("id")})
+    rows = {}
+    if ids:
+        from .db import get_db
+
+        conn = get_db(project_path)
+        try:
+            marks = ",".join("?" * len(ids))
+            rows = dict(conn.execute(
+                f"SELECT id, status FROM drafts WHERE id IN ({marks})", ids
+            ).fetchall())
+        finally:
+            conn.close()
+    return [{**s, "status": reconcile_status(s.get("status"), rows.get(s.get("id")))}
+            for s in snapshots]
+
+
 def sorted_ops(ops: list) -> list:
     """Dispatch order: create → edit → delete → reorder, stable within a kind.
 

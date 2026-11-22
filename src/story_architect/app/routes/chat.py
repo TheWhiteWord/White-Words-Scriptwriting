@@ -127,6 +127,13 @@ def make_router(config, app):
             if m.get("hidden"):
                 continue
             msgs.append({"id": m["id"], "role": m["role"], "text": m.get("text", ""), "status": m.get("status", "complete"), "created_at": m.get("created_at"), "tools": m.get("tools"), "drafts": m.get("drafts"), "attachments": m.get("attachments"), "error": m.get("error")})
+        # A card's stored status is a display copy; the drafts table is the truth.
+        # Overlay it here, at serve time only, so the stored cards stay as the
+        # approve/reject routes wrote them.
+        from story_architect.core.drafts import reconcile_snapshots
+        slots = [(m, i) for m in msgs for i, d in enumerate(m["drafts"] or []) if isinstance(d, dict)]
+        for (m, i), shown in zip(slots, reconcile_snapshots(pp, [m["drafts"][i] for m, i in slots])):
+            m["drafts"][i] = shown
         return {"id": conv["id"], "title": conv.get("title", ""), "messages": msgs}
 
     @router.delete("/api/projects/{slug}/conversations/{cid}")
