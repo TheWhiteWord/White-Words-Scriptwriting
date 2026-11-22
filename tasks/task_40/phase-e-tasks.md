@@ -874,10 +874,10 @@ matters more than tidying the key. The trap about asserting only that `committed
 truthy is worth keeping in T5's tests: assert `success` and the exact `applied` list.
 
 ### Done when
-- [ ] Atomic path + purge path + idempotence kept. · [ ] Report shape per Part 2.4; message
-      says nothing changed. · [ ] Old partial-landing tests rewritten (not deleted) with
-      comments. · [ ] New tests above, each mutation-checked. · [ ] Skill/tool docs updated.
-      · [ ] `assert_no_orphans` used. · [ ] Close-out.
+- [x] Atomic path + purge path + idempotence kept. · [x] Report shape per Part 2.4; message
+      says nothing changed. · [x] Old partial-landing tests rewritten (not deleted) with
+      comments. · [x] New tests above, each mutation-checked. · [x] Skill/tool docs updated.
+      · [x] `assert_no_orphans` used. · [x] Close-out.
 
 ---
 
@@ -1023,7 +1023,7 @@ Baseline at start: `1602 passed, 1 failed` (expected `1602 passed, 1 failed`).
 | T2b baseline (drop legacy support) | done | `e-t2b-baseline` (branch tip) | 1619 passed, 1 failed | −10 net: legacy-only tests deleted, mechanism tests added; 8 mutations verified; live DB upgraded 0→5; code diff 342 insertions / 612 deletions (Discoveries) |
 | T3 connection plumbing | done | `e-t3-connection-plumbing` (branch tip) | 1625 passed, 1 failed | +6 tests (uncommitted-row visibility ×3 parametrized, hidden-connection, ownership, rollback); 6 mutations verified (M1→[location], M2→[plot], M3→[value-turns], M4→all 6, M5→rollback+ownership+hidden, M6→5); 4 stub signatures updated owner-approved; `plan`/`delete_form_entity` added to the worklist (Discoveries) |
 | T4 atomic version checks | done | `e-t4-atomic-version-checks` (branch tip) | 1630 passed, 1 failed | +5 tests (3 race guarantees, structure rollback, create rollback); 1 partial-landing test rewritten (TR-6a); 6 mutations verified (M1→[form-race, beats], M2→[structure-race, structure-rollback], M3→[script-race], M4→[structure-rollback], M5→[beats, create], M6→[create]); owner-approved follow-up wrapped the create path too, deleting `saved_scene` (Discoveries) |
-| T5 atomic draft commit | | | | |
+| T5 atomic draft commit | done | `e-t5-atomic-draft-commit` (branch tip) | 1650 passed, 1 failed | +20 tests (`test_draft_atomic.py`); 4 partial-landing tests rewritten (TR-6a); 11 mutations verified (M1→15 tests, M2→9, M3→crash test, M4→11, M4b→success-False, M5→4 incl. `database is locked`, M6→2, M7→2, M8→2, M9→crash test, M10→purge test); purge-only drafts keep the per-op path; non-op failures also returned as reports (Discoveries) |
 | T6 draft status | | | | |
 | T7 UTC (optional) | | | | |
 
@@ -1197,6 +1197,56 @@ contradicted this file):
   as briefed: with the caller's transaction already open its internal
   `with transaction` is a savepoint, so the read-then-write gap is closed
   without restructuring it.
+
+- **T5: a draft now lands all ops or none, with the mark in the same transaction.**
+  `commit` runs every op and `_mark_committed` on one connection in one
+  `transaction`; `_dispatch` hands each write function `conn`. A refusal is
+  `result.get("error") or result.get("success") is False` (raised errors reach
+  that check through `_call`). `_OpFailed` is private to `drafts.py`. The
+  `already_committed` replay and the receipt pruning are unchanged (pruning moved
+  verbatim into `_mark_committed`). `dry_run`, `validate_ops`, the approve route
+  and `test_purge_approval.py` needed no change.
+- **T5: a failure that is not an op's fault is also returned, not raised.** The
+  brief caught only `_OpFailed`. A lock that cannot be taken within 3 s, a failed
+  COMMIT, or a failed mark would have escaped `commit` as a raw exception (a 500
+  from the approve route); the old per-op code turned those into a failure report
+  through `_call`. A second `except Exception` returns the same report shape
+  (`failed.op == "save the draft"`, message "Nothing was changed … commit it
+  again"). Mutation M9 pins it.
+- **T5: a multi-purge draft can still partly land — the one place `committed`
+  is not always `[]`.** `validate_ops` forbids mixing a purge with other ops but
+  allows several purges. Each purge is its own transaction (it takes a backup)
+  and cannot be undone, so if purge 2 fails purge 1 stays done. For that case
+  only, `committed` lists what was purged and the message says so (tested:
+  `test_a_draft_with_several_purges_says_truthfully_what_was_done`). Not changed
+  here: `story_admin` stages exactly one purge. **Recommendation:** a later task
+  limits a purge draft to one op; `_commit_purges`'s landed-list branch and the
+  "Partly done" report then disappear.
+- **T5: four old tests pinned partial landing — all class (a), none a regression.**
+  `test_drafts.py` ×2 (`..._names_what_landed` → `..._lands_nothing`;
+  `..._refuses_the_op_that_already_landed` → `..._fails_the_same_way_again`),
+  `test_story_draft_tool.py` ×1, `test_draft_preview.py` ×1 ("Partly saved" →
+  "Not saved … Nothing was changed"). `test_draft_dry_run.py` needed none.
+- **T5: the briefed relationship example does not discriminate** (same finding as
+  T3): a relationship's characters are not validated, so it passes with or without
+  the shared connection. It is kept as briefed; location→scene and character→plot
+  are the pairs that fail when `conn` is not passed (M1).
+- **T5: the skill reference was teaching the old behaviour.**
+  `staging-changes.md` had a section "A failed commit may have partly landed"
+  (resume by re-staging the remainder). Rewritten as "A commit lands everything or
+  nothing". `tools/story_draft.py` gained "all of it or none of it" in the commit
+  description. Not changed, flagged: `craft/scene-design.md` still says to "create
+  the location and commit it first" — now unnecessary within one draft, but
+  over-cautious rather than false.
+- **T5: residual race, not a regression.** `commit` reads the draft's status
+  before opening the transaction. Two commits of the same open draft at nearly the
+  same moment (web approve + agent tool) can both pass that check; the second then
+  fails on "already exists" for a draft that actually landed. Re-checking status
+  inside the transaction would close it. Left alone per scope.
+- **T5: mutation runs.** M1 (`conn` dropped) and M5 (purge through the atomic
+  path) make every failing test wait out the 3 s lock timeout; run them one per
+  call under `timeout`. A run killed mid-mutation can leave a mutated source file:
+  keep a known-good copy and `cmp` after every run.
 
 ---
 

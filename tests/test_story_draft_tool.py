@@ -79,7 +79,10 @@ def test_commit_writes_and_clears_the_draft(fixture_path):
     assert _entity_count(fixture_path) > 0
 
 
-def test_commit_reports_the_partial_failure_and_keeps_the_draft(fixture_path):
+def test_commit_reports_the_failure_and_keeps_the_draft(fixture_path):
+    # T5 rewrote this (it was "...partial_failure..."): the create that came
+    # first used to land and be named in `committed`; now nothing lands.
+    before = _entity_count(fixture_path)
     ops = OPS + [{
         "op": "reorder", "entity_type": "sequence", "entity_id": "act-two",
         "ordered_ids": ["a", "b"], "summary": "Resequence act two"}]
@@ -88,8 +91,10 @@ def test_commit_reports_the_partial_failure_and_keeps_the_draft(fixture_path):
 
     assert result["success"] is False
     assert result["draft_kept"] is True
-    assert result["committed"] == ["create scene/mira-tells-kael"]
+    assert result["committed"] == []
     assert result["failed"]["op"].startswith("reorder")
+    assert "Nothing was changed" in result["message"]
+    assert _entity_count(fixture_path) == before
     assert call({"action": "list"}, fixture_path)["count"] == 1
 
 

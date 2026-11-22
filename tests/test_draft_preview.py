@@ -236,17 +236,22 @@ def test_a_commit_report_is_terse_and_names_what_landed(fixture_path):
     assert "| field | value |" not in md
 
 
-def test_a_partial_failure_report_warns_that_the_project_is_mixed(fixture_path):
-    """The user is now looking at a partly-saved project; this message is the
-    only thing that says so."""
+def test_a_failure_report_says_nothing_was_changed(fixture_path):
+    """T5 rewrote this (it was "...warns_that_the_project_is_mixed"). A failed
+    commit used to leave a partly-saved project and this report said so with
+    "Partly saved". Now the project is untouched, and this report is the thing
+    that tells the user it is safe."""
     ops = BATCH + [{"op": "reorder", "entity_type": "sequence",
                     "entity_id": "act-two", "ordered_ids": ["a", "b"],
                     "summary": "Resequence act two"}]
     staged = stage(fixture_path, ops, "five changes")
     md = commit(fixture_path, staged["draft_id"])["preview_md"]
-    assert "⚠️ Partly saved" in md
+    assert "Not saved" in md and "Partly" not in md
     assert "❌" in md
-    assert "still open, so nothing is lost" in md
+    assert "Nothing was changed" in md
+    assert "still open" in md
+    # Nothing landed, so nothing is shown as saved — not even the valid ops.
+    assert "✅" not in md
 
 
 def test_rendering_reads_but_never_writes(fixture_path):

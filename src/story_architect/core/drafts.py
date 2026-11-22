@@ -47,6 +47,15 @@ class DraftError(ValueError):
     """A draft op is not dispatchable. The message is agent-facing."""
 
 
+class _OpFailed(Exception):
+    """One op of a draft was refused. Raised inside `commit`'s transaction so the
+    whole batch rolls back; never escapes `commit`."""
+
+    def __init__(self, position: int, op: dict, error: str):
+        super().__init__(error)
+        self.position, self.op, self.error = position, op, error
+
+
 # How long a committed draft's row is kept as the receipt for a repeated commit.
 RECEIPT_DAYS = 30
 
@@ -358,22 +367,25 @@ def sorted_ops(ops: list) -> list:
 
 
 def commit(project_path: Path, draft_id: str) -> dict:
-    """Write a staged draft by replaying its ops into `core.writes`.
+    """Write a staged draft by replaying its ops into `core.writes`: all or none.
 
     No re-implementation of the writes: each op dispatches in-process to the
     function that means what a create means, so there is one place where that
     meaning lives.
 
-    The guarantee is **atomic per op, resumable per batch**. Each write
-    function opens its own connection and runs in its own transaction
-    (`core.db.transaction`), so a multi-op draft cannot be one transaction
-    without threading a shared connection through every write path. On
-    failure the draft row is KEPT and the response names exactly what landed:
-    the agent re-stages the remainder and commits again, and an op that
-    already landed refuses correctly (a create whose id now exists fails on
-    uniqueness). A temporarily inconsistent project, never lost work.
+    The guarantee is **all or nothing**. Every op and the "committed" mark run
+    on ONE connection in ONE transaction, so a refused op, an error, or a crash
+    part-way rolls the whole batch back and leaves the draft open: the
+    project is exactly as it was, and the agent fixes the draft and re-stages
+    it. Each write function joins the caller's transaction (it is handed
+    `conn`), so a later op sees what an earlier one created.
+
+    The one exception is a purge-only draft (`validate_ops` guarantees a purge
+    is never mixed with other ops). A purge opens its own connection and takes
+    a backup, which cannot happen inside the shared transaction — it would wait
+    for the lock and fail — so those drafts run op by op, see `_commit_purges`.
     """
-    from .db import get_db
+    from .db import get_db, transaction
 
     conn = get_db(project_path)
     try:
@@ -406,42 +418,37 @@ def commit(project_path: Path, draft_id: str) -> dict:
                         f"Nothing was written twice."),
         }
 
-    landed, failed = [], None
-    for op in ops:
-        result = _dispatch(project_path, op)
-        if result.get("error"):
-            failed = {"op": _describe(op), "error": result["error"]}
-            break
-        landed.append(_describe(op))
+    if all(op["op"] == "purge" for op in ops):
+        return _commit_purges(project_path, draft_id, ops)
 
-    if failed:
-        # The draft row is the resume token — kept, not deleted, so nothing in
-        # the batch is lost and the remainder can be re-staged against it.
-        return {
-            "success": False,
-            "committed": landed,
-            "failed": failed,
-            "draft_id": draft_id,
-            "draft_kept": True,
-            "preview_md": _commit_report(landed, failed, draft_id),
-            "message": (
-                f"{len(landed)} of {len(ops)} change(s) written, then it stopped. "
-                f"Draft {draft_id} kept so you can retry — re-stage the "
-                f"remainder and commit again."
-            ),
-        }
-
-    # Marked, not deleted: the row is the receipt that makes a repeated commit
-    # replay instead of claiming the work was lost. `discard` removes it.
+    landed = []
     conn = get_db(project_path)
     try:
-        conn.execute("UPDATE drafts SET status='committed' WHERE id=?", (draft_id,))
-        # The receipt only matters while a repeated commit might still arrive; old
-        # ones would otherwise pile up for good. Never the one just written.
-        conn.execute("DELETE FROM drafts WHERE status='committed' AND id != ? "
-                     "AND created_at < ?",
-                     (draft_id, (datetime.now() - timedelta(days=RECEIPT_DAYS))
-                      .isoformat(timespec="seconds")))
+        with transaction(conn):
+            for n, op in enumerate(ops, 1):
+                result = _dispatch(project_path, op, conn=conn)
+                # A write function reports a refusal either by raising (which
+                # `_call` turns into an error dict) or by returning one.
+                if result.get("error") or result.get("success") is False:
+                    raise _OpFailed(n, op, str(result.get("error")
+                                               or result.get("message")
+                                               or "the write was refused"))
+                landed.append(_describe(op))
+            _mark_committed(conn, draft_id)
+    except _OpFailed as stop:
+        label = _describe(stop.op)
+        return _failure_report(
+            draft_id, label, stop.error,
+            f"Nothing was changed. Change {stop.position} of {len(ops)} failed "
+            f"({label}: {stop.error}). Fix it and re-stage — draft {draft_id} is kept.")
+    except Exception as e:
+        # Not an op's fault — the lock could not be taken, the commit itself
+        # failed, the mark failed. The transaction has already rolled back.
+        error = f"{type(e).__name__}: {e}"
+        return _failure_report(
+            draft_id, "save the draft", error,
+            f"Nothing was changed. The batch could not be saved as a whole ({error}). "
+            f"Draft {draft_id} is kept — commit it again.")
     finally:
         conn.close()
     return {
@@ -451,6 +458,89 @@ def commit(project_path: Path, draft_id: str) -> dict:
         "applied": landed,
         "preview_md": _commit_report(landed, None, draft_id),
         "message": f"Committed {len(landed)} change(s) from draft {draft_id}.",
+    }
+
+
+def _commit_purges(project_path: Path, draft_id: str, ops: list) -> dict:
+    """Commit a purge-only draft op by op, each in its own transaction.
+
+    `purge_deleted` is already one transaction of its own (it selects, takes the
+    backup and deletes together), so each purge is all-or-nothing. A draft with
+    SEVERAL purges is not: an earlier one stays purged when a later one fails,
+    and a purge cannot be undone, so the report says exactly what was done.
+    """
+    from .db import get_db, transaction
+
+    landed = []
+    for n, op in enumerate(ops, 1):
+        result = _dispatch(project_path, op)
+        if result.get("error") or result.get("success") is False:
+            error = str(result.get("error") or result.get("message")
+                        or "the write was refused")
+            label = _describe(op)
+            if landed:
+                message = (f"{len(landed)} of {len(ops)} purge(s) were done and cannot be "
+                           f"undone (a backup was taken first), then change {n} failed "
+                           f"({label}: {error}). Draft {draft_id} is kept; stage the "
+                           f"purges that did not run again.")
+            else:
+                message = (f"Nothing was changed. Change {n} of {len(ops)} failed "
+                           f"({label}: {error}). Fix it and re-stage — "
+                           f"draft {draft_id} is kept.")
+            return _failure_report(draft_id, label, error, message, landed)
+        landed.append(_describe(op))
+
+    conn = get_db(project_path)
+    try:
+        with transaction(conn):
+            _mark_committed(conn, draft_id)
+    finally:
+        conn.close()
+    return {
+        "success": True,
+        "committed": True,
+        "draft_id": draft_id,
+        "applied": landed,
+        "preview_md": _commit_report(landed, None, draft_id),
+        "message": f"Committed {len(landed)} change(s) from draft {draft_id}.",
+    }
+
+
+def _mark_committed(conn: sqlite3.Connection, draft_id: str) -> None:
+    """Mark the draft committed, on the caller's connection and transaction.
+
+    Marked, not deleted: the row is the receipt that makes a repeated commit
+    replay instead of claiming the work was lost. `discard` removes it. Being in
+    the same transaction as the ops is the point: there is no moment where the
+    ops have landed and the draft still reads open.
+    """
+    conn.execute("UPDATE drafts SET status='committed' WHERE id=?", (draft_id,))
+    # The receipt only matters while a repeated commit might still arrive; old
+    # ones would otherwise pile up for good. Never the one just written.
+    conn.execute("DELETE FROM drafts WHERE status='committed' AND id != ? "
+                 "AND created_at < ?",
+                 (draft_id, (datetime.now() - timedelta(days=RECEIPT_DAYS))
+                  .isoformat(timespec="seconds")))
+
+
+def _failure_report(draft_id: str, op: str, error: str, message: str,
+                    landed: list | None = None) -> dict:
+    """The answer for a commit that did not finish. The draft row is untouched.
+
+    `landed` is empty for every draft except a multi-purge one (see
+    `_commit_purges`), so "committed" is `[]` and "nothing was changed" is the
+    plain truth.
+    """
+    landed = landed or []
+    failed = {"op": op, "error": error}
+    return {
+        "success": False,
+        "committed": landed,
+        "failed": failed,
+        "draft_id": draft_id,
+        "draft_kept": True,
+        "preview_md": _commit_report(landed, failed, draft_id),
+        "message": message,
     }
 
 
@@ -503,27 +593,34 @@ def _commit_report(landed: list, failed: dict | None, draft_id: str) -> str:
     """What landed, and what did not. Terse by default (decision 4).
 
     The user read the full detail moments earlier in the same conversation;
-    repeating it is noise. The exception is partial failure, which gets a
-    warning line and the resume instruction, because the project is now in a
-    mixed state and only this message says so.
+    repeating it is noise. A failure says plainly that nothing was changed —
+    only a multi-purge draft can say otherwise, and then it lists what was done.
     """
-    lines = [f"### {'⚠️ Partly saved' if failed else '✅ Committed'} · draft `{draft_id}`", ""]
-    for op in landed:
-        lines.append(f"· ✅ `{op}`")
-    if failed:
-        lines.append(f"· ❌ `{failed['op']}` — {failed['error']}")
-    if failed:
-        lines += ["", f"Draft `{draft_id}` is still open, so nothing is lost. "
-                      f"Re-stage the remainder and commit again."]
+    if not failed:
+        lines = [f"### ✅ Committed · draft `{draft_id}`", ""]
+        lines += [f"· ✅ `{op}`" for op in landed]
+        return "\n".join(lines) + "\n"
+    if landed:
+        lines = [f"### ⚠️ Partly done · draft `{draft_id}`", ""]
+        lines += [f"· ✅ `{op}`" for op in landed]
+        lines += [f"· ❌ `{failed['op']}` — {failed['error']}", "",
+                  f"Those purges cannot be undone. Draft `{draft_id}` is still open; "
+                  f"stage the purges that did not run again."]
+    else:
+        lines = [f"### ❌ Not saved · draft `{draft_id}`", "",
+                 f"· ❌ `{failed['op']}` — {failed['error']}", "",
+                 f"Nothing was changed. Draft `{draft_id}` is still open."]
     return "\n".join(lines) + "\n"
 
 
-def _dispatch(project_path: Path, op: dict) -> dict:
+def _dispatch(project_path: Path, op: dict, conn=None) -> dict:
     """Apply one op by calling the core write function for its kind.
 
     The op fields are already what the write functions take, so there is
     nothing to translate: `project_path` is resolved, and each op names its
-    entity directly. Each op is handed to its own write function as-is.
+    entity directly. Each op is handed to its own write function as-is, along
+    with `conn` so it runs inside the caller's transaction (None: its own).
+    A purge never gets one — see `commit`.
     """
     from . import writes
 
@@ -532,11 +629,13 @@ def _dispatch(project_path: Path, op: dict) -> dict:
         return _call(
             writes.create_entity, project_path,
             op["type"], op["id"], op["frontmatter"], op.get("sections") or {},
+            conn=conn,
         )
     if kind == "edit":
         return _call(
             writes.edit_entity, project_path,
             op["entity_type"], op["entity_id"], op["data"], op["summary"],
+            conn=conn,
         )
     if kind == "delete":
         # NOT a safety bypass: delete_entity's `confirm` gate exists so the
@@ -547,6 +646,7 @@ def _dispatch(project_path: Path, op: dict) -> dict:
         return _call(
             writes.delete_entity, project_path,
             op["entity_type"], op["entity_id"], op["summary"], True,
+            conn=conn,
         )
     if kind == "purge":
         # Irreversible, and reached only by the person approving the draft: there
@@ -558,19 +658,19 @@ def _dispatch(project_path: Path, op: dict) -> dict:
     return _call(
         writes.reorder, project_path,
         op["entity_type"], op["ordered_ids"], op["summary"],
+        conn=conn,
     )
 
 
-def _call(fn, *args) -> dict:
+def _call(fn, *args, **kwargs) -> dict:
     """Run a write function and get its result or its error as a dict.
 
     The write functions raise on failure; the commit loop keys off a returned
     `error` key so it can name the op that failed and keep the draft. Funnel
-    the raise into that shape here — and keep a surprise from aborting a
-    half-applied batch, which validate_ops should already have prevented.
+    the raise into that shape here.
     """
     try:
-        return fn(*args)
+        return fn(*args, **kwargs)
     except Exception as e:
         return {"error": f"{type(e).__name__}: {e}"}
 

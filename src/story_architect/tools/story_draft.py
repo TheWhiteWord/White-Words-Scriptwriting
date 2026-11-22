@@ -146,8 +146,8 @@ SCHEMA = {
             "type": "string",
             "enum": ["stage", "commit", "discard", "list"],
             "description": "stage (propose ops and get a draft_id back — writes nothing to the "
-                           "story), commit (write a staged draft; only ever call this once the "
-                           "user has confirmed), discard (drop a draft; nothing it proposed was "
+                           "story), commit (write a staged draft — all of it or none of it; only "
+                           "ever call this once the user has confirmed), discard (drop a draft; nothing it proposed was "
                            "ever written), list (every open draft in the project)",
         },
         "project": {

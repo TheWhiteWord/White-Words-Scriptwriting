@@ -361,10 +361,12 @@ def test_restaging_a_committed_draft_id_reopens_it(fixture_path):
     assert "already_committed" not in result
 
 
-# ─── Guard 2: partial failure keeps the draft and names what landed ───
+# ─── Guard 2: a failing batch keeps the draft and lands nothing ───
 
-def test_a_failing_batch_keeps_the_draft_and_names_what_landed(fixture_path):
-    """Guard 2: atomic per op, resumable per batch — not all-or-nothing."""
+def test_a_failing_batch_keeps_the_draft_and_lands_nothing(fixture_path):
+    """Guard 2. T5 rewrote this: it used to pin "atomic per op, resumable per
+    batch" (the create landed, `committed` named it). A draft now lands all its
+    ops or none, so the create is rolled back with the failed reorder."""
     ops = [
         _create_scene("mira-tells-kael"),
         # Fails: no such sequence.
@@ -376,17 +378,20 @@ def test_a_failing_batch_keeps_the_draft_and_names_what_landed(fixture_path):
 
     assert result["success"] is False
     assert result["draft_kept"] is True
-    assert result["committed"] == ["create scene/mira-tells-kael"]
+    assert result["committed"] == []
     assert "act-two" in result["failed"]["error"] or \
         "not found" in result["failed"]["error"]
-    # The resume token survives, and the create that landed is not repeated.
+    # The draft survives, and the create that came first did NOT land.
     assert drafts.list_drafts(fixture_path)["count"] == 1
     assert _rows(fixture_path, "SELECT COUNT(*) FROM entities WHERE id=?",
-                 "mira-tells-kael")[0][0] == 1
+                 "mira-tells-kael")[0][0] == 0
 
 
-def test_a_recommitted_draft_refuses_the_op_that_already_landed(fixture_path):
-    """The re-stage path the partial-failure message tells the agent to take."""
+def test_a_recommitted_failing_draft_fails_the_same_way_again(fixture_path):
+    """T5 rewrote this: it used to pin the old re-stage path, where recommitting
+    refused the create that had already landed ("already exists"). Nothing lands
+    now, so a second commit of an unfixed draft hits the SAME refusal — the
+    failing op, not a create that was never written — and still lands nothing."""
     ops = [
         _create_scene("mira-tells-kael"),
         {"op": "reorder", "entity_type": "sequence", "entity_id": "act-two",
@@ -395,10 +400,14 @@ def test_a_recommitted_draft_refuses_the_op_that_already_landed(fixture_path):
     staged = drafts.stage(fixture_path, ops, "two changes")
     drafts.commit(fixture_path, staged["draft_id"])
 
+    first = drafts.commit(fixture_path, staged["draft_id"])
     again = drafts.commit(fixture_path, staged["draft_id"])
     assert again["success"] is False
     assert again["committed"] == []
-    assert "already exists" in again["failed"]["error"]
+    assert again["failed"] == first["failed"]
+    assert "already exists" not in again["failed"]["error"]
+    assert _rows(fixture_path, "SELECT COUNT(*) FROM entities WHERE id=?",
+                 "mira-tells-kael")[0][0] == 0
 
 
 # ─── Guard 5: ordering ───
