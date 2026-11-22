@@ -991,11 +991,13 @@ together" still groups. The conversion itself: run the script on a copy and
 verify every stamp parses aware and the row counts are unchanged.
 
 ### Done when
-- [x] Inventory table in the commit message. · [ ] **Conversion run on the live
-      project (backup path recorded) — OWNER STEP, see Discoveries "T7: how to
-      run the conversion"**; [x] then one producer helper for all stored
-      stamps. · [x] No naive-tolerance path anywhere. · [x] Close-out (code); the
-      box above is ticked by the owner after the run.
+- [x] Inventory table in the commit message. · [x] **Conversion run on the live
+      project — DONE 2026-11-22: 6 `drafts.created_at` stamps converted
+      (report first, then `--apply`), safety backup
+      `projects/browser-verification-test/.story/pre-t7-utc-20261122_234933.db`;
+      row counts unchanged, zero orphans, integrity ok.** · [x] then one producer
+      helper for all stored stamps. · [x] No naive-tolerance path anywhere. ·
+      [x] Close-out.
 
 ---
 
@@ -1027,7 +1029,7 @@ Baseline at start: `1602 passed, 1 failed` (expected `1602 passed, 1 failed`).
 | T4 atomic version checks | done | `e-t4-atomic-version-checks` (branch tip) | 1630 passed, 1 failed | +5 tests (3 race guarantees, structure rollback, create rollback); 1 partial-landing test rewritten (TR-6a); 6 mutations verified (M1→[form-race, beats], M2→[structure-race, structure-rollback], M3→[script-race], M4→[structure-rollback], M5→[beats, create], M6→[create]); owner-approved follow-up wrapped the create path too, deleting `saved_scene` (Discoveries) |
 | T5 atomic draft commit | done | `e-t5-atomic-draft-commit` (branch tip) | 1650 passed, 1 failed | +20 tests (`test_draft_atomic.py`); 4 partial-landing tests rewritten (TR-6a); 11 mutations verified (M1→15 tests, M2→9, M3→crash test, M4→11, M4b→success-False, M5→4 incl. `database is locked`, M6→2, M7→2, M8→2, M9→crash test, M10→purge test); purge-only drafts keep the per-op path; non-op failures also returned as reports (Discoveries) |
 | T6 draft status | done | `e-t6-draft-status` (branch tip) | 1675 passed, 1 failed | +25 tests (`test_draft_status_overlay.py`: 12 rule cases, 8 against a real DB, 4 through the routes); 9 mutations verified (a→6, b→4, c→2, d→3, e→query-count, f→query-count, g→input-not-mutated, h→2, i→2); no route contract change; no schema change |
-| T7 UTC (optional) | code done; **conversion not yet run** | `e-t7-utc-timestamps` (branch tip) | 1720 passed, 1 failed | +45 tests (`test_utc_stamps.py` 21, `test_utc_conversion.py` 24); 27 mutations verified (C1–C13 clock/producers, S1–S14 script; two survived at first — S8, S14 — and were fixed by strengthening tests); no existing test needed a change; **owner must run `upgrade_live_db.py` (report, then `--apply`) BEFORE starting the app on the new code** |
+| T7 UTC (optional) | done | `e-t7-utc-timestamps` (branch tip) | 1720 passed, 1 failed | +45 tests (`test_utc_stamps.py` 21, `test_utc_conversion.py` 24); 27 mutations verified (C1–C13 clock/producers, S1–S14 script; two survived at first — S8, S14 — and were fixed by strengthening tests); no existing test needed a change; conversion run on the live project 2026-11-22 (6 stamps, backup `pre-t7-utc-20261122_234933.db`) |
 
 **Discoveries** (anything surprising, any bug you saw but did not fix, any place the code
 contradicted this file):
@@ -1288,6 +1290,12 @@ contradicted this file):
   per date). Safe to run twice. If the new code runs first, nothing breaks loudly —
   stamps are compared as text, so old naive ones are simply off by the zone offset
   (hours) in the 30-day windows — but then run the conversion anyway.
+  **RUN 2026-11-22:** root `/mnt/AI/TWW/hermes-story-architect`, `--tz Europe/Rome`,
+  1 project DB, 0 trash records. Report first (nothing changed), then `--apply`:
+  6 `drafts.created_at` stamps converted (all winter, UTC+1); `entities.deleted_at`
+  and `revisions.replaced_at` were empty. Row counts unchanged (42/23/244/0/6),
+  zero orphans, integrity ok. Safety backup kept at
+  `projects/browser-verification-test/.story/pre-t7-utc-20261122_234933.db`.
 - **T7: inventory (Step 0).** Stored = written to a database/file and read back.
 
   | file · what | stored? | compared / matched? | read by | now |
