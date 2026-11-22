@@ -13,9 +13,10 @@ tasks/task_28/draft-staging-design.md.
 """
 import json
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
+from . import clock
 from .constants import ENTITY_SCHEMAS
 
 # Dispatch order. Creates must land before edits (an edit referencing a staged
@@ -266,7 +267,7 @@ def stage(project_path: Path, ops, summary: str = "",
                 json.dumps(ops, ensure_ascii=False),
                 json.dumps(prev_ops, ensure_ascii=False) if prev_ops is not None else None,
                 summary or (row[1] if row else ""),
-                row[2] if row else datetime.now().isoformat(timespec="seconds"),
+                row[2] if row else clock.now_iso(),
             ),
         )
     finally:
@@ -572,8 +573,7 @@ def _mark_committed(conn: sqlite3.Connection, draft_id: str) -> None:
     # ones would otherwise pile up for good. Never the one just written.
     conn.execute("DELETE FROM drafts WHERE status='committed' AND id != ? "
                  "AND created_at < ?",
-                 (draft_id, (datetime.now() - timedelta(days=RECEIPT_DAYS))
-                  .isoformat(timespec="seconds")))
+                 (draft_id, clock.ago_iso(RECEIPT_DAYS)))
 
 
 def _failure_report(draft_id: str, op: str, error: str, message: str,

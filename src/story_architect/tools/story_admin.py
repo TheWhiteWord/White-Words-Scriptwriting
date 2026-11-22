@@ -29,6 +29,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+from story_architect.core import clock
 from story_architect.core.trash import deleted_together, purge_cutoff
 
 # Deleted projects wait here, under the root but outside projects/, so they are
@@ -243,7 +244,7 @@ def _delete_project(args: dict, root_path: Path) -> dict:
             "slug": slug,
             "original_path": str(project_path),
             # Full precision: two deletes in one second must still sort newest-first.
-            "deleted_at": datetime.now().isoformat(),
+            "deleted_at": clock.now_iso("microseconds"),
         }), encoding="utf-8")
         shutil.move(str(project_path), str(slot))
     except BaseException:

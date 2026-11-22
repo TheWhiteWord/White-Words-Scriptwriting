@@ -10,11 +10,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from . import clock
+
 
 def purge_cutoff(days: int) -> str:
-    """ISO timestamp: entities deleted at or before it are old enough to purge."""
-    from datetime import datetime, timedelta
-    return (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+    """ISO timestamp: entities deleted at or before it are old enough to purge.
+
+    Compared against `deleted_at` as text, so it comes from the same clock and
+    has the same format (UTC, whole seconds, explicit offset).
+    """
+    return clock.ago_iso(days)
 
 
 def select_one_deletion(conn, target: dict):

@@ -28,7 +28,7 @@ Effort/risk, in the order I recommend:
 | T4 atomic version checks | E1 | M | medium | **only if you want the `rev` column** |
 | T5 atomic draft commit | E2 (part 2) | L | **high** | no |
 | T6 draft status, one source | E3d | S | low | no |
-| T7 UTC timestamps | E3c | M | low–medium | **skip or do?** (my advice: skip unless you work across timezones) |
+| T7 UTC timestamps | E3c | M | low–medium | **owner said yes** (done; the conversion run is the owner's step) |
 
 None of this is an emergency. The race in E1 needs two writers within milliseconds; the
 partial-commit state in E2 has a working recovery path today. This phase is about
@@ -991,9 +991,11 @@ together" still groups. The conversion itself: run the script on a copy and
 verify every stamp parses aware and the row counts are unchanged.
 
 ### Done when
-- [ ] Inventory table in the commit message. · [ ] Conversion run on the live
-      project (backup path recorded), then one producer helper for all stored
-      stamps. · [ ] No naive-tolerance path anywhere. · [ ] Close-out.
+- [x] Inventory table in the commit message. · [ ] **Conversion run on the live
+      project (backup path recorded) — OWNER STEP, see Discoveries "T7: how to
+      run the conversion"**; [x] then one producer helper for all stored
+      stamps. · [x] No naive-tolerance path anywhere. · [x] Close-out (code); the
+      box above is ticked by the owner after the run.
 
 ---
 
@@ -1025,7 +1027,7 @@ Baseline at start: `1602 passed, 1 failed` (expected `1602 passed, 1 failed`).
 | T4 atomic version checks | done | `e-t4-atomic-version-checks` (branch tip) | 1630 passed, 1 failed | +5 tests (3 race guarantees, structure rollback, create rollback); 1 partial-landing test rewritten (TR-6a); 6 mutations verified (M1→[form-race, beats], M2→[structure-race, structure-rollback], M3→[script-race], M4→[structure-rollback], M5→[beats, create], M6→[create]); owner-approved follow-up wrapped the create path too, deleting `saved_scene` (Discoveries) |
 | T5 atomic draft commit | done | `e-t5-atomic-draft-commit` (branch tip) | 1650 passed, 1 failed | +20 tests (`test_draft_atomic.py`); 4 partial-landing tests rewritten (TR-6a); 11 mutations verified (M1→15 tests, M2→9, M3→crash test, M4→11, M4b→success-False, M5→4 incl. `database is locked`, M6→2, M7→2, M8→2, M9→crash test, M10→purge test); purge-only drafts keep the per-op path; non-op failures also returned as reports (Discoveries) |
 | T6 draft status | done | `e-t6-draft-status` (branch tip) | 1675 passed, 1 failed | +25 tests (`test_draft_status_overlay.py`: 12 rule cases, 8 against a real DB, 4 through the routes); 9 mutations verified (a→6, b→4, c→2, d→3, e→query-count, f→query-count, g→input-not-mutated, h→2, i→2); no route contract change; no schema change |
-| T7 UTC (optional) | | | | |
+| T7 UTC (optional) | code done; **conversion not yet run** | `e-t7-utc-timestamps` (branch tip) | 1720 passed, 1 failed | +45 tests (`test_utc_stamps.py` 21, `test_utc_conversion.py` 24); 27 mutations verified (C1–C13 clock/producers, S1–S14 script; two survived at first — S8, S14 — and were fixed by strengthening tests); no existing test needed a change; **owner must run `upgrade_live_db.py` (report, then `--apply`) BEFORE starting the app on the new code** |
 
 **Discoveries** (anything surprising, any bug you saw but did not fix, any place the code
 contradicted this file):
@@ -1272,6 +1274,75 @@ contradicted this file):
   show stale `changes`/`summary`; T6 corrects status, as briefed, not content.
 - **T6: not fixed, seen in passing.** `app/mcp_server.py` writes
   `/tmp/draft_debug.txt` on every staged draft (a leftover debug line).
+- **T7: how to run the conversion (owner step, do this BEFORE starting the app on
+  the new code).** Stop the app and any agent. Then, with the project venv:
+  `python tasks/task_40/upgrade_live_db.py <ROOT> --all --tz <your zone>` (report:
+  changes nothing, prints the zone it assumed and sample conversions), check the
+  samples, then the same line with `--apply`. `--all` covers every project under
+  `<ROOT>/projects/`, every trashed project, and every `.story-trash/*/deleted.json`;
+  it reports on everything first and writes nothing unless all of it is readable.
+  For a single project: `<PROJECT_DIR>` without `--all`. Each database gets a safety
+  backup `.story/pre-t7-utc-<time>.db` (the path is printed — record it here);
+  keep it until you are sure. `--tz` is the zone the machine was in when the
+  stamps were written (default: the machine's own zone, with summer time applied
+  per date). Safe to run twice. If the new code runs first, nothing breaks loudly —
+  stamps are compared as text, so old naive ones are simply off by the zone offset
+  (hours) in the 30-day windows — but then run the conversion anyway.
+- **T7: inventory (Step 0).** Stored = written to a database/file and read back.
+
+  | file · what | stored? | compared / matched? | read by | now |
+  |---|---|---|---|---|
+  | `core/writes.py` `delete_entity` · `deleted_at` (parent + children, one string) | DB | `<=` cutoff (text); `=` in `deleted_together` | trash list, purge, restore | `clock.now_iso()` |
+  | `core/revisions.py` · `replaced_at` | DB | no | revision list/get/restore (display) | `clock.now_iso()` |
+  | `core/drafts.py` `stage` · `created_at` | DB | `<` cutoff in receipt pruning | `list_drafts`, approve card | `clock.now_iso()` |
+  | `core/drafts.py` `_mark_committed` · the 30-day cutoff | — | against `created_at` (text) | — | `clock.ago_iso()` |
+  | `core/trash.py` `purge_cutoff` · the age-floor cutoff | — | against `deleted_at` (text) | purge, preview, list | `clock.ago_iso()` |
+  | `tools/story_admin.py` `delete_project` · `deleted.json` `deleted_at` | file | sorted as text, newest first | list/restore trashed projects | `clock.now_iso("microseconds")` (full precision kept on purpose) |
+  | `app/mcp_server.py` · the chat card's `created_at` | chat DB (JSON) | no | UI (not displayed) | `clock.now_iso()` |
+  | `chat/store.py` · conversation/message stamps | chat DB | ordering | UI | already UTC; untouched |
+  | `core/backups.py` · backup `created_at` (read from the FILE NAME), periodic-backup interval | name | `now - taken` (both local) | backup list, periodic backup | **unchanged** (below) |
+  | `core/db.py`, `core/drafts.py` (draft id), `tools/story_admin.py` (trash folder) · `strftime` labels | names | no | people | **unchanged** (below) |
+  | `app/server.py`, `adapters/hermes/gateway.py` · `time.time()` | no | heartbeat / timeouts | — | not a stored stamp |
+
+- **T7: backup file names stay local time (decision; veto if you disagree).** The
+  brief lists backups as "known to matter", but their time is in the FILE NAME
+  (`story_20261120_091500.db`), not a database column. Switching new names to UTC
+  would put two zones in one folder, and `list_backups` sorts and prunes by that
+  time: a new backup taken at UTC (1–2 hours behind Rome) could sort as OLDER than
+  one taken just before it, so pruning could keep the wrong ones. The only risk
+  left is the 24-hour periodic-backup interval being an hour off across a DST
+  change, which is harmless. `LOCAL_TIME_ALLOWED` in `test_utc_stamps.py` records
+  each such exemption and its reason, and a test fails if one stops being needed.
+- **T7: the brief's helper was extended in three small ways.** `now_iso(timespec=)`
+  because the project-trash stamp is full precision on purpose ("two deletes in one
+  second must still sort newest-first") and must be fixed width; `ago_iso(days)`
+  because the purge cutoff and the receipt cutoff are stamps compared as text and
+  were two hand-written copies of the same arithmetic; `STORED_STAMPS`, the one list
+  of stamp columns, walked by the conversion and guarded by a test that fails if the
+  schema gains a `*_at` column that is not listed.
+- **T7: `clock.parse` has no production caller.** Nothing in the app parses a stored
+  stamp — every comparison is text, which is exactly why one format matters. So
+  "naive means unconverted data" is enforced where parsing happens: by the conversion
+  script's own post-check, and by tests. A naive stamp that appeared in a database
+  later would not raise at runtime; it would compare as text, hours off. Cheap
+  hardening if wanted: run the script's report mode (it fails on any non-aware stamp)
+  from time to time, or add a "naive stamps" category to `find_orphans`.
+- **T7: the conversion is wider than the brief's one project.** The brief says
+  `deleted_at`, draft `created_at`, `revisions.replaced_at` of the live project. A
+  trashed project's database comes back with naive stamps when restored, other
+  projects under `projects/` have their own, and `deleted.json` records are stored
+  stamps outside any database; the script covers all of them with `--all`. T2b's
+  version of this script wrote its data fix as naive local time; it now stamps with
+  `clock.now_iso()`, and conversion + verification are one transaction (T2b's
+  version was not).
+- **T7: existing test fixtures still hand-write naive stamps** (`'2020-01-01T00:00:00'`
+  in about a dozen places in `test_purge_one`, `test_list_deleted`, `test_delete_stamps`,
+  `test_purge_approval`, `test_story_admin`, `test_write_atomicity`, `test_backups`).
+  They still pass, because the code compares as text and the stamps are far from the
+  cutoff, and rule 0.5 says not to edit tests that do not need it. They describe data
+  that can no longer exist. Recommendation: leave them.
+- **T7: known leftover.** Chat cards already stored in the chat database keep their old
+  naive `created_at` in the JSON display copy. Nothing parses or displays it.
 
 ---
 

@@ -802,8 +802,7 @@ def delete_entity(project_path: Path, entity_type: str, slug: str,
     * without `confirm` — a report of what would go, and nothing has changed;
     * with structural children — the blockers, which the caller must act on.
     """
-    from datetime import datetime
-
+    from . import clock
     from .db import get_db, transaction
 
     own_conn = conn is None
@@ -885,7 +884,7 @@ def delete_entity(project_path: Path, entity_type: str, slug: str,
 
             # Soft delete: flag the row instead of removing it. Sections and
             # relations are left intact, so nothing has to be reconstructed later.
-            stamp = datetime.now().isoformat(timespec="seconds")
+            stamp = clock.now_iso()
             for child_id, child_type in children:
                 conn.execute(
                     "UPDATE entities SET is_deleted=1, deleted_at=? WHERE id=?",

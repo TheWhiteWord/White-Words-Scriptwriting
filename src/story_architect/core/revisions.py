@@ -14,7 +14,7 @@ cast, status). They change often and are small; this is the *text*. Not
 touched by the Markdown import either, which rebuilds sections wholesale after
 taking a full backup of its own.
 """
-from datetime import datetime
+from . import clock
 from pathlib import Path
 
 # How many replaced versions to keep per (entity, section). The script editor
@@ -41,7 +41,7 @@ def snapshot_replaced_body(conn, entity_id: str, heading: str, new_body: str,
         "INSERT INTO revisions (entity_id, heading, body, replaced_at, summary) "
         "VALUES (?, ?, ?, ?, ?)",
         (entity_id, heading, row[0],
-         datetime.now().isoformat(timespec="seconds"), summary or ""))
+         clock.now_iso(), summary or ""))
     conn.execute(
         "DELETE FROM revisions WHERE entity_id=? AND heading=? AND id NOT IN ("
         " SELECT id FROM revisions WHERE entity_id=? AND heading=? "

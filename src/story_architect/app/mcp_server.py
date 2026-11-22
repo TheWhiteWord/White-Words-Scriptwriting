@@ -90,7 +90,7 @@ def create_mcp_server(config: Config) -> Server:
                 if not (isinstance(dry, dict) and dry.get("status") == "clean"):
                     return types.CallToolResult(content=[types.TextContent(type="text", text=result)])
                 from pathlib import Path
-                from datetime import datetime
+                from story_architect.core import clock
                 from story_architect.tools.story_resolve import resolve_project
                 from story_architect.core.drafts import describe_ops
                 try:
@@ -103,7 +103,7 @@ def create_mcp_server(config: Config) -> Server:
                     "id": obj.get("draft_id"),
                     "status": "open",
                     "summary": args.get("summary", ""),
-                    "created_at": datetime.now().isoformat(timespec="seconds"),
+                    "created_at": clock.now_iso(),
                     "changes": changes,
                     "warnings": obj.get("validation") or [],
                 }
