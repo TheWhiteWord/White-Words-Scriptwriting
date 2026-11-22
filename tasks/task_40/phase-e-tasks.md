@@ -133,7 +133,7 @@ T3–T5.
 - **A new reader must be added to `tests/twin_helpers.everything_a_reader_can_say()`**
   — that is the only test that covers it.
 
-**DB-5 — Schema changes.** The schema has a baseline (`BASELINE_VERSION = 5` in
+**DB-5 — Schema changes.** The schema has a baseline (`BASELINE_VERSION = 4` in
 `core/db.py`; `chat/store.py` has its own `CHAT_BASELINE = 1`). Every change from
 now on is **appended after the baseline**: add a function to `SCHEMA_MIGRATIONS`
 **and** update `SCHEMA_SQL` for fresh databases. Never edit an existing migration
@@ -141,7 +141,10 @@ now on is **appended after the baseline**: add a function to `SCHEMA_MIGRATIONS`
 `LATEST_VERSION = BASELINE_VERSION + len(SCHEMA_MIGRATIONS)`. The live database is
 upgraded by opening it (`get_db`); never edit it by hand. A file below the
 baseline, or one with tables but no version, is refused with a pointer to
-`tasks/task_40/upgrade_live_db.py` — there is no legacy support (T2b). Test a
+`tasks/task_40/upgrade_live_db.py`. The baseline was 5 until the v4 database in
+the default root turned out to be the live one (T2b's "one database exists"
+premise was wrong); the 4→5 step is the frozen index migration, so 4 is the
+oldest shape this build opens. Test a
 migration on (a) a new project and (b) a database stamped one version lower,
 using a test-only migration monkeypatched onto the list (see
 `tests/test_schema_migrations.py`); no legacy shapes. Beware: SQLite re-validates
@@ -1351,6 +1354,22 @@ contradicted this file):
   that can no longer exist. Recommendation: leave them.
 - **T7: known leftover.** Chat cards already stored in the chat database keep their old
   naive `created_at` in the JSON display copy. Nothing parses or displays it.
+- **Post-T7: the live project was in the wrong root, and T2b had made it unopenable.**
+  The app and the agent tools both resolve the root independently (`--root` /
+  `STORY_ARCHITECT_ROOT` / `~/.config/story-architect/config.toml` / `DEFAULT_ROOT`
+  for the app; `resolve_root` → `load_plugin_config()` for the tools, which returns
+  `{}`, so also `DEFAULT_ROOT`). Neither reads the other's config, and the desktop
+  launcher passes no `--root` — so both silently serve `~/story-architect`, whose
+  only project is the seeded `demo`. That `demo` is the **newer** copy (49 entities,
+  299 sections, drafts to 2026-11-15); the `browser-verification-test` under
+  `/media/theww/AI/TWW/hermes-story-architect` is a strict subset of it (42/244,
+  drafts to 2026-10-20) and is not the working project. It stopped opening because
+  T2b raised the baseline to 5 and `demo` is at 4 — T2b's premise ("there is one
+  database that matters") was false. Fixed by lowering `BASELINE_VERSION` to 4 and
+  reinstating the frozen 4→5 index step in `SCHEMA_MIGRATIONS`, so `demo` opens
+  through migrate-on-open. **`demo` still holds naive stamps** (26 `drafts.created_at`,
+  6 `entities.deleted_at`); `upgrade_live_db.py` now reaches it, but the conversion
+  has not been run on it.
 
 ---
 

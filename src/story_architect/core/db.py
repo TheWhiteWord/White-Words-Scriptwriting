@@ -108,15 +108,15 @@ WHERE from_id NOT IN (SELECT id FROM entities WHERE is_deleted=1)
   AND to_id   NOT IN (SELECT id FROM entities WHERE is_deleted=1);
 """
 
-# The schema baseline. The application has not shipped: every database that
-# exists was either created at this shape or upgraded to it once, by
-# tasks/task_40/upgrade_live_db.py. Files older than the baseline are refused,
-# not repaired — there is no history to repair them from.
-BASELINE_VERSION = 5
+# The schema baseline: the oldest shape this build opens. A file at the
+# baseline or one step above it is brought forward by SCHEMA_MIGRATIONS; a file
+# older than that is refused, not repaired.
+BASELINE_VERSION = 4
 
 # Schema history AFTER the baseline: one function per change, oldest first.
-# Empty today; the next real change is appended here and takes a database from
-# version 5 to 6. PRAGMA user_version records how far a file has come.
+# Entry at position k upgrades BASELINE_VERSION+k to BASELINE_VERSION+k+1 and
+# may assume the shape the earlier ones leave. PRAGMA user_version records how
+# far a file has come.
 #
 #   * APPEND ONLY. Editing or reordering an entry that has shipped silently
 #     skips it for every database already past it.
@@ -124,9 +124,29 @@ BASELINE_VERSION = 5
 #     new database is created with) and a new entry here (what an existing one
 #     is upgraded with).
 #   * Steps run inside a transaction: use conn.execute(), never executescript().
-#   * Entry at position k upgrades BASELINE_VERSION+k to BASELINE_VERSION+k+1
-#     and may assume the shape the earlier ones leave.
-SCHEMA_MIGRATIONS: list = []
+def _m5_indexes(conn: sqlite3.Connection) -> None:
+    """The four lookup indexes (see SCHEMA_SQL): relations by to_id, entities
+    by type and by parent_id, and the deleted-id set the hiding layer reads.
+
+    A frozen record of the step that took a database from version 4 to 5.
+    Guarded on the tables it indexes: an index over a missing table errors at
+    once, and a file with no `relations` is no project yet; `create_schema`
+    makes the indexes with the tables (they are in SCHEMA_SQL), so skipping
+    here loses nothing.
+    """
+    have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "relations" in have:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_id, kind)")
+    if "entities" in have:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type, is_deleted)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_parent ON entities(parent_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_deleted "
+                     "ON entities(id) WHERE is_deleted=1")
+
+
+SCHEMA_MIGRATIONS: list = [
+    _m5_indexes,
+]
 
 LATEST_VERSION = BASELINE_VERSION + len(SCHEMA_MIGRATIONS)
 
