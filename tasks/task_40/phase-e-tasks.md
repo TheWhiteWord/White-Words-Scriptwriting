@@ -1368,8 +1368,10 @@ contradicted this file):
   database that matters") was false. Fixed by lowering `BASELINE_VERSION` to 4 and
   reinstating the frozen 4→5 index step in `SCHEMA_MIGRATIONS`, so `demo` opens
   through migrate-on-open. **`demo` still holds naive stamps** (26 `drafts.created_at`,
-  6 `entities.deleted_at`); `upgrade_live_db.py` now reaches it, but the conversion
-  has not been run on it.
+  6 `entities.deleted_at`). **The conversion was run on it** (2026-11-23,
+  `--tz Europe/Rome`, 32 stamps, backup `pre-t7-utc-20261123_004452.db`), and the
+  stale media-root copy was then deleted (tarball in
+  `~/story-architect/.trash-backup/`). `demo` is now the only project on disk.
 
 ---
 
