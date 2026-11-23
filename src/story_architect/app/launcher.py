@@ -7,7 +7,6 @@ import threading
 import time
 import urllib.request
 import webbrowser
-from pathlib import Path
 
 from story_architect.app.config import load_config
 from story_architect.app.server import create_app
@@ -33,25 +32,16 @@ def main(argv=None):
             return status(rest)
         return setup(rest)
     if argv and argv[0] == "seed-demo":
-        # seed demo project from fixture
         parser = argparse.ArgumentParser(prog="story-architect seed-demo")
         parser.add_argument("--root", default=None)
         a = parser.parse_args(argv[1:])
         config = load_config(cli_root=a.root)
-        src = Path(__file__).resolve().parents[1] / "data" / "browser-verification-test"
-        # fallback search
-        if not src.exists():
-            for cand in Path(".").rglob("browser-verification-test"):
-                if (cand / ".story" / "story.db").exists():
-                    src = cand
-                    break
+        from story_architect.core.writes import create_project
         dest = config.root / "projects" / "demo"
         if dest.exists():
             print(f"Demo already exists at {dest}")
             return 0
-        import shutil
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(src, dest)
+        create_project("demo", {"name": "Demo"}, config.root)
         print(f"Seeded demo at {dest}")
         return 0
 
