@@ -76,6 +76,36 @@ def live_column(value, dead):
     return "" if value and value in dead else value
 
 
+def scrub_live_extras(conn, ids) -> list:
+    """Remove references to `ids` from the `extra` of LIVE entities.
+
+    For a *delete* nothing needs this: the ids stay in `entities`, so `dead_ids`
+    knows them and `live_extra` hides them, and that is what makes restore exact.
+    A *purge* is the one case where the id leaves `entities` altogether — after
+    which `dead_ids` no longer lists it and every reader stops hiding it. A live
+    scene would keep `characters: ["kael"]` for a character that no longer
+    exists, and render a chip for it. So a purge physically removes what a delete
+    only hid.
+
+    Call it inside the purge's transaction, before the rows go. Returns the ids
+    of the live entities whose `extra` changed.
+    """
+    ids = {str(i) for i in ids}
+    if not ids:
+        return []
+    changed = []
+    for entity_id, extra_json in conn.execute(
+            "SELECT id, extra FROM entities WHERE is_deleted=0").fetchall():
+        extra = json.loads(extra_json) if extra_json else {}
+        shown = live_extra(extra, ids)
+        if shown is extra:
+            continue
+        conn.execute("UPDATE entities SET extra=? WHERE id=?",
+                     (json.dumps(shown), entity_id))
+        changed.append(entity_id)
+    return changed
+
+
 def references_to(conn, ids) -> tuple:
     """What deleting `ids` leaves pointing at them, for the delete's report.
 

@@ -30,7 +30,7 @@ from datetime import datetime
 from pathlib import Path
 
 from story_architect.core import clock
-from story_architect.core.trash import deleted_together, purge_cutoff
+from story_architect.core.trash import purge_cutoff
 
 # Deleted projects wait here, under the root but outside projects/, so they are
 # not listed as projects. Hidden so a vault that is also opened in Obsidian does
@@ -358,6 +358,10 @@ def _stage_purge(args: dict, project_path: Path) -> dict:
 def _list_deleted(project_path: Path, args: dict) -> dict:
     """The trash: every soft-deleted entity, newest deletion first.
 
+    Delegates to `core.trash.list_deleted`, which the dashboard's Trash tab also
+    reads: what the agent is told and what the person sees come from one
+    function, so a bundle cannot be described two ways.
+
     One entry per *deletion*. Deleting a scene also deletes its beats, all
     stamped with the same `deleted_at`; they are folded under the scene as
     `includes` instead of listed as separate things, because restoring the scene
@@ -367,54 +371,17 @@ def _list_deleted(project_path: Path, args: dict) -> dict:
     `purge_eligible` says whether a purge with the current age floor would
     remove it.
     """
-    from story_architect.core.db import get_db
+    from story_architect.core import trash
 
-    days = args.get("older_than_days", 30)
-    cutoff = purge_cutoff(days)
-
-    conn = get_db(project_path)
-    try:
-        rows = conn.execute(
-            "SELECT id, type, name, deleted_at, parent_id FROM entities "
-            "WHERE is_deleted=1 ORDER BY deleted_at DESC, type, id").fetchall()
-    finally:
-        conn.close()
-
-    by_id = {r[0]: r for r in rows}
-
-    entries, includes = {}, {}
-    for row in rows:
-        parent = by_id.get(row[4])
-        if parent is not None and parent[3] == row[3]:
-            # Same deletion stamp as its parent: deleted in the same operation.
-            includes.setdefault(parent[0], []).append(
-                {"type": row[1], "id": row[0], "name": row[2] or row[0]})
-        else:
-            entries[row[0]] = row
-
-    deleted = [
-        {
-            "type": r[1],
-            "id": r[0],
-            "name": r[2] or r[0],
-            "deleted_at": r[3],
-            "purge_eligible": r[3] <= cutoff,
-            "includes": includes.get(r[0], []),
-        }
-        for r in entries.values()
-    ]
-    result = {"success": True, "count": len(deleted), "deleted": deleted,
-              "purge_older_than_days": days}
-    if not deleted:
-        result["message"] = "Nothing has been deleted."
-    else:
-        result["hint"] = ('Bring one back with action="restore" and target '
-                          '{entity_type, id}; anything in `includes` comes back with it.')
-    return result
+    return trash.list_deleted(project_path, args.get("older_than_days", 30))
 
 
 def _restore_entity(args: dict, project_path: Path) -> dict:
     """Undelete an entity by clearing is_deleted. The exact inverse of the delete.
+
+    Delegates to `core.trash.restore` for the reason `_list_deleted` delegates:
+    one implementation of what a restore brings back, used by the agent and by
+    the dashboard's Trash tab alike.
 
     The delete changes nothing but the flags: sections, relation rows, the names
     other entities hold in `extra`, and `location_id` all stay as written, and
@@ -427,56 +394,13 @@ def _restore_entity(args: dict, project_path: Path) -> dict:
     while the entity was in the trash. An edit that sets `characters` replaces
     the stored list, hidden names included.
     """
-    from story_architect.core.db import get_db, transaction
+    from story_architect.core import trash
 
     target = args.get("target") or {}
-    entity_type = target.get("entity_type") or ""
-    entity_id = target.get("id") or ""
-    summary = args.get("summary", "")
-    conn = get_db(project_path)
-    try:
-        # The parent and its children come back together or not at all.
-        with transaction(conn):
-            # Deliberately NOT filtered on is_deleted — that is the point.
-            row = conn.execute(
-                "SELECT id, is_deleted, deleted_at FROM entities WHERE id=?",
-                (entity_id,),
-            ).fetchone()
-            if not row:
-                return {"error": f"Entity not found: {entity_type}/{entity_id}"}
-            entity_id, is_deleted, deleted_at = row
-            if not is_deleted:
-                return {
-                    "error": f"{entity_id} is not deleted — nothing to restore.",
-                    "entity_id": entity_id,
-                }
-            conn.execute(
-                "UPDATE entities SET is_deleted=0, deleted_at=NULL WHERE id=?", (entity_id,))
-            # Children come back with their parent — the ones THIS delete flagged,
-            # and only those. The delete cascades on `parent_id`, so leaving such a
-            # child deleted would restore a scene with no scene_beats, silently; but
-            # a child that was already in the trash before (or was deleted on its
-            # own after) carries a different stamp, and bringing it back would undo
-            # a deletion nobody asked to undo.
-            #
-            # Keyed on `parent_id` for every type rather than a per-type branch: the
-            # cascade is one fact (this row owned that row).
-            restored_children = sorted(
-                r[0] for r in deleted_together(conn, entity_id, deleted_at))
-            if restored_children:
-                conn.executemany(
-                    "UPDATE entities SET is_deleted=0, deleted_at=NULL WHERE id=?",
-                    [(c,) for c in restored_children])
-    finally:
-        conn.close()
-
-    return {
-        "success": True,
-        "message": f"Restored: {summary}",
-        "entity_id": entity_id,
-        "was_deleted_at": deleted_at,
-        "restored_cascade_children": restored_children,
-    }
+    return trash.restore(project_path,
+                         target.get("entity_type") or "",
+                         target.get("id") or "",
+                         args.get("summary", ""))
 
 
 def _target_id(args: dict, action: str) -> str:

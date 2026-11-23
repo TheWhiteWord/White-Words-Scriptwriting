@@ -23,6 +23,7 @@ from story_architect.app.routes import drafts as drafts_routes
 from story_architect.app.routes import entities as entities_routes
 from story_architect.app.routes import projects as projects_routes
 from story_architect.app.routes import scripts as scripts_routes
+from story_architect.app.routes import trash as trash_routes
 
 # Some systems have no `.webmanifest` entry in /etc/mime.types, and Chrome
 # refuses a manifest served as application/octet-stream.
@@ -117,6 +118,7 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(projects_routes.make_router(config, app))
     app.include_router(scripts_routes.make_router(config, app))
     app.include_router(entities_routes.make_router(config, app))
+    app.include_router(trash_routes.make_router(config, app))
 
     @app.get("/healthz")
     def healthz():
