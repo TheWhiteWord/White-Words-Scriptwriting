@@ -146,6 +146,13 @@ def test_preview_shows_the_prose_and_the_hidden_links(client):
     assert body["restore"]["returned"]["sections"] == len(body["sections"])
     assert body["purge"]["items"][0]["id"] == "kael"
 
+    # The panel names what a link points at, never the raw id: a cast entry read
+    # "central-room-day" until the relation ends were added to the lookup, and a
+    # person deciding whether to restore cannot check a slug.
+    names = {link["id"]: link["name"] for link in body["relations"]["all"]}
+    assert names.get("central-room-day") == "Central Room - Day"
+    assert all(name and name != eid for eid, name in names.items()), names
+
 
 def test_preview_of_a_live_entity_is_a_conflict(client):
     tc, project = client

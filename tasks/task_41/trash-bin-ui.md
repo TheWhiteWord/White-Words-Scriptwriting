@@ -609,3 +609,51 @@ refs were keyed by field and the location is stored twice. Not a mockup artefact
 - A blocked row disables the bulk `Restore` (its tooltip names the blocker)
   rather than failing after the click; the one-click fix lives in the row's
   panel, where the reason is printed in full.
+
+---
+
+## 11. As built
+
+Seven phases, three commits of code, one of spec + mockup, one of review fixes.
+The tab is live: bin button in the sidebar above Refresh, count badge, list,
+preview panel, bulk restore and bulk permanent delete.
+
+### What is in the tree
+
+| File | What shipped |
+|---|---|
+| `core/trash.py` | `list_deleted` / `restore` moved out of the tool; `restore_check`, `restore_many`, `purge_selected`, `purge_preview`, `trash_for_ui`, `trash_detail` |
+| `core/references.py` | `scrub_live_extras` — the live-`extra` bug of §3.2, fixed and reported |
+| `tools/story_admin.py` | `_list_deleted` / `_restore_entity` delegate; JSON byte-identical |
+| `app/routes/trash.py` | the six endpoints of §3.4 |
+| `web/index.html` | `#nav-trash` (+ badge), `#trash-view`, the stylesheet, the script |
+| `web/css/trash.css` | the tab's styles, plus the `.nav-badge` and the disabled-button state |
+| `web/js/views/trash.js` | state, list, grouping, search, selection, panel, batch restore, purge dialog, badge |
+| `web/css/components.css` | one line, `#detail-panel.open.panel-wide` (§10) |
+| `tests/test_trash_routes.py` | 18 tests — round trip, bundles, parent block, batch atomicity, purge + scrub, refusals, the twice-named link |
+| `tests/trash_harness.js` | 17 checks — runs the real `trash.js` in a stub DOM |
+| `tests/test_trash_ui.py` | 2 tests — drives that harness under pytest, and pins that it still runs ≥17 checks (a harness that quietly stops asserting is worse than none) |
+
+### Three things building it changed
+
+1. **Relations printed ids, not names.** `trash_detail` built the name
+   dictionary before reading the relation rows, so the panel showed
+   `cast central-room-day`. Names are now collected after the relation endpoints
+   are known, and the test asserts the names, not the ids.
+2. **`#detail-panel.panel-wide` could not be released** (§10) — fixed for every
+   widening panel, not only this one.
+3. **The harness is mutation-checked.** Adding one inline handler built from an
+   id makes `tests/trash_harness.js` fail, which is the check that keeps the
+   dashboard's `data-*` + delegated-listener habit from rotting back into
+   `onclick="…${item.id}…"`.
+
+### One deviation from §6
+
+`docs/Dashboard inventory/0.4.1 — Views and tabs.md` was **not** changed. It is
+a frozen inventory of the *pre-port* dashboard (`src/dashboard/index.html`, a
+file that no longer exists), kept as the parity reference for task 35; adding a
+`trash` row with `index.html` line numbers to it would describe a file and a
+build it does not document. The current dashboard has no equivalent inventory
+doc, so this section is the record. If one is ever written, the trash tab is the
+tenth view: `data-view="trash"`, container `#trash-view`, rendered by
+`js/views/trash.js`, and the only one with a nav badge.

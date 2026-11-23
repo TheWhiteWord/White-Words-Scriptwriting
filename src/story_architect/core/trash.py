@@ -605,7 +605,15 @@ def trash_detail(project_path: Path, entity_type: str, entity_id: str) -> dict:
         extra = json.loads(extra_json) if extra_json else {}
 
         bundle = deleted_together(conn, eid, deleted_at)
-        names = _names(conn, [c[0] for c in bundle] + [parent_id, location_id])
+
+        # Every id this panel will name: the bundle, the structural parent, the
+        # location, and the far end of each relation row. Without the last group
+        # a character's cast links printed raw ids ("central-room-day") where the
+        # reader wants a scene's name — the panel is the one reader that must
+        # name dead links, so it must have them in hand.
+        relation_rows = _relations_touching(conn, eid)
+        ends = [(r[1] if r[0] == eid else r[0]) for r in relation_rows]
+        names = _names(conn, [c[0] for c in bundle] + [parent_id, location_id] + ends)
 
         def _ref(vid):
             known = names.get(vid) or ("", "")
@@ -618,7 +626,7 @@ def trash_detail(project_path: Path, entity_type: str, entity_id: str) -> dict:
         relations, out_links, in_links = [], [], []
         live = {r[0] for r in conn.execute(
             "SELECT id FROM entities WHERE is_deleted=0")}
-        for from_id, to_id, kind, note in _relations_touching(conn, eid):
+        for from_id, to_id, kind, note in relation_rows:
             other = to_id if from_id == eid else from_id
             link = {**_ref(other), "kind": kind, "note": note or "",
                     "live": other in live}

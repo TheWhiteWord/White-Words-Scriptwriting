@@ -92,7 +92,7 @@
 /* A tab that draws to a width asks for it through the tab strip's widen
    toggle; `panel-tabs.js` sets this class. Without the rule the toggle is a
    button that changes nothing. */
-#detail-panel.panel-wide { width: var(--panel-w-wide); }
+#detail-panel.open.panel-wide { width: var(--panel-w-wide); }
 /* Wide-screen: panel opens beside content */
 @media (min-width: 700px) {
   #detail-panel { min-width: 0; }
@@ -108,7 +108,7 @@
   #detail-panel.open {
     width: min(var(--panel-w), calc(100vw - var(--sidebar-w)));
   }
-  #detail-panel.panel-wide {
+  #detail-panel.open.panel-wide {
     width: min(var(--panel-w-wide), calc(100vw - var(--sidebar-w)));
   }
 }
