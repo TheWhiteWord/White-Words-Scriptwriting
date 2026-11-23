@@ -326,7 +326,8 @@ check('the footer counts the batch and says what the press will do', () => {
   const T = D.trashState;
   T.detail = DETAIL;
   T.pending.clear();
-  has(D.trashPanelFooter(), 'Deleting permanently cannot be undone.');
+  // Nothing ticked: no sentence to explain the obvious, just the two verbs.
+  hasNot(D.trashPanelFooter(), 'trash-footer-note');
   has(D.trashPanelFooter(), 'Restore</button>');
   T.pending.add('character:kael');
   has(D.trashPanelFooter(), 'Restore 2');

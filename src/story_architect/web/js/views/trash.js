@@ -465,14 +465,18 @@ window.DASH = window.DASH || {};
     const pendingBlockers = ((detail.restore && detail.restore.blockers) || [])
       .filter((b) => b.fix && !T.pending.has(keyOf(b.fix.entity_type, b.fix.id)));
     const n = 1 + T.pending.size;
+    // Only what the press would do *not* say for itself. "Deleting permanently
+    // cannot be undone" is the button's own name plus common sense; the purge
+    // dialog is where the consequence is spelled out, with the item list and
+    // the backup beside it.
     const note = pendingBlockers.length
       ? `Restore “${pendingBlockers[0].fix.name}” first — tick it above.`
       : n > 1
         ? `${n} items come back together — this one, and the ${n - 1 === 1 ? 'one' : n - 1} you ticked.`
-        : 'Deleting permanently cannot be undone.';
+        : '';
     const wide = !!T.wide;
     return `
-    <span class="trash-footer-note">${h(note)}</span>
+    ${note ? `<span class="trash-footer-note">${h(note)}</span>` : ''}
     <span class="trash-footer-actions">
       <button class="btn btn-ghost trash-widen" data-panel="widen"
               aria-pressed="${wide ? 'true' : 'false'}"

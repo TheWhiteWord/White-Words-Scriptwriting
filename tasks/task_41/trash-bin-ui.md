@@ -696,3 +696,14 @@ Measured in the running app at 1440×900 with the chat rail open:
 
 `node tests/trash_harness.js` gained *the preview opens narrow and widens only
 when the reader asks*, and the pytest wrapper's floor moved to 18 checks.
+
+### And: the footer stopped explaining the button
+
+`Deleting permanently cannot be undone.` sat under the panel's footer at all
+times, said what the button's own name says, and took the left edge that the
+width toggle wanted. It is gone; the sentence that matters is the one the purge
+dialog prints, where the consequence sits next to the list of names and the
+backup note, and that is the only place a permanent delete is actually agreed
+to. The footer keeps the two sentences that say something the buttons cannot —
+the ticket that unblocks a restore, and how many things a restore brings back —
+and the widen toggle now holds the left edge, clear of both verbs.

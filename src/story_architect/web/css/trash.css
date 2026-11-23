@@ -315,6 +315,9 @@
 }
 .panel-footer.trash-footer .trash-footer-note { margin-right: auto; }
 .trash-footer-actions { display: flex; gap: 6px; justify-content: flex-end; }
+/* The width toggle sits on the far edge, away from the two verbs it has nothing
+   to do with; the auto margin is what holds it there once the row is full. */
+.trash-footer-actions .trash-widen { margin-right: auto; }
 /* the primary carries a count once things are ticked, and must not wrap */
 .trash-footer-actions .btn { white-space: nowrap; }
 
