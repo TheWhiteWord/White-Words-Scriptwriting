@@ -158,7 +158,7 @@ def test_a_file_with_tables_but_no_version_is_refused(tmp_path):
     c = sqlite3.connect(str(_db_file(proj)))
     c.execute("PRAGMA user_version = 0")
     c.close()
-    with pytest.raises(SchemaTooOldError, match="upgrade_live_db.py"):
+    with pytest.raises(SchemaTooOldError, match="older than this build supports"):
         get_db(proj)
     assert _version(_db_file(proj)) == 0
 

@@ -9,8 +9,7 @@ import sqlite3
 
 import pytest
 
-from story_architect.core.db import (BASELINE_VERSION, LATEST_VERSION, create_schema,
-                                     get_db, transaction)
+from story_architect.core.db import create_schema, transaction
 from story_architect.core.writes import create_project
 
 INDEXES = {"idx_relations_to", "idx_entities_type", "idx_entities_parent",
@@ -39,30 +38,6 @@ def test_a_new_project_has_all_four_indexes(tmp_path):
     conn = sqlite3.connect(str(_db_file(proj)))
     try:
         assert INDEXES <= _index_names(conn)
-    finally:
-        conn.close()
-
-
-# ─── a database from before the indexes ───
-
-def test_a_database_from_before_the_indexes_is_upgraded_on_open(tmp_path):
-    """A database one step behind — the live one, before the indexes existed —
-    opens and is brought forward: the four indexes appear, the version advances,
-    and every row survives."""
-    proj = _new_project(tmp_path)
-    conn = sqlite3.connect(str(_db_file(proj)))
-    conn.execute(f"PRAGMA user_version = {BASELINE_VERSION}")
-    for name in INDEXES:
-        conn.execute(f"DROP INDEX IF EXISTS {name}")
-    conn.commit()
-    rows = conn.execute("SELECT count(*) FROM entities").fetchone()[0]
-    conn.close()
-
-    conn = get_db(proj)
-    try:
-        assert INDEXES <= _index_names(conn)
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == LATEST_VERSION
-        assert conn.execute("SELECT count(*) FROM entities").fetchone()[0] == rows
     finally:
         conn.close()
 

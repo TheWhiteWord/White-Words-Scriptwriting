@@ -108,15 +108,16 @@ WHERE from_id NOT IN (SELECT id FROM entities WHERE is_deleted=1)
   AND to_id   NOT IN (SELECT id FROM entities WHERE is_deleted=1);
 """
 
-# The schema baseline: the oldest shape this build opens. A file at the
-# baseline or one step above it is brought forward by SCHEMA_MIGRATIONS; a file
-# older than that is refused, not repaired.
-BASELINE_VERSION = 4
+# The schema baseline: the oldest shape this build opens. The app has not
+# shipped, so the baseline is the only schema there is; a file older than it is
+# refused, not repaired. A file at the baseline or one step above it is brought
+# forward by SCHEMA_MIGRATIONS.
+BASELINE_VERSION = 5
 
 # Schema history AFTER the baseline: one function per change, oldest first.
 # Entry at position k upgrades BASELINE_VERSION+k to BASELINE_VERSION+k+1 and
 # may assume the shape the earlier ones leave. PRAGMA user_version records how
-# far a file has come.
+# far a file has come. Empty today; the next real change is appended here.
 #
 #   * APPEND ONLY. Editing or reordering an entry that has shipped silently
 #     skips it for every database already past it.
@@ -124,29 +125,7 @@ BASELINE_VERSION = 4
 #     new database is created with) and a new entry here (what an existing one
 #     is upgraded with).
 #   * Steps run inside a transaction: use conn.execute(), never executescript().
-def _m5_indexes(conn: sqlite3.Connection) -> None:
-    """The four lookup indexes (see SCHEMA_SQL): relations by to_id, entities
-    by type and by parent_id, and the deleted-id set the hiding layer reads.
-
-    A frozen record of the step that took a database from version 4 to 5.
-    Guarded on the tables it indexes: an index over a missing table errors at
-    once, and a file with no `relations` is no project yet; `create_schema`
-    makes the indexes with the tables (they are in SCHEMA_SQL), so skipping
-    here loses nothing.
-    """
-    have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    if "relations" in have:
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_id, kind)")
-    if "entities" in have:
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type, is_deleted)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_parent ON entities(parent_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_deleted "
-                     "ON entities(id) WHERE is_deleted=1")
-
-
-SCHEMA_MIGRATIONS: list = [
-    _m5_indexes,
-]
+SCHEMA_MIGRATIONS: list = []
 
 LATEST_VERSION = BASELINE_VERSION + len(SCHEMA_MIGRATIONS)
 
@@ -176,10 +155,9 @@ def apply_migrations(conn: sqlite3.Connection, migrations: list, *,
     open a behind database together, the second finds it already upgraded and
     does nothing, instead of running every step twice.
 
-    Refuses a file below the baseline — older than this build supports, run
-    tasks/task_40/upgrade_live_db.py on it — and a file above the latest
-    version, which was written by a newer build: carrying on would run old
-    code against a schema it does not understand.
+    Refuses a file below the baseline, which this build does not support, and a
+    file above the latest version, which was written by a newer build: carrying
+    on would run old code against a schema it does not understand.
     """
     target = baseline + len(migrations)
     version = _user_version(conn)
@@ -210,7 +188,7 @@ def _too_new(name: str, version: int, target: int) -> SchemaTooNewError:
 def _too_old(name: str, version: int, baseline: int) -> SchemaTooOldError:
     return SchemaTooOldError(
         f"{name} is older than this build supports (version {version}; the "
-        f"baseline is {baseline}). Run tasks/task_40/upgrade_live_db.py on it.")
+        f"baseline is {baseline}).")
 
 
 def get_db(project_path: Path) -> sqlite3.Connection:

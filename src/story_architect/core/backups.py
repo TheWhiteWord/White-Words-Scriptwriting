@@ -196,8 +196,7 @@ def restore_backup(project_path: Path, name: str) -> dict:
         if version < BASELINE_VERSION:
             raise ValueError(
                 f"{name} is older than this build supports (schema {version}; the "
-                f"baseline is {BASELINE_VERSION}). Run tasks/task_40/upgrade_live_db.py "
-                f"on a copy of it first.")
+                f"baseline is {BASELINE_VERSION}).")
 
         live = get_db(project_path)
         try:

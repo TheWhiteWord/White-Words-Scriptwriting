@@ -133,18 +133,17 @@ T3–T5.
 - **A new reader must be added to `tests/twin_helpers.everything_a_reader_can_say()`**
   — that is the only test that covers it.
 
-**DB-5 — Schema changes.** The schema has a baseline (`BASELINE_VERSION = 4` in
+**DB-5 — Schema changes.** The schema has a baseline (`BASELINE_VERSION = 5` in
 `core/db.py`; `chat/store.py` has its own `CHAT_BASELINE = 1`). Every change from
 now on is **appended after the baseline**: add a function to `SCHEMA_MIGRATIONS`
 **and** update `SCHEMA_SQL` for fresh databases. Never edit an existing migration
 (it is a frozen record). Entry *k* upgrades `BASELINE+k → BASELINE+k+1`;
 `LATEST_VERSION = BASELINE_VERSION + len(SCHEMA_MIGRATIONS)`. The live database is
 upgraded by opening it (`get_db`); never edit it by hand. A file below the
-baseline, or one with tables but no version, is refused with a pointer to
-`tasks/task_40/upgrade_live_db.py`. The baseline was 5 until the v4 database in
-the default root turned out to be the live one (T2b's "one database exists"
-premise was wrong); the 4→5 step is the frozen index migration, so 4 is the
-oldest shape this build opens. Test a
+baseline, or one with tables but no version, is refused. The app has not shipped,
+so the baseline is the only schema there is: `SCHEMA_MIGRATIONS` is empty and the
+machinery (`apply_migrations`, the version gate) stays for the first real change.
+Test a
 migration on (a) a new project and (b) a database stamped one version lower,
 using a test-only migration monkeypatched onto the list (see
 `tests/test_schema_migrations.py`); no legacy shapes. Beware: SQLite re-validates
@@ -1365,13 +1364,16 @@ contradicted this file):
   `/media/theww/AI/TWW/hermes-story-architect` is a strict subset of it (42/244,
   drafts to 2026-10-20) and is not the working project. It stopped opening because
   T2b raised the baseline to 5 and `demo` is at 4 — T2b's premise ("there is one
-  database that matters") was false. Fixed by lowering `BASELINE_VERSION` to 4 and
-  reinstating the frozen 4→5 index step in `SCHEMA_MIGRATIONS`, so `demo` opens
-  through migrate-on-open. **`demo` still holds naive stamps** (26 `drafts.created_at`,
-  6 `entities.deleted_at`). **The conversion was run on it** (2026-11-23,
-  `--tz Europe/Rome`, 32 stamps, backup `pre-t7-utc-20261123_004452.db`), and the
-  stale media-root copy was then deleted (tarball in
-  `~/story-architect/.trash-backup/`). `demo` is now the only project on disk.
+  database that matters") was false. The baseline went to 4 with the frozen 4→5
+  index step reinstated so `demo` opened, then **went back to 5** once `demo` was
+  the only database and had been converted: the app has not shipped, so the
+  baseline is the only schema there is and no legacy step is carried. The
+  migrate-on-open machinery stays for the first real schema change. **`demo`
+  holds naive stamps** (26 `drafts.created_at`, 6 `entities.deleted_at`); the
+  conversion was run on it (2026-11-23, `--tz Europe/Rome`, 32 stamps, backup
+  `pre-t7-utc-20261123_004452.db`), and the stale media-root copy was then deleted
+  (tarball in `~/story-architect/.trash-backup/`). `demo` is now the only project
+  on disk.
 
 ---
 
