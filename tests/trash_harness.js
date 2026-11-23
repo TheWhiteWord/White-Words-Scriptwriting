@@ -334,6 +334,23 @@ check('the footer counts the batch and says what the press will do', () => {
   T.pending.clear();
 });
 
+check('the preview opens narrow and widens only when the reader asks', () => {
+  const T = D.trashState;
+  T.detail = DETAIL;
+  T.pending.clear();
+  T.wide = false;
+  let html = D.trashPanelFooter();
+  has(html, 'data-panel="widen"', 'the width toggle');
+  has(html, 'aria-pressed="false"');
+  has(html, 'title="Widen the preview"');
+
+  T.wide = true;                       // what the toggle writes, and what the
+  html = D.trashPanelFooter();         // next row's preview then reopens at
+  has(html, 'aria-pressed="true"');
+  has(html, 'title="Narrow the preview"');
+  T.wide = false;
+});
+
 check('the purge card names every item, every consequence, and the backup', () => {
   const html = D.trashPurgeBody(PREVIEW);
   ['Kael', 'Central Room - Day', 'central-room-day-beats'].forEach((n) => has(html, n));

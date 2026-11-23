@@ -67,6 +67,7 @@ window.DASH = window.DASH || {};
     filter: '',
     open: null,               // `type:id` of the row whose panel is open
     detail: null,
+    wide: false,              // the reader widened the preview; forgotten on leaving the tab
     loadedAt: 0,
   };
 
@@ -469,9 +470,17 @@ window.DASH = window.DASH || {};
       : n > 1
         ? `${n} items come back together — this one, and the ${n - 1 === 1 ? 'one' : n - 1} you ticked.`
         : 'Deleting permanently cannot be undone.';
+    const wide = !!T.wide;
     return `
     <span class="trash-footer-note">${h(note)}</span>
     <span class="trash-footer-actions">
+      <button class="btn btn-ghost trash-widen" data-panel="widen"
+              aria-pressed="${wide ? 'true' : 'false'}"
+              title="${wide ? 'Narrow the preview' : 'Widen the preview'}">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor"
+             stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1.5 8h13M4.5 5 1.5 8l3 3M11.5 5l3 3-3 3"/></svg>
+      </button>
       <button class="btn btn-danger btn-ghost" data-panel="purge">Delete permanently</button>
       <button class="btn btn-primary" data-panel="restore"${pendingBlockers.length ? ' disabled' : ''}>
         ${n === 1 ? 'Restore' : 'Restore ' + n}</button>
@@ -501,12 +510,17 @@ window.DASH = window.DASH || {};
     document.getElementById('panel-name').textContent = item.name;
     document.getElementById('panel-edit').hidden = true;   // editing a deleted entity is refused
     document.getElementById('panel-body').innerHTML = panelBodyHtml(detail);
+    const panel = document.getElementById('detail-panel');
+    // The app's panel width, not the wide one: with the chat rail open a 680px
+    // preview leaves the list too little room and the header wraps onto two
+    // lines. Reading a screenplay is the one case that wants more, so the
+    // footer's toggle offers it — and the choice lasts while the tab is open,
+    // so widening once does not have to be repeated on every row.
+    panel.classList.toggle('panel-wide', !!T.wide);
     const footer = document.getElementById('panel-footer');
     footer.classList.add('trash-footer');
     syncPanelFooter();
-    const panel = document.getElementById('detail-panel');
     panel.classList.add('open');
-    panel.classList.add('panel-wide');    // a scene's script is unreadable at 320px
   }
 
   // ─── the actions ───────────────────────────────────────────────────────────
@@ -757,6 +771,14 @@ window.DASH = window.DASH || {};
       if (!b || b.disabled) return;
       if (b.dataset.panel === 'restore') panelRestore();
       if (b.dataset.panel === 'purge') panelPurge();
+      if (b.dataset.panel === 'widen') {
+        // The one width control, and it is the reader's: narrow until asked,
+        // then wide enough for a screenplay. Nothing else moves the panel.
+        T.wide = !T.wide;
+        document.getElementById('detail-panel').classList.toggle('panel-wide', T.wide);
+        b.setAttribute('aria-pressed', T.wide ? 'true' : 'false');
+        b.title = T.wide ? 'Narrow the preview' : 'Widen the preview';
+      }
     });
 
     document.addEventListener('keydown', (e) => {
@@ -765,11 +787,13 @@ window.DASH = window.DASH || {};
       D.closePanel();
     });
 
-    // Every other view: the wide panel is the trash's, so drop the class on the
-    // way out. (The trash re-adds it when it opens a preview.)
+    // Every other view: the preview may have been widened by hand, so leaving
+    // the tab narrows it again (and forgets the choice) rather than handing a
+    // 680px panel to the next view that opens one.
     D.onViewOpened(function (view) {
       if (view === 'trash') { D.trashOpen(); return; }
       const panel = document.getElementById('detail-panel');
+      T.wide = false;
       if (panel) panel.classList.remove('panel-wide');
       const footerEl = document.getElementById('panel-footer');
       if (footerEl) footerEl.classList.remove('trash-footer');

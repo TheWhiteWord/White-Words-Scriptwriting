@@ -407,8 +407,11 @@ DASH.showTrashPanel = function (item) {           // in views/trash.js
 };
 ```
 
-- The panel opens **wide** (`#detail-panel.panel-wide`): a scene's script at
-  320px is unreadable. The class is removed when the trash view is reopened.
+- The panel opens at the app's **panel width (320px)**, like every other entity
+  panel, and its footer carries one **widen toggle** (`panel-wide`, the same
+  class and glyph the tab strip's toggle drives) for reading a screenplay. See
+  §11 — the first build opened wide and it squeezed the list to nothing with the
+  chat rail open.
 - Body, in order: *Deleted* (absolute + relative, "N days ago"), the entity's
   fields, the prose **sections** (a scene's Content first — that is what the
   user came to check), *Also deleted with it* (the bundle, read-only), *Links*
@@ -657,3 +660,39 @@ build it does not document. The current dashboard has no equivalent inventory
 doc, so this section is the record. If one is ever written, the trash tab is the
 tenth view: `data-view="trash"`, container `#trash-view`, rendered by
 `js/views/trash.js`, and the only one with a nav badge.
+
+### After a look at it: the preview is not wide by default
+
+The panel shipped forced-wide, on the reasoning that a scene's screenplay does
+not fit in 320px. On screen, with the chat rail open, that is the wrong trade:
+680 + 380 + 44 leaves the list 336px on a 1440 window, and the header's three
+named buttons wrap onto a second line while the row previews truncate to
+`A young person inside The I who begins to fe…`. The tab is *for* scanning the
+list; the panel is a preview beside it, not the thing being read.
+
+So the panel opens at the app's own width (320px) and the footer carries one
+widen toggle (`⇔`, the glyph `panel-tabs.css` already uses), because reading a
+screenplay is the one case that wants the room. The choice is remembered while
+the tab is open — widening once does not have to be repeated on every row — and
+forgotten when the tab is left, so no other view inherits a 680px panel.
+
+Two things came with it:
+
+- **The header wraps where it has to.** `#trash-view .view-header` now allows a
+  second row for its actions, and the title and subtitle are `nowrap`. At 1180
+  with the chat open the actions drop to their own line; the words never break.
+  Before, both shrank and wrapped *within* themselves, which is what looked
+  broken.
+- **The panel footer stacks.** A sentence and three controls on one line at
+  320px squeezed the sentence into a two-line column that stole the buttons'
+  width. Note first, actions right-aligned under it.
+
+Measured in the running app at 1440×900 with the chat rail open:
+
+| | panel | main | header height | title |
+|---|---|---|---|---|
+| narrow (default) | 320px | 696px | 51px — one row | one line |
+| widened by hand | 680px | 336px | 113px — two rows | one line |
+
+`node tests/trash_harness.js` gained *the preview opens narrow and widens only
+when the reader asks*, and the pytest wrapper's floor moved to 18 checks.

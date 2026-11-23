@@ -10,6 +10,18 @@
   padding: var(--gap) 16px;
 }
 
+/* The header shares its row with a much narrower main column whenever the chat
+   rail is open, and it carries three named actions beside the search box. Given
+   the choice, the actions move to a second row; the words do not wrap. */
+#trash-view .view-header { flex-wrap: wrap; row-gap: 8px; }
+#trash-view .view-title,
+#trash-view .view-subtitle { white-space: nowrap; }
+#trash-view .view-header-actions {
+  flex-wrap: wrap;
+  row-gap: 6px;
+  justify-content: flex-end;
+}
+
 .trash-list {
   display: flex;
   flex-direction: column;
@@ -292,16 +304,35 @@
 }
 
 /* The panel footer is a plain block in components.css; the trash panel needs a
-   note and two buttons on one line. Scoped so no other panel changes. */
+   sentence and three controls. Stacked, not side by side: at the panel's own
+   320px the sentence was squeezed into a two-line column beside the buttons and
+   stole their width. */
 .panel-footer.trash-footer {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
 }
 .panel-footer.trash-footer .trash-footer-note { margin-right: auto; }
-.trash-footer-actions { display: flex; gap: 6px; }
+.trash-footer-actions { display: flex; gap: 6px; justify-content: flex-end; }
 /* the primary carries a count once things are ticked, and must not wrap */
 .trash-footer-actions .btn { white-space: nowrap; }
+
+/* The preview's width toggle. Narrow is the default — the panel shares the row
+   with the chat rail, and a 680px preview squeezed the list and the header.
+   Reading a screenplay is the case that wants the room, so it is one click
+   away, next to the actions rather than in a menu. Same glyph as the tab
+   strip's widen toggle (panel-tabs.css), which `panel-wide` already drives. */
+.trash-footer-actions .trash-widen {
+  padding: 4px 6px;
+  display: inline-flex;
+  align-items: center;
+}
+.trash-footer-actions .trash-widen[aria-pressed="true"] {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
 
 /* one line per hidden link, with its kind in the margin */
 .trash-warn-line { display: block; }

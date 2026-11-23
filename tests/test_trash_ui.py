@@ -54,6 +54,6 @@ def test_the_harness_reports_how_many_checks_it_ran():
         # The summary line may carry the count in its own format; fall back to
         # counting the per-check lines it prints.
         ran = len(re.findall(r"^\s*(?:ok|PASS)\b", out.stdout, re.M))
-        assert ran >= 17, out.stdout[-3000:]
+        assert ran >= 18, out.stdout[-3000:]
     else:
-        assert int(m.group(1)) >= 17, out.stdout[-3000:]
+        assert int(m.group(1)) >= 18, out.stdout[-3000:]
