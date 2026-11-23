@@ -162,6 +162,34 @@ def test_preview_of_an_unknown_entity_is_404(client):
 
 # ─── restore ─────────────────────────────────────────────────────────────────
 
+def test_the_bundle_is_not_reported_as_staying_behind(client):
+    """A child of the bundle comes back with the parent — so it is never "stranded".
+
+    The only stranded child is one deleted on its own, carrying another stamp;
+    reporting the bundle as stranded made the panel say "also deleted with it"
+    and "stays behind" about the same row.
+    """
+    tc, project = client
+    scene = _first_scene_with_beats(project)
+    beats = _beats_of(project, scene)[0]
+    delete_entity(project, "scene_beats", beats, "t", True)
+    _earlier(project, beats)
+    delete_entity(project, "scene", scene, "t", True)
+
+    body = tc.get(f"/api/projects/{SLUG}/trash/scene/{scene}").json()
+    stranded = body["restore"]["warnings"].get("stranded_children", [])
+    assert [s["id"] for s in stranded] == [beats], "the separately-deleted child stays behind"
+    assert body["includes"] == []
+
+    # The scene's own panel must not contradict itself: nothing is both in the
+    # bundle and left behind.
+    night = tc.get(f"/api/projects/{SLUG}/trash/scene/central-room-night")
+    if night.status_code == 200:
+        payload = night.json()
+        assert not payload["restore"]["warnings"].get("stranded_children")
+        assert payload["includes"], "its beats are in the bundle, so they come back"
+
+
 def test_restoring_the_parent_brings_the_bundle_back(client):
     tc, project = client
     scene = _first_scene_with_beats(project)

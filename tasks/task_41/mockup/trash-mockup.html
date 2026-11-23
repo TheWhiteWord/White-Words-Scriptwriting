@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trash tab — mockup (task 41)</title>
+
+<!-- The real stylesheets, by relative path: nothing here is a redrawn shell. -->
+<link rel="stylesheet" href="../../../src/story_architect/web/css/base.css">
+<link rel="stylesheet" href="../../../src/story_architect/web/css/components.css">
+<link rel="stylesheet" href="../../../src/story_architect/web/css/views.css">
+<link rel="stylesheet" href="../../../src/story_architect/web/css/entity-form.css">
+<!-- Candidate stylesheet: this file becomes web/css/trash.css. -->
+<link rel="stylesheet" href="trash.css">
+
+<style>
+  /* Mockup frame only — none of this ships. */
+  html, body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
+  .mock-bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 200;
+    display: flex; gap: 8px; align-items: center;
+    padding: 8px 12px;
+    background: #0b0b0b; border-top: 1px solid rgba(255,255,255,.14);
+    font-size: 11px; color: var(--muted-foreground);
+  }
+  .mock-bar strong { color: var(--foreground); font-weight: 500; }
+  .mock-bar .spacer { flex: 1; }
+  .mock-bar .btn { font-size: 11px; padding: 3px 8px; }
+  .mock-bar .btn.on { border-color: var(--accent); color: var(--accent); }
+  #app { padding-bottom: 40px; }
+  .mock-warn { color: var(--c-gap); }
+</style>
+</head>
+
+<body>
+<div id="app">
+
+  <!-- ── Sidebar: the real one, with the bin in the position asked for ── -->
+  <nav id="sidebar">
+    <button class="nav-btn" data-view="story"><svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M3 3h10v10H3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M3 8h10" stroke="currentColor" stroke-width="1.2"/><path d="M8 3v5" stroke="currentColor" stroke-width="1.2"/></svg><span class="nav-label">Story</span></button>
+    <button class="nav-btn" data-view="graph"><svg class="nav-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.5"/><circle cx="2.5" cy="3.5" r="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="13.5" cy="3.5" r="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="2.5" cy="12.5" r="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="13.5" cy="12.5" r="1.5" stroke="currentColor" stroke-width="1.2"/><line x1="5.5" y1="6.5" x2="3.5" y2="5" stroke="currentColor" stroke-width="1.2"/><line x1="10.5" y1="6.5" x2="12.5" y2="5" stroke="currentColor" stroke-width="1.2"/><line x1="5.5" y1="9.5" x2="3.5" y2="11" stroke="currentColor" stroke-width="1.2"/><line x1="10.5" y1="9.5" x2="12.5" y2="11" stroke="currentColor" stroke-width="1.2"/></svg><span class="nav-label">Characters</span></button>
+    <button class="nav-btn" data-view="relationships"><svg class="nav-icon" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="5" r="2.2" stroke="currentColor" stroke-width="1.3"/><circle cx="11" cy="11" r="2.2" stroke="currentColor" stroke-width="1.3"/><path d="M6.8 6.8L9.2 9.2" stroke="currentColor" stroke-width="1.2"/><path d="M9.2 6.8L6.8 9.2" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 1"/></svg><span class="nav-label">Relationships</span></button>
+    <button class="nav-btn" data-view="scenes"><svg class="nav-icon" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.4"/><line x1="5" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.2"/><line x1="5" y1="8.5" x2="11" y2="8.5" stroke="currentColor" stroke-width="1.2"/><line x1="5" y1="11" x2="8.5" y2="11" stroke="currentColor" stroke-width="1.2"/></svg><span class="nav-label">Scenes</span></button>
+    <button class="nav-btn" data-view="locations"><svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M8 2a4 4 0 0 1 4 4c0 3-4 8-4 8S4 9 4 6a4 4 0 0 1 4-4z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="8" cy="6" r="1.5" stroke="currentColor" stroke-width="1.2"/></svg><span class="nav-label">Locations</span></button>
+    <button class="nav-btn" data-view="plots"><svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M2 5c3 0 3 6 6 6s3-6 6-6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M2 11c3 0 3-6 6-6s3 6 6 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg><span class="nav-label">Plots</span></button>
+    <button class="nav-btn" data-view="values"><svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M2 12l3-4 3 2 3-6 3 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nav-label">Values</span></button>
+    <button class="nav-btn" data-view="worlds"><svg class="nav-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 8h11M8 2.5a8 6 0 0 1 0 11M8 2.5a8 6 0 0 0 0 11" stroke="currentColor" stroke-width="1.1"/></svg><span class="nav-label">Worlds</span></button>
+    <button class="nav-btn" data-view="script"><svg class="nav-icon" viewBox="0 0 16 16" fill="none"><rect x="3" y="1.5" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.4"/><line x1="5.5" y1="5" x2="10.5" y2="5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><line x1="5.5" y1="7.5" x2="10.5" y2="7.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><line x1="5.5" y1="10" x2="8.5" y2="10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg><span class="nav-label">Script</span></button>
+
+    <div class="nav-separator"></div>
+
+    <button class="nav-btn"><svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h7.5A2.5 2.5 0 0 1 13 5v8.5H5.5A2.5 2.5 0 0 1 3 11V2.5Z" stroke="currentColor" stroke-width="1.2"/><path d="M3 11.5A2.5 2.5 0 0 1 5.5 9H13M5.5 5h4M5.5 7h5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg><span class="nav-label">Memory</span></button>
+
+    <!-- ── THE NEW ONE: bin, directly above Refresh ── -->
+    <button class="nav-btn active" data-view="trash" title="Trash — 6 items">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
+        <path d="M3 4.5h10M6.5 4.5V3h3v1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        <path d="M4.5 4.5l.6 8.2a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-8.2" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+        <path d="M6.8 7v4M9.2 7v4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+      </svg>
+      <span class="nav-label">Trash</span>
+      <span class="nav-badge" id="nav-trash-count">6</span>
+    </button>
+
+    <button class="nav-btn" title="Refresh index">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
+        <path d="M13.5 2.5v4h-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M2 8a6 6 0 0 1 10-4.47l1.5 2.97" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <path d="M2.5 13.5v-4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M14 8a6 6 0 0 1-10 4.47L2.5 9.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+      <span class="nav-label">Refresh</span>
+    </button>
+
+    <button class="sidebar-toggle" title="Toggle sidebar">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </nav>
+
+  <!-- ── The Trash view ── -->
+  <main id="main">
+    <div class="view active" id="trash-view">
+      <div class="view-header">
+        <div class="view-title">Trash</div>
+        <div class="view-subtitle" id="trash-subtitle">6 items · 9 entities</div>
+        <div class="view-header-actions">
+          <div class="search-bar">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="4.5" cy="4.5" r="3" stroke="currentColor" stroke-width="1.2"/><line x1="7" y1="7" x2="9" y2="9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            <input type="text" placeholder="Filter deleted items…" id="trash-search">
+          </div>
+          <button class="btn" id="trash-select-all">Select all</button>
+          <button class="btn" id="trash-restore" disabled>Restore</button>
+          <button class="btn btn-danger" id="trash-purge" disabled>Delete permanently</button>
+        </div>
+      </div>
+      <div class="view-body">
+        <div class="trash-list" id="trash-list"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── The preview panel: the app's own aside, wide ── -->
+  <aside id="detail-panel" class="panel-wide">
+    <div class="panel-header">
+      <div class="panel-title-block">
+        <div class="panel-entity-type" id="panel-type">—</div>
+        <div class="panel-name" id="panel-name">—</div>
+      </div>
+      <button class="panel-edit" id="panel-edit" hidden>Edit</button>
+      <button class="panel-close" id="panel-close">✕</button>
+    </div>
+    <div class="panel-body" id="panel-body"></div>
+    <div class="panel-footer" id="panel-footer"></div>
+  </aside>
+
+</div>
+
+<!-- Mockup controls: not part of the design being approved. -->
+<div class="mock-bar">
+  <strong>Mockup</strong><span>— real payload, real stylesheets. Not wired to the app.</span>
+  <span class="spacer"></span>
+  <button class="btn on" data-state="list">List</button>
+  <button class="btn" data-state="empty">Empty trash</button>
+  <button class="btn" data-state="nomatch">Filter, no match</button>
+  <button class="btn" data-state="selectall">Select all</button>
+  <button class="btn" id="mock-sidebar">Expand sidebar</button>
+  <button class="btn" id="mock-dialog-btn">Purge dialog</button>
+</div>
+
+<script src="data.js"></script>
+<script>
+/* ─────────────────────────────────────────────────────────────────────────────
+   Mockup behaviour. Kept deliberately thin: grouping, selection, the panel and
+   the dialog. The production file (web/js/views/trash.js) will grow from this,
+   with the same markup and the same copy.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+const NOW = new Date('2026-11-23T15:12:00Z');   // pinned so the labels stay stable
+const DATA = window.MOCKUP;
+const ITEMS = DATA.list.items;
+
+const TYPE_COLOR = {
+  character: 'var(--role-protagonist)',
+  scene: 'var(--role-supporting)',
+  location: 'var(--role-rival)',
+  world: 'var(--role-mentor)',
+  plot: 'var(--role-antagonist)',
+  relationship: 'var(--role-entity)',
+  value: 'var(--role-supporting)',
+  scene_beats: 'var(--muted-foreground)',
+};
+
+const state = { selected: new Set(), filter: '', mode: 'list', open: null };
+
+const escape = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+function relative(stamp) {
+  const then = new Date(stamp);
+  if (isNaN(then)) return '—';
+  const mins = Math.max(0, Math.round((NOW - then) / 60000));
+  if (mins < 2) return 'just now';
+  if (mins < 60) return mins + ' minutes ago';
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return hours === 1 ? 'an hour ago' : hours + ' hours ago';
+  const days = Math.round(hours / 24);
+  if (days === 1) return 'yesterday';
+  if (days < 30) return days + ' days ago';
+  const months = Math.round(days / 30);
+  return months <= 1 ? 'a month ago' : months + ' months ago';
+}
+
+function absolute(stamp) {
+  const d = new Date(stamp);
+  if (isNaN(d)) return '—';
+  return d.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric',
+                                       hour: '2-digit', minute: '2-digit' });
+}
+
+function bucket(stamp) {
+  // Calendar days, not elapsed hours: "yesterday" has to mean yesterday's date,
+  // or a row stamped 18:02 two days ago sits under "Deleted yesterday" while its
+  // own label reads "2 days ago".
+  const then = new Date(stamp);
+  if (isNaN(then)) return 'Older';
+  const a = Date.UTC(NOW.getUTCFullYear(), NOW.getUTCMonth(), NOW.getUTCDate());
+  const b = Date.UTC(then.getUTCFullYear(), then.getUTCMonth(), then.getUTCDate());
+  const days = Math.round((a - b) / 86400000);
+  if (days <= 0) return 'Deleted today';
+  if (days === 1) return 'Deleted yesterday';
+  if (days < 7) return 'Earlier this week';
+  if (days < 30) return 'This month';
+  return 'Older';
+}
+
+const KIND_WORDS = {
+  character_scene: 'cast',
+  plot_setup: 'plot role', plot_inciting_incident: 'plot role', plot_complication: 'plot role',
+  plot_crisis: 'plot role', plot_climax: 'plot role', plot_resolution: 'plot role',
+  location_scene: 'location',
+  location_variant: 'variant of', world_variant: 'variant of',
+  value_scene: 'value turn', value_turn: 'value turn',
+};
+
+const words = (field) => KIND_WORDS[field] || String(field || '').replace(/_/g, ' ');
+
+const plural = (n, one, many) => n === 1 ? `1 ${one}` : `${n} ${many || one + 's'}`;
+
+/* ── the list ─────────────────────────────────────────────────────────────── */
+
+function visibleItems() {
+  const q = state.filter.trim().toLowerCase();
+  if (!q) return ITEMS;
+  return ITEMS.filter((i) => (i.name + ' ' + i.type + ' ' + i.preview).toLowerCase().includes(q));
+}
+
+function rowHtml(item) {
+  const blocked = item.restore.blockers.length > 0;
+  const on = state.selected.has(item.id);
+  const includes = item.includes.length
+    ? `<div class="trash-includes">${item.includes.map((inc) => `
+        <div class="trash-include">
+          <span class="trash-include-type" style="color:${TYPE_COLOR[inc.type] || 'inherit'}">${escape(inc.label)}</span>
+          <span>${escape(inc.name)}</span>
+        </div>`).join('')}</div>`
+    : '';
+  const chips = [
+    blocked ? '<span class="trash-chip blocked">restore blocked</span>' : '',
+    item.purge_eligible ? '<span class="trash-chip">30+ days</span>' : '',
+    item.includes.length ? `<span class="trash-chip count">${1 + item.includes.length} entities</span>` : '',
+  ].filter(Boolean).join('');
+
+  return `
+  <div class="trash-row${on ? ' selected' : ''}" data-row="${escape(item.id)}">
+    <input class="trash-check" type="checkbox" data-check="${escape(item.id)}"${on ? ' checked' : ''}
+           aria-label="Select ${escape(item.name)}">
+    <div class="trash-main">
+      <div class="trash-title-line">
+        <span class="trash-type" style="color:${TYPE_COLOR[item.type] || 'var(--muted-foreground)'}">
+          <span class="trash-pip"></span>${escape(item.label)}
+        </span>
+        <span class="trash-name">${escape(item.name)}</span>
+      </div>
+      <div class="trash-preview">${escape(item.preview)}</div>
+      ${includes}
+    </div>
+    <div class="trash-meta">
+      <span class="trash-age" title="${escape(absolute(item.deleted_at))}">${relative(item.deleted_at)}</span>
+      ${chips}
+    </div>
+  </div>`;
+}
+
+function renderList() {
+  const host = document.getElementById('trash-list');
+  const items = visibleItems();
+  const total = state.mode === 'empty' ? 0 : ITEMS.length;
+  const entities = ITEMS.reduce((n, i) => n + 1 + i.includes.length, 0);
+  document.getElementById('trash-subtitle').textContent = total
+    ? `${plural(total, 'item')} · ${plural(entities, 'entity', 'entities')}`
+    : 'No deleted items';
+  document.getElementById('trash-select-all').disabled = total === 0;
+
+  if (state.mode === 'empty' || !total) {
+    host.innerHTML = emptyHtml();
+    syncActions();
+    return;
+  }
+  if (!items.length) {
+    host.innerHTML = `
+      <div class="trash-empty">
+        <div class="trash-empty-title">No deleted item matches “${escape(state.filter)}”</div>
+        <div class="trash-empty-body">Clear the filter to see all ${plural(total, 'item')}.</div>
+      </div>`;
+    syncActions();
+    return;
+  }
+
+  const order = ['Deleted today', 'Deleted yesterday', 'Earlier this week', 'This month', 'Older'];
+  const groups = new Map(order.map((k) => [k, []]));
+  items.forEach((i) => groups.get(bucket(i.deleted_at)).push(i));
+
+  host.innerHTML = [...groups.entries()]
+    .filter(([, rows]) => rows.length)
+    .map(([title, rows]) => `
+      <div class="trash-group">
+        <div class="trash-group-title">${title}</div>
+        ${rows.map(rowHtml).join('')}
+      </div>`).join('');
+  syncActions();
+}
+
+function emptyHtml() {
+  return `
+    <div class="trash-empty">
+      <svg width="34" height="34" viewBox="0 0 16 16" fill="none">
+        <path d="M3 4.5h10M6.5 4.5V3h3v1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M4.5 4.5l.6 8.2a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-8.2" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+        <path d="M6.8 7v4M9.2 7v4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+      </svg>
+      <div class="trash-empty-title">The trash is empty</div>
+      <div class="trash-empty-body">Deleted scenes, characters and everything else wait here
+        until you restore them or remove them for good.</div>
+    </div>`;
+}
+
+/* ── selection and the two buttons ────────────────────────────────────────── */
+
+function selectedItems() {
+  return ITEMS.filter((i) => state.selected.has(i.id));
+}
+
+function syncActions() {
+  const n = state.selected.size;
+  const blocked = selectedItems().filter((i) => i.restore.blockers.length);
+  const restore = document.getElementById('trash-restore');
+  const purge = document.getElementById('trash-purge');
+  restore.textContent = n ? `Restore ${n}` : 'Restore';
+  purge.textContent = n ? `Delete permanently ${n}` : 'Delete permanently';
+  purge.disabled = n === 0;
+  // One blocked row blocks the batch: the button says why rather than failing
+  // after the click. The row's own panel carries the one-click fix.
+  restore.disabled = n === 0 || blocked.length > 0;
+  restore.title = blocked.length
+    ? `${blocked.map((b) => b.name).join(', ')} — restore the parent first`
+    : 'Bring them back, exactly as they were';
+}
+
+/* ── the panel ────────────────────────────────────────────────────────────── */
+
+const DETAILS = DATA.details;
+
+function panelHtml(id) {
+  const detail = DETAILS[id];
+  const item = ITEMS.find((i) => i.id === id);
+  if (!detail || !item) return `<div class="trash-panel-block"><div class="trash-note">
+      Preview payload for this row is not in the mockup data. The real panel renders
+      it the same way as the ones here.</div></div>`;
+
+  const { entity, sections, relations, referenced_by, restore } = detail;
+  const blocked = restore.blockers.length > 0;
+
+  const blocker = blocked ? `
+    <div class="trash-panel-block">
+      <div class="trash-note blocked">
+        <strong>${escape(restore.blockers[0].message)}</strong>
+        <div class="trash-note-actions">
+          <button class="btn">Restore “${escape(restore.blockers[0].fix.name)}” as well</button>
+        </div>
+      </div>
+    </div>` : '';
+
+  const warnings = Object.entries(restore.warnings || {}).map(([code, refs]) => {
+    const label = code === 'stranded_children' ? 'Stays behind — restore it separately'
+      : code === 'reference_purged' ? 'A link that cannot come back'
+      : code === 'parent_trashed' ? 'Its parent is still in the trash'
+      : 'Links that stay hidden';
+    return `
+      <div class="trash-panel-block">
+        <div class="trash-panel-label">${label}</div>
+        <div class="trash-note warn">
+          ${refs.map((r) => `<span class="trash-warn-line">${escape(r.name)}
+            <span class="trash-warn-kind">${escape(words(r.field))}</span></span>`).join('')}
+          ${code === 'stranded_children' ? '' :
+            '<div class="trash-note-actions"><button class="btn">Restore these too</button></div>'}
+        </div>
+      </div>`;
+  }).join('');
+
+  const fields = Object.entries(entity.fields || {})
+    .filter(([, v]) => v && (typeof v !== 'object' || v.name))
+    .map(([k, v]) => `
+      <div class="trash-field-row">
+        <div class="trash-field-key">${escape(k.replace(/_/g, ' '))}</div>
+        <div class="trash-field-value">${escape(typeof v === 'object' ? v.name : String(v)).slice(0, 220)}</div>
+      </div>`).join('');
+
+  const prose = ['Content', 'Summary', 'Description', 'Definition', 'Objective']
+    .filter((h) => sections[h] && !/^\s*\[placeholder/i.test(sections[h]))
+    .map((h) => `
+      <div class="trash-panel-block">
+        <div class="trash-panel-label">${h}</div>
+        <div class="trash-prose">${escape(sections[h])}</div>
+      </div>`).join('');
+  const otherSections = Object.entries(sections)
+    .filter(([h, body]) => !['Content', 'Summary', 'Description', 'Definition', 'Objective'].includes(h)
+      && body.trim() && !/^\s*\[placeholder/i.test(body))
+    .map(([h, body]) => `
+      <div class="trash-panel-block">
+        <div class="trash-panel-label">${escape(h)}</div>
+        <div class="trash-prose" style="max-height:150px">${escape(body)}</div>
+      </div>`).join('');
+
+  const includes = detail.includes.length ? `
+    <div class="trash-panel-block">
+      <div class="trash-panel-label">Also deleted with it</div>
+      ${detail.includes.map((inc) => `
+        <div class="trash-link">
+          <span class="trash-link-kind">${escape(inc.label)}</span>
+          <span>${escape(inc.name)}</span>
+        </div>`).join('')}
+      <div class="trash-footer-note" style="margin-top:6px">
+        They come back with it — they went with it.
+      </div>
+    </div>` : '';
+
+  const links = relations.all.length ? `
+    <div class="trash-panel-block">
+      <div class="trash-panel-label">Links</div>
+      ${relations.all.slice(0, 8).map((l) => `
+        <div class="trash-link${l.live ? '' : ' trash-link-dead'}">
+          <span class="trash-link-kind">${escape(words(l.kind))}</span>
+          <span>${escape(l.name)}</span>
+        </div>`).join('')}
+    </div>` : '';
+
+  const referencedBy = referenced_by.length ? `
+    <div class="trash-panel-block">
+      <div class="trash-panel-label">Referenced by</div>
+      ${referenced_by.slice(0, 8).map((r) => `
+        <div class="trash-link">
+          <span class="trash-link-kind">${escape(words(r.field || r.entity_type))}</span>
+          <span>${escape(r.name)}</span>
+        </div>`).join('')}
+      <div class="trash-footer-note" style="margin-top:6px">
+        These still name it, and read as having a gap until it is back.
+      </div>
+    </div>` : '';
+
+  const returned = restore.returned || {};
+  const whenBack = `
+    <div class="trash-panel-block">
+      <div class="trash-panel-label">When restored</div>
+      <div class="trash-footer-note">
+        ${plural(1 + (returned.children || []).length, 'entity', 'entities')}
+        become visible again:
+        ${returned.sections || 0} section(s), ${returned.relations || 0} link(s),
+        ${(returned.referenced_by || []).length} mention(s) elsewhere.
+        Nothing is rebuilt — it was only hidden.
+      </div>
+    </div>`;
+
+  return blocker + `
+    <div class="trash-panel-block">
+      <div class="trash-panel-label">Deleted</div>
+      <div class="trash-field-row">
+        <div class="trash-field-value">${escape(absolute(entity.deleted_at))}</div>
+        <div class="trash-field-key" style="text-align:right">${relative(entity.deleted_at)}</div>
+      </div>
+    </div>
+    ${fields ? `<div class="trash-panel-block"><div class="trash-panel-label">Fields</div>${fields}</div>` : ''}
+    ${warnings}
+    ${prose}
+    ${otherSections}
+    ${includes}
+    ${links}
+    ${referencedBy}
+    ${whenBack}`;
+}
+
+function openPanel(id) {
+  const detail = DETAILS[id];
+  const item = ITEMS.find((i) => i.id === id);
+  state.open = id;
+  document.getElementById('panel-type').textContent = `${item ? item.label : ''} · in the trash`;
+  document.getElementById('panel-name').textContent = item ? item.name : id;
+  document.getElementById('panel-body').innerHTML = panelHtml(id);
+  const blocked = item && item.restore.blockers.length;
+  document.getElementById('panel-footer').classList.add('trash-footer');
+  document.getElementById('panel-footer').innerHTML = `
+    <span class="trash-footer-note">${blocked
+      ? 'Restore the parent first.'
+      : 'Deleting permanently cannot be undone.'}</span>
+    <span class="trash-footer-actions">
+      <button class="btn btn-danger btn-ghost" data-panel="purge">Delete permanently</button>
+      <button class="btn btn-primary" data-panel="restore"${blocked ? ' disabled' : ''}>Restore</button>
+    </span>`;
+  const panelEl = document.getElementById('detail-panel');
+  panelEl.classList.add('open');
+  panelEl.classList.add('panel-wide');  // a scene script is unreadable at 320px
+}
+
+function closePanel() {
+  // `panel-wide` must go too: #detail-panel.panel-wide sets a width of its own,
+  // so a widened panel stays visible after `open` is removed. (components.css
+  // fixes this by scoping the wide rule to `#detail-panel.open.panel-wide`; the
+  // mockup just takes the class off.)
+  const panel = document.getElementById('detail-panel');
+  panel.classList.remove('open');
+  panel.classList.remove('panel-wide');
+  state.open = null;
+}
+
+/* ── the purge dialog: the app's own efDialog markup ──────────────────────── */
+
+function purgeDialog(itemsOverride) {
+  const preview = DATA.purgePreview;
+  // The list comes from the SERVER's preview, never from the cached rows: a row
+  // the agent restored meanwhile must not be described as about to go.
+  const count = preview.items.length;
+  const rows = preview.items.map((i) => `
+    <div class="trash-link">
+      <span class="trash-link-kind">${escape(i.label || i.type)}</span>
+      <span>${escape(i.name)}</span>
+    </div>`).join('');
+  const affected = preview.affected.length
+    ? `<div class="trash-panel-label" style="margin-top:12px">Also affected</div>
+       ${preview.affected.map((a) => `<div class="trash-link">
+          <span class="trash-link-kind">${escape(a.field || a.entity_type)}</span>
+          <span>${escape(a.name)}</span> <span style="color:var(--muted-foreground)">loses a reference</span>
+        </div>`).join('')}`
+    : '';
+
+  const el = document.createElement('div');
+  el.className = 'ef-backdrop open';
+  el.innerHTML = `
+    <div class="ef-card ef-card-sm" role="dialog" aria-modal="true" tabindex="-1">
+      <div class="ef-head">
+        <div class="ef-titles">
+          <div class="ef-kicker">Cannot be undone</div>
+          <div class="ef-name">Permanently delete ${count} item${count === 1 ? "" : "s"}?</div>
+        </div>
+        <button class="ef-x-close" data-d="close" aria-label="Close">×</button>
+      </div>
+      <div class="ef-body">
+        <div class="ef-banner" data-d="err"></div>
+        ${rows}
+        ${affected}
+        <div class="trash-footer-note" style="margin-top:12px">
+          A backup of the database is taken first (<code>before-purge</code>), so this can be
+          undone by hand. The Markdown files are removed by the next export.
+        </div>
+      </div>
+      <div class="ef-foot">
+        <div class="grow"></div>
+        <button class="btn" data-d="close">Keep them</button>
+        <button class="btn btn-danger" data-d="ok">Delete ${count} permanently</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  const close = () => el.remove();
+  el.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-d]');
+    if ((t && t.dataset.d === 'close') || e.target === el) close();
+    if (t && t.dataset.d === 'ok') {
+      t.disabled = true; t.textContent = 'Working…';
+      setTimeout(() => { close(); toast('Permanently deleted ' + count + ' items — backup before-purge'); }, 500);
+    }
+  });
+  el.querySelector('.ef-card').focus();
+}
+
+function toast(text) {
+  const el = document.createElement('div');
+  el.textContent = text;
+  el.style.cssText = 'position:fixed;bottom:56px;left:50%;transform:translateX(-50%);'
+    + 'background:#222;color:#fff;padding:8px 14px;border-radius:6px;font-size:12px;z-index:300';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
+/* ── events ───────────────────────────────────────────────────────────────── */
+
+document.getElementById('trash-list').addEventListener('click', (e) => {
+  const check = e.target.closest('[data-check]');
+  if (check) {
+    const id = check.dataset.check;
+    if (check.checked) state.selected.add(id); else state.selected.delete(id);
+    renderList();
+    return;
+  }
+  const row = e.target.closest('[data-row]');
+  if (row) openPanel(row.dataset.row);
+});
+
+document.getElementById('panel-close').addEventListener('click', closePanel);
+
+document.getElementById('panel-footer').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-panel]');
+  if (!b) return;
+  if (b.dataset.panel === 'purge') purgeDialog([ITEMS.find((i) => i.id === state.open)]);
+  if (b.dataset.panel === 'restore') toast('Restored — the item and its bundle are back');
+});
+
+document.getElementById('trash-search').addEventListener('input', (e) => {
+  state.filter = e.target.value;
+  renderList();
+});
+
+document.getElementById('trash-select-all').addEventListener('click', () => {
+  const visible = visibleItems();
+  const all = visible.every((i) => state.selected.has(i.id));
+  visible.forEach((i) => all ? state.selected.delete(i.id) : state.selected.add(i.id));
+  renderList();
+});
+
+document.getElementById('trash-restore').addEventListener('click', () => {
+  const blocked = selectedItems().filter((i) => i.restore.blockers.length);
+  if (blocked.length) {
+    toast('Restore blocked: ' + blocked[0].name + ' needs its parent first');
+    return;
+  }
+  toast('Restored ' + state.selected.size + ' item(s)');
+});
+
+document.getElementById('trash-purge').addEventListener('click', () => purgeDialog());
+
+document.querySelectorAll('.mock-bar [data-state]').forEach((b) => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.mock-bar [data-state]').forEach((x) => x.classList.remove('on'));
+    b.classList.add('on');
+    state.mode = b.dataset.state === 'nomatch' ? 'list' : b.dataset.state;
+    document.getElementById('trash-search').value = b.dataset.state === 'nomatch' ? 'zzz' : '';
+    state.filter = b.dataset.state === 'nomatch' ? 'zzz' : '';
+    renderList();
+  });
+});
+
+document.getElementById('mock-sidebar').addEventListener('click', (e) => {
+  const bar = document.getElementById('sidebar');
+  bar.classList.toggle('expanded');
+  e.target.textContent = bar.classList.contains('expanded') ? 'Collapse sidebar' : 'Expand sidebar';
+});
+
+document.getElementById('mock-dialog-btn').addEventListener('click', () => purgeDialog());
+
+/* ── boot: land on the list with nothing selected, one panel open ─────────── */
+
+renderList();
+openPanel('central-room-night');
+
+// `#empty`, `#selectall`, `#nomatch`, `#noppanel`, `#dialog` open the mockup in
+// that state, so a specific view can be linked to (and screenshotted).
+const hash = location.hash.replace('#', '');
+if (hash === 'empty') { state.mode = 'empty'; closePanel(); renderList(); }
+if (hash === 'nomatch') {
+  state.filter = 'zzz';
+  document.getElementById('trash-search').value = 'zzz';
+  closePanel(); renderList();
+}
+if (hash === 'selectall') {
+  ITEMS.forEach((i) => state.selected.add(i.id));
+  renderList();
+}
+if (hash === 'noppanel') closePanel();
+if (hash === 'dialog') { closePanel(); purgeDialog(); }
+
+</script>
+</body>
+</html>

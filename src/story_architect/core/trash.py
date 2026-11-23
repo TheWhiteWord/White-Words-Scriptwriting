@@ -462,9 +462,18 @@ def restore_check(conn, entity_id: str, *, also_restoring=()) -> dict:
             _classify_refs(conn, warnings, [str(v) for v in values], field,
                            dead, existing, batch)
 
-    # 5. Children that were deleted separately stay behind — say so, once.
+    # 5. Children in the trash that this restore does NOT bring back.
+    #
+    # The bundle comes back with the parent — that is the rule `_clear_flags`
+    # applies — so a child of the bundle is never "stranded". What stays behind
+    # is a child deleted on its own, carrying another stamp: restoring the parent
+    # leaves it in the trash, and a reader that walks `parent_id` will not see it.
     bundle = deleted_together(conn, eid, deleted_at) if deleted_at else []
-    stranded = [c for c in bundle if c[0] not in batch]
+    in_bundle = {c[0] for c in bundle}
+    stranded = [r for r in conn.execute(
+        "SELECT id, type FROM entities WHERE parent_id=? AND is_deleted=1 "
+        "AND (deleted_at IS NULL OR deleted_at <> ?) ORDER BY type, id",
+        (eid, deleted_at)).fetchall() if r[0] not in in_bundle]
     if stranded:
         names = _names(conn, [c[0] for c in stranded])
         _warning(warnings, "stranded_children",

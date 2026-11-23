@@ -437,6 +437,7 @@ DASH.showTrashPanel = function (item) {           // in views/trash.js
 |---|---|
 | The agent restored an item while the tab was open | The next mutation's 404/409 names it; the list refetches and selection drops the dead id. The "Project updated" banner still covers the plain case. |
 | Two rows share a `deleted_at` but are not parent/child (a character and its relationships) | Two rows. Never merged: merging would claim a restore does more than it does. |
+| Two *deletions* land in the same second | `deleted_at` has whole-second resolution, so the bundle rule (same stamp, same parent) merges them. Accepted: one person doing two things inside one second is one action, and the alternative — a counter or an operation id — is a schema change for a case nobody can perceive. The tests that mean "deleted separately" force an earlier stamp. |
 | Purging a character whose relationships are still in the trash | Allowed. `hard_delete` removes the relation rows; the relationship rows left behind now name a purged id — the restore preview of *those* warns with `reference_purged`. |
 | A bundle whose root is a `scene_beats` record with no parent (deleted separately) | Its own row, `restore_check` reports `parent_trashed`, block with the fix. |
 | The trash holds a `project` row | Impossible: `SINGLETONS` (`core/manual_entities.py:47`) and `_refuse_singleton`. The UI does not special-case it; an empty/short list is the answer. |
@@ -519,3 +520,54 @@ DASH.showTrashPanel = function (item) {           // in views/trash.js
 6. **Actions** — restore (with the blocked dialog and the fix), purge-preview →
    `efDialog` → purge, `reloadData`, badge refresh, toasts.
 7. **Docs** — inventory 0.4.1, and a line in `tasks/tasks.md`.
+
+**Status.** Phases 1–2 are done and committed (`539f3c3`): `core/trash.py`,
+`core/references.py`, `tools/story_admin.py` (delegating), `app/routes/trash.py`,
+and 17 tests in `tests/test_trash_routes.py`. The mockup (§10) is the gate on
+phase 3: the UI is not written until it is approved.
+
+---
+
+## 10. Mockup (for approval, before any UI code)
+
+`tasks/task_41/mockup/` — a static page, no server:
+
+- `trash-mockup.html` — the tab's real markup;
+- `trash.css` — the candidate `web/css/trash.css`;
+- `data.js` — the real payload from `core/trash.py`, on a
+  throwaway copy of the fixture project; `gen_mockup_data.py` rebuilds both.
+
+It links the app's own stylesheets by relative path, so what it shows is the
+component set the tab will use, not a drawing of it. State hashes (`#empty`,
+`#selectall`, `#dialog`, `#nomatch`, `#noppanel`) exist to review the states.
+
+The fixture was deleted in six ways so one row of every shape is on screen: a
+bundle with two nested locations, a scene with a script, a blocked beats record,
+a character still named by three live relationships, a bundle whose root has a
+script, and a plot wearing the `30+ days` chip.
+
+### Two things building it changed
+
+1. **`restore_check` reported the bundle as "stranded".** It treated every
+   trashed child as staying behind, so the panel said "also deleted with it"
+   *and* "stays behind" about the same row. A child of the bundle always comes
+   back with its parent (`_clear_flags`), so only a child with a *different*
+   stamp can stay behind. Fixed in `core/trash.py`, pinned by
+   `test_the_bundle_is_not_reported_as_staying_behind`.
+2. **`#detail-panel.panel-wide` cannot be closed.** `css/components.css` gives
+   `#detail-panel { width: 0 }`, `#detail-panel.open { width: var(--panel-w) }`
+   and `#detail-panel.panel-wide { width: var(--panel-w-wide) }` — same
+   specificity, later rule wins, so a widened panel keeps a width after `open`
+   is removed. Not introduced here (the Beats and Journey tabs widen too), but
+   the trash panel opens wide by default, so phase 3 fixes it with
+   `#detail-panel.open.panel-wide`.
+
+### Accepted as-is after looking at it
+
+- The list is not width-capped: rows stretch with the window, like every other
+  view.
+- The panel is read-only and has no tab strip: the preview answers "what was
+  this", and editing a trashed entity is a non-goal (§8).
+- A blocked row disables the bulk `Restore` (its tooltip names the blocker)
+  rather than failing after the click; the one-click fix lives in the row's
+  panel, where the reason is printed in full.
