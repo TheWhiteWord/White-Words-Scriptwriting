@@ -209,7 +209,35 @@
   color: var(--foreground);
 }
 .trash-note + .trash-note { margin-top: 6px; }
-.trash-note .trash-note-actions { margin-top: 8px; display: flex; gap: 6px; }
+
+/* A link whose target was purged: there is nothing left to bring back, so it is
+   plain text in a redder frame, never a tick box that could not do anything. */
+.trash-note.gone { border-color: rgba(224, 112, 112, 0.3); }
+.trash-warn-line.plain { color: var(--muted-foreground); }
+
+/* One tick box per thing that stays hidden. The box only edits the panel's
+   batch; the footer's Restore is the single thing that acts on it, so the scope
+   of a click is never something the reader has to infer. */
+.trash-tick {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.trash-tick + .trash-tick { margin-top: 2px; }
+.trash-tick input {
+  margin: 3px 0 0;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+.trash-tick:hover { color: var(--foreground); }
+.trash-tick-note {
+  margin: 6px 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
 
 .trash-field-row {
   display: flex;
@@ -272,6 +300,8 @@
 }
 .panel-footer.trash-footer .trash-footer-note { margin-right: auto; }
 .trash-footer-actions { display: flex; gap: 6px; }
+/* the primary carries a count once things are ticked, and must not wrap */
+.trash-footer-actions .btn { white-space: nowrap; }
 
 /* one line per hidden link, with its kind in the margin */
 .trash-warn-line { display: block; }

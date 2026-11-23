@@ -18,6 +18,8 @@ take.
 | nothing selected, nothing open | click a row's ✕ |
 | selection, buttons with counts | `#selectall`, or tick rows |
 | a selection that contains a blocked row: `Restore` goes inert, `Delete permanently` does not | `#selectall` — hover the disabled `Restore` for the reason |
+| a panel whose restore is blocked, and what unblocking it looks like | `#blocked` — tick the one box and the footer's button comes alive |
+| a panel with two "bring it back as well" boxes ticked | `#ticked` — the footer counts three and restores them in one call |
 | the purge confirmation | `#dialog`, or `Delete permanently` |
 | empty trash | `#empty` |
 | filter with no match | `#nomatch` |
@@ -38,10 +40,19 @@ every shape:
   they appear under `Referenced by`, and the purge card lists them as affected.
 - **Scene “Central Room - Night”** — a bundle whose root has a script.
 - **Scene Beats “central-room-day-beats”** — deleted on its own six days before
-  its scene went. **Restore is blocked** with the real message and the one-click
-  fix, because a beats record restored without its scene is invisible to every
-  reader.
+  its scene went. **Restore is blocked** with the real message and a tick box
+  that adds its scene to the same call, because a beats record restored without
+  its scene is invisible to every reader.
 - **Plot “The Resistance”** — two months old, so it wears the `30+ days` chip.
+
+## One box, one button
+
+Everything that can come back with the open item is a tick box in the panel
+(`Links that stay hidden`, `A link that cannot come back` is the one with none,
+`Children that stay hidden`, and the blocker's parent). A box only edits the
+batch; the footer's `Restore` is the only thing that acts, and it counts what
+it will bring back (`Restore 3`) before you press it. No per-line button, so a
+click never means something the footer did not already say.
 
 ## Regenerating the data
 

@@ -190,6 +190,26 @@ def test_the_bundle_is_not_reported_as_staying_behind(client):
         assert payload["includes"], "its beats are in the bundle, so they come back"
 
 
+def test_a_link_named_twice_is_one_line(client):
+    """A scene's location is written twice — the column *and* a relation row.
+
+    The preview names entities, not storage: two lines for one location read as
+    two links the user must bring back, and the panel offers each of them a tick
+    box. So a ref is keyed by (type, id) and the second sighting is dropped.
+    """
+    tc, project = client
+    assert delete_entity(project, "location", "the-central-room", "t", True)["success"]
+    assert delete_entity(project, "scene", "central-room-day", "t", True)["success"]
+
+    body = tc.get(f"/api/projects/{SLUG}/trash/scene/central-room-day").json()
+    refs = body["restore"]["warnings"].get("reference_in_trash", [])
+    keys = [(r["entity_type"], r["id"]) for r in refs]
+    assert len(keys) == len(set(keys)), f"the same entity twice: {keys}"
+    # The column's label wins over the relation kind: one link, named plainly.
+    assert keys == [("location", "the-central-room")]
+    assert refs[0]["field"] == "location"
+
+
 def test_restoring_the_parent_brings_the_bundle_back(client):
     tc, project = client
     scene = _first_scene_with_beats(project)

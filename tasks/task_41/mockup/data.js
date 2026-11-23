@@ -20,7 +20,7 @@ window.MOCKUP = {
     "type": "world",
     "id": "the-i",
     "name": "The I",
-    "deleted_at": "2026-11-23T15:22:08+00:00",
+    "deleted_at": "2026-11-23T15:49:40+00:00",
     "purge_eligible": false,
     "includes": [
      {
@@ -86,12 +86,6 @@ window.MOCKUP = {
         "id": "kael",
         "name": "Kael",
         "field": "character_scene"
-       },
-       {
-        "entity_type": "location",
-        "id": "the-central-room",
-        "name": "The Central Room",
-        "field": "location_scene"
        },
        {
         "entity_type": "plot",
@@ -211,12 +205,6 @@ window.MOCKUP = {
         "id": "kael",
         "name": "Kael",
         "field": "character_scene"
-       },
-       {
-        "entity_type": "location",
-        "id": "the-central-room",
-        "name": "The Central Room",
-        "field": "location_scene"
        },
        {
         "entity_type": "plot",
@@ -631,12 +619,6 @@ window.MOCKUP = {
       "field": "character_scene"
      },
      {
-      "entity_type": "location",
-      "id": "the-central-room",
-      "name": "The Central Room",
-      "field": "location_scene"
-     },
-     {
       "entity_type": "plot",
       "id": "the-resistance",
       "name": "The Resistance",
@@ -709,7 +691,7 @@ window.MOCKUP = {
    "type": "world",
    "name": "The I",
    "label": "World",
-   "deleted_at": "2026-11-23T15:22:08+00:00",
+   "deleted_at": "2026-11-23T15:49:40+00:00",
    "one_sentence": "A simulation environment where developing consciousness forms.",
    "has_script": false,
    "fields": {
@@ -1020,7 +1002,7 @@ window.MOCKUP = {
     "type": "world",
     "name": "The I",
     "label": "World",
-    "deleted_at": "2026-11-23T15:22:08+00:00",
+    "deleted_at": "2026-11-23T15:49:40+00:00",
     "one_sentence": "A simulation environment where developing consciousness forms.",
     "has_script": false,
     "fields": {
@@ -1370,12 +1352,6 @@ window.MOCKUP = {
        "id": "kael",
        "name": "Kael",
        "field": "character_scene"
-      },
-      {
-       "entity_type": "location",
-       "id": "the-central-room",
-       "name": "The Central Room",
-       "field": "location_scene"
       },
       {
        "entity_type": "plot",
@@ -1792,12 +1768,6 @@ window.MOCKUP = {
        "id": "kael",
        "name": "Kael",
        "field": "character_scene"
-      },
-      {
-       "entity_type": "location",
-       "id": "the-central-room",
-       "name": "The Central Room",
-       "field": "location_scene"
       },
       {
        "entity_type": "plot",

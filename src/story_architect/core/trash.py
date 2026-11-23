@@ -306,13 +306,21 @@ def list_deleted(project_path: Path, older_than_days: int = 30, *,
 # ─── what a restore would change, and would refuse ───────────────────────────
 
 def _warning(warnings: dict, code: str, refs: list) -> None:
-    """File one warning's refs under its code, keeping the payload JSON-shaped."""
+    """File one warning's refs under its code, keeping the payload JSON-shaped.
+
+    One entity, one line: the key is (type, id), not the field. A scene's
+    location is stored twice — the `location_id` column *and* a relation row, the
+    same fact written by two paths — so keying on the field produced "The Central
+    Room" twice in the same warning, reading as two links to bring back when
+    there is one. The first ref wins, and the caller files the column before the
+    relation, so the label is the plain one ("location", not "location_scene").
+    """
     if not refs:
         return
     bucket = warnings.setdefault(code, [])
-    seen = {(r.get("entity_type"), r.get("id"), r.get("field")) for r in bucket}
+    seen = {(r.get("entity_type"), r.get("id")) for r in bucket}
     for ref in refs:
-        key = (ref.get("entity_type"), ref.get("id"), ref.get("field"))
+        key = (ref.get("entity_type"), ref.get("id"))
         if key not in seen:
             bucket.append(ref)
             seen.add(key)

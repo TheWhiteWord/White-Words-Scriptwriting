@@ -150,7 +150,7 @@ const TYPE_COLOR = {
   scene_beats: 'var(--muted-foreground)',
 };
 
-const state = { selected: new Set(), filter: '', mode: 'list', open: null };
+const state = { selected: new Set(), pending: new Set(), filter: '', mode: 'list', open: null };
 
 const escape = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -331,6 +331,34 @@ function syncActions() {
 
 const DETAILS = DATA.details;
 
+const keyOf = (type, id) => `${type}:${id}`;
+
+/* One line in a "stays hidden" list: the entity, its kind, and a tick box that
+   adds it to this panel's batch. Nothing is restored from here — the batch is
+   the footer's, and only the footer acts on it, so a click never means two
+   different things depending on where it landed. */
+function tickLine(ref) {
+  const k = keyOf(ref.entity_type, ref.id);
+  return `
+    <label class="trash-tick">
+      <input type="checkbox" data-extra="${escape(k)}"${state.pending.has(k) ? ' checked' : ''}>
+      <span>${escape(ref.name)}<span class="trash-warn-kind">${escape(words(ref.field || ''))}</span></span>
+    </label>`;
+}
+
+const WARN_TITLES = {
+  reference_in_trash: 'Links that stay hidden',
+  reference_purged: 'A link that cannot come back',
+  parent_trashed: 'Its parent is still in the trash',
+  stranded_children: 'Children that stay hidden',
+};
+const WARN_NOTES = {
+  reference_in_trash: 'They read as gaps until they come back. Tick the ones to bring back with it.',
+  reference_purged: 'Gone for good: the link will read empty. There is nothing left to bring back.',
+  parent_trashed: 'Tick it and it comes back in the same go, with everything of its own.',
+  stranded_children: 'Deleted on their own, so they do not come back with it unless you tick them.',
+};
+
 function panelHtml(id) {
   const detail = DETAILS[id];
   const item = ITEMS.find((i) => i.id === id);
@@ -341,29 +369,29 @@ function panelHtml(id) {
   const { entity, sections, relations, referenced_by, restore } = detail;
   const blocked = restore.blockers.length > 0;
 
-  const blocker = blocked ? `
+  // A structural parent in the trash: with it ticked, the footer's Restore is
+  // allowed again and sends both in one batch. Without it, the button is inert
+  // and says why — the tick box is the one path, so there is no second button
+  // whose effect the reader has to guess at.
+  const blocker = (restore.blockers || []).map((b) => `
     <div class="trash-panel-block">
       <div class="trash-note blocked">
-        <strong>${escape(restore.blockers[0].message)}</strong>
-        <div class="trash-note-actions">
-          <button class="btn">Restore “${escape(restore.blockers[0].fix.name)}” as well</button>
-        </div>
+        <strong>${escape(b.message)}</strong>
+        ${b.fix ? tickLine({ entity_type: b.fix.entity_type, id: b.fix.id,
+                             name: b.fix.name, field: '' }) : ''}
       </div>
-    </div>` : '';
+    </div>`).join('');
 
   const warnings = Object.entries(restore.warnings || {}).map(([code, refs]) => {
-    const label = code === 'stranded_children' ? 'Stays behind — restore it separately'
-      : code === 'reference_purged' ? 'A link that cannot come back'
-      : code === 'parent_trashed' ? 'Its parent is still in the trash'
-      : 'Links that stay hidden';
+    const title = WARN_TITLES[code] || 'Stays hidden';
+    const ticked = code !== 'reference_purged';   // nothing left to bring back
     return `
       <div class="trash-panel-block">
-        <div class="trash-panel-label">${label}</div>
-        <div class="trash-note warn">
-          ${refs.map((r) => `<span class="trash-warn-line">${escape(r.name)}
-            <span class="trash-warn-kind">${escape(words(r.field))}</span></span>`).join('')}
-          ${code === 'stranded_children' ? '' :
-            '<div class="trash-note-actions"><button class="btn">Restore these too</button></div>'}
+        <div class="trash-panel-label">${escape(title)}</div>
+        <div class="trash-note ${code === 'reference_purged' ? 'gone' : 'warn'}">
+          ${refs.map((r) => ticked ? tickLine(r) : `<span class="trash-warn-line plain">
+            ${escape(r.name)}<span class="trash-warn-kind">${escape(words(r.field))}</span></span>`).join('')}
+          <div class="trash-tick-note">${escape(WARN_NOTES[code] || '')}</div>
         </div>
       </div>`;
   }).join('');
@@ -433,14 +461,14 @@ function panelHtml(id) {
     <div class="trash-panel-block">
       <div class="trash-panel-label">When restored</div>
       <div class="trash-footer-note">
-        ${plural(1 + (returned.children || []).length, 'entity', 'entities')}
-        become visible again:
+        ${(1 + (returned.children || []).length) === 1 ? 'One entity becomes'
+          : `${plural(1 + (returned.children || []).length, 'entity', 'entities')} become`}
+        visible again:
         ${returned.sections || 0} section(s), ${returned.relations || 0} link(s),
         ${(returned.referenced_by || []).length} mention(s) elsewhere.
         Nothing is rebuilt — it was only hidden.
       </div>
     </div>`;
-
   return blocker + `
     <div class="trash-panel-block">
       <div class="trash-panel-label">Deleted</div>
@@ -459,23 +487,42 @@ function panelHtml(id) {
     ${whenBack}`;
 }
 
+/* The footer is the only place that acts: it owns the batch, counts what will
+   come back, and goes inert while a blocker is still unticked. */
+function footerHtml() {
+  const detail = DETAILS[state.open];
+  const restore = (detail && detail.restore) || { blockers: [], warnings: {} };
+  const pendingBlockers = (restore.blockers || [])
+    .filter((b) => b.fix && !state.pending.has(keyOf(b.fix.entity_type, b.fix.id)));
+  const n = 1 + state.pending.size;
+  const note = pendingBlockers.length
+    ? `Restore “${pendingBlockers[0].fix.name}” first — tick it above.`
+    : n > 1
+      ? `${n} items come back together — this one, and the ${n - 1 === 1 ? 'one' : n - 1} you ticked.`
+      : 'Deleting permanently cannot be undone.';
+  return `
+    <span class="trash-footer-note">${escape(note)}</span>
+    <span class="trash-footer-actions">
+      <button class="btn btn-danger btn-ghost" data-panel="purge">Delete permanently</button>
+      <button class="btn btn-primary" data-panel="restore"${pendingBlockers.length ? ' disabled' : ''}>
+        ${n === 1 ? 'Restore' : `Restore ${n}`}</button>
+    </span>`;
+}
+
+function syncPanelFooter() {
+  document.getElementById('panel-footer').innerHTML = footerHtml();
+}
+
 function openPanel(id) {
   const detail = DETAILS[id];
   const item = ITEMS.find((i) => i.id === id);
   state.open = id;
+  state.pending.clear();          // a new item, a new batch
   document.getElementById('panel-type').textContent = `${item ? item.label : ''} · in the trash`;
   document.getElementById('panel-name').textContent = item ? item.name : id;
   document.getElementById('panel-body').innerHTML = panelHtml(id);
-  const blocked = item && item.restore.blockers.length;
   document.getElementById('panel-footer').classList.add('trash-footer');
-  document.getElementById('panel-footer').innerHTML = `
-    <span class="trash-footer-note">${blocked
-      ? 'Restore the parent first.'
-      : 'Deleting permanently cannot be undone.'}</span>
-    <span class="trash-footer-actions">
-      <button class="btn btn-danger btn-ghost" data-panel="purge">Delete permanently</button>
-      <button class="btn btn-primary" data-panel="restore"${blocked ? ' disabled' : ''}>Restore</button>
-    </span>`;
+  syncPanelFooter();
   const panelEl = document.getElementById('detail-panel');
   panelEl.classList.add('open');
   panelEl.classList.add('panel-wide');  // a scene script is unreadable at 320px
@@ -576,11 +623,27 @@ document.getElementById('trash-list').addEventListener('click', (e) => {
 
 document.getElementById('panel-close').addEventListener('click', closePanel);
 
+// A tick box only edits the batch. It never sends anything: the footer's button
+// is the one thing that restores, so "what did that click do" always has an
+// answer the footer can show before it happens.
+document.getElementById('panel-body').addEventListener('change', (e) => {
+  const box = e.target.closest('[data-extra]');
+  if (!box) return;
+  if (box.checked) state.pending.add(box.dataset.extra);
+  else state.pending.delete(box.dataset.extra);
+  syncPanelFooter();
+});
+
 document.getElementById('panel-footer').addEventListener('click', (e) => {
   const b = e.target.closest('[data-panel]');
   if (!b) return;
   if (b.dataset.panel === 'purge') purgeDialog([ITEMS.find((i) => i.id === state.open)]);
-  if (b.dataset.panel === 'restore') toast('Restored — the item and its bundle are back');
+  if (b.dataset.panel === 'restore') {
+    const n = 1 + state.pending.size;
+    state.pending.clear();
+    syncPanelFooter();
+    toast(`Restored ${plural(n, 'item')} — back in the story`);
+  }
 });
 
 document.getElementById('trash-search').addEventListener('input', (e) => {
@@ -645,6 +708,18 @@ if (hash === 'selectall') {
 }
 if (hash === 'noppanel') closePanel();
 if (hash === 'dialog') { closePanel(); purgeDialog(); }
+if (hash === 'blocked') openPanel('central-room-day-beats');   // a parent in the trash
+if (hash === 'ticked') {
+  // Two boxes ticked the way a click would tick them (a real change event, so
+  // this state also proves the listener and the footer agree).
+  openPanel('central-room-day');
+  ['location:the-central-room', 'scene_beats:central-room-day-beats'].forEach((k) => {
+    const box = document.querySelector(`#panel-body [data-extra="${k}"]`);
+    if (!box) return;
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
 
 </script>
 </body>

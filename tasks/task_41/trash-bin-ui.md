@@ -75,9 +75,9 @@ parent is dead, `core/references.py:32-37`). So:
 
 | Situation | UI behaviour |
 |---|---|
-| Parent (act / sequence / scene) is trashed | **Block** the restore. Explain it, and offer one button that restores the parent's bundle plus this item in one call. |
+| Parent (act / sequence / scene) is trashed | **Block** the restore. Explain it, and offer a tick box that adds the parent's bundle to this item's call. The footer's `Restore` stays inert until it is ticked, and names the parent when it is not. |
 | Parent no longer exists (purged) | **Block** for `scene_beats` (a beat with no scene), **warn** for anything else (restores parentless). |
-| References entities still in the trash (relationships, plot roles, cast, location) | **Warn**: the preview lists them, each with a "restore this too" action that adds it to the same batch. |
+| References entities still in the trash (relationships, plot roles, cast, location) | **Warn**: the preview lists them, each with a tick box that adds it to the same batch (§4.5). |
 | References an id that was purged | **Warn** with a different colour: the link is gone for good and will read empty. |
 
 Restore itself needs no confirmation: it is reversible (`story_admin.py:416`
@@ -133,6 +133,14 @@ warnings: [{code: "reference_in_trash", message,
 returned: {children: [{type,id,name}], relations: n, cast_scenes: [...],
            plot_roles: [...], location_links: n, sections: n}
 ```
+
+A ref is one entity, keyed by `(entity_type, id)` — not by field. A scene's
+location is stored twice (the `location_id` column *and* a relation row: the same
+fact written by two paths), and keying on the field put "The Central Room" on two
+lines of the same warning, reading as two links to bring back when there is one.
+The first sighting wins, and the column is filed before the relation, so the
+label stays the plain one. Pinned by
+`test_a_link_named_twice_is_one_line`.
 
 `returned` is what becomes visible again — read before the restore, from the
 same tables the readers use (`live_relations`, `references_to`). It is the
@@ -409,11 +417,22 @@ DASH.showTrashPanel = function (item) {           // in views/trash.js
   become visible again: 1 scene-beats record, 3 relationships, the cast entry on
   “The Final Offer”").
 - Blockers and warnings are printed where they belong — at the top when they are
-  blockers (with the fix button), beside the link they concern when they are a
-  reference warning (each with "Restore this too", which adds that id to the
-  pending batch).
+  blockers, beside the link they concern when they are a reference warning.
+  **Every list of things that could come back is tick boxes, and nothing in the
+  panel acts on a tick by itself.** The boxes edit one batch; the footer's
+  `Restore` is the only control that sends it, it says how many it will restore
+  (`Restore 3`), and it is inert while a blocker is unticked. The alternative —
+  a per-line "Restore these too" button — was built first and rejected: with a
+  button beside a checkbox-less list and a second `Restore` in the footer, a
+  click's scope has to be inferred, and two clicks could race. The one list
+  without boxes is `reference_purged`: its target is gone, so a box would be a
+  control that cannot do anything.
 - Footer: `Restore` (primary), `Delete permanently` (danger, ghost), and a
-  `Close`. Plus, for a scene with a script, nothing else — the preview is
+  `Close`. The primary carries the batch count once anything is ticked
+  (`Restore 3`), and a one-line note beside it says what the press will do:
+  "3 items come back together — this one, and the 2 you ticked", or, while a
+  blocker is unticked, "Restore "Act One" first — tick it above" with the button
+  inert. Plus, for a scene with a script, nothing else — the preview is
   read-only. Editing a trashed entity is out of scope (§8).
 - `Esc` closes the panel (`switchView` already closes it on a view change).
 
@@ -477,6 +496,9 @@ DASH.showTrashPanel = function (item) {           // in views/trash.js
 - **Parent block**: a separately-deleted child whose parent is in the trash →
   `409 restore_blocked` with `fix`, and the fix-then-retry call succeeds.
 - **Batch atomicity**: one blocked target in a batch of three restores nothing.
+- **One line per link**: a scene whose location is in the trash reports that
+  location once, not twice, though both the column and a relation row name it
+  (`test_a_link_named_twice_is_one_line`).
 - **Purge**: takes exactly one backup; removes the bundle; leaves a live
   sibling's `location_id` blank rather than dangling; `extra` scrub
   (§3.2) — a live scene's cast no longer names the purged character, and the
@@ -561,6 +583,22 @@ script, and a plot wearing the `30+ days` chip.
    is removed. Not introduced here (the Beats and Journey tabs widen too), but
    the trash panel opens wide by default, so phase 3 fixes it with
    `#detail-panel.open.panel-wide`.
+
+### What the first review changed
+
+The panel shipped with a button per warning ("Restore these too") and a section
+titled *Stays behind — restore it separately*. Both were wrong for the same
+reason: a click whose effect has to be inferred. Now every list of things that
+can come back is a tick box, the footer's `Restore` is the only control that
+sends the batch, and it counts (`Restore 3`) and says what the press will do
+before it happens. The blocker's one-click fix became a tick box too — it had the
+same ambiguity — and the stranded section is now *Children that stay hidden*,
+naming what they are instead of what to do with them.
+
+The same review caught a backend bug the panel had been faithfully drawing: a
+scene's location appeared twice under *Links that stay hidden*, because the
+refs were keyed by field and the location is stored twice. Not a mockup artefact
+— `restore_check` really returned it twice (§3.1). Fixed, with a test.
 
 ### Accepted as-is after looking at it
 
