@@ -96,6 +96,23 @@ DASH.hideLoading = function(force) {
   });
 };
 
+// The twelve rail marks ship as one sprite. An external <use href="file#id"> is
+// not reliable outside Chrome, so the symbols are fetched once and put in the
+// document, where <use href="#id"> resolves in every browser.
+DASH.loadNavSprite = async function() {
+  try {
+    const res = await fetch('icons/nav-sprite.svg');
+    if (!res.ok) return;
+    const doc = new DOMParser().parseFromString(await res.text(), 'image/svg+xml');
+    if (!doc.querySelector('symbol')) return;
+    const host = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    host.setAttribute('aria-hidden', 'true');
+    host.setAttribute('style', 'position:absolute;width:0;height:0;overflow:hidden');
+    doc.querySelectorAll('symbol').forEach(function(s) { host.appendChild(document.importNode(s, true)); });
+    document.body.insertBefore(host, document.body.firstChild);
+  } catch (e) { /* a missing sprite costs the glyphs, not the dashboard */ }
+};
+
 // Fetch a project and rebuild every view from it. Shared by boot and by the
 // update banner's refresh, which re-reads in place instead of reloading.
 DASH.loadDashboard = async function(slug) {
@@ -115,6 +132,7 @@ DASH.loadDashboard = async function(slug) {
 
 DASH.boot = async function() {
   try {
+    await DASH.loadNavSprite();   // the rail's glyphs, before anything is drawn
     const m = (location.hash || '').match(/^#\/p\/([^/?]+)/);
     if (!m) {
       await DASH.showPicker();

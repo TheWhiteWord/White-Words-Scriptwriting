@@ -44,7 +44,7 @@
 .se-banner[hidden] { display: none; }
 .se-banner span { flex: 1 1 280px; }
 .se-banner-conflict { background: rgba(224,168,107,.12); }
-.se-banner-locked { background: rgba(123,156,240,.1); }
+.se-banner-locked { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 
 .se-body { flex: 1; min-height: 0; display: flex; }
 
@@ -61,7 +61,7 @@
 .se-el { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px;
   background: none; border: 1px solid transparent; border-radius: var(--radius); cursor: pointer; text-align: left; }
 .se-el:hover:not(:disabled) { background: rgba(255,255,255,.06); }
-.se-el.on { background: rgba(123,156,240,.16); border-color: var(--accent); }
+.se-el.on { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent); }
 .se-el kbd { font: inherit; font-size: var(--font-size-xs); color: var(--muted-foreground); }
 .se-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .se-chip { padding: 5px 9px; font-size: var(--font-size-sm); letter-spacing: .03em; cursor: pointer;
@@ -137,7 +137,7 @@
   padding: 8px 10px; text-align: left; background: none; border: 0; border-radius: 6px; cursor: pointer;
   border-left: 3px solid var(--c, transparent); font-size: var(--font-size-base); }
 .se-ac-item small, .se-pop-item small { color: var(--muted-foreground); font-size: var(--font-size-xs); white-space: nowrap; }
-.se-ac-item.on, .se-pop-item.on, .se-ac-item:hover, .se-pop-item:hover:not(.dis) { background: rgba(123,156,240,.2); }
+.se-ac-item.on, .se-pop-item.on, .se-ac-item:hover, .se-pop-item:hover:not(.dis) { background: color-mix(in srgb, var(--accent) 20%, transparent); }
 .se-pop-item.dis { opacity: .45; cursor: default; }
 .se-pop-q { width: 100%; margin-bottom: 4px; padding: 7px 9px; background: rgba(255,255,255,.06); color: inherit;
   border: 1px solid var(--border); border-radius: 6px; font: inherit; outline: 0; }
@@ -175,7 +175,7 @@
 
 /* script view: a scene's text opens the editor */
 .se-clickable { cursor: pointer; }
-.se-clickable:hover { background: rgba(123,156,240,.07); }
+.se-clickable:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
 
 /* the scene panel's Script card */
 .se-card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); padding: 12px; }

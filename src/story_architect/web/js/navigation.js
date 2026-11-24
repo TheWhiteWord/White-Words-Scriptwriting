@@ -32,8 +32,6 @@ DASH.switchView = function(view, btn) {
 DASH.toggleSidebar = function() {
   DASH.sidebarExpanded = !DASH.sidebarExpanded;
   document.getElementById('sidebar').classList.toggle('expanded', DASH.sidebarExpanded);
-  const icon = document.querySelector('.sidebar-toggle svg path');
-  icon.setAttribute('d', DASH.sidebarExpanded ? 'M9 3l-4 4 4 4' : 'M5 3l4 4-4 4');
 }
 
 DASH.refreshIndex = function() {
