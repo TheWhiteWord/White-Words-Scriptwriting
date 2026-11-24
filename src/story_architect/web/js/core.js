@@ -15,6 +15,104 @@ document.addEventListener('click', function(e){
   const b = e.target && e.target.closest && e.target.closest('[data-hermes-send]');
   if (b) { e.preventDefault(); DASH.askAgent(b.getAttribute('data-hermes-send')); }
 });
+// ─── Loading overlay ──────────────────────────────────────────────────────────
+// Every mark draws itself in, so hiding the overlay the moment the data lands
+// cuts the stroke off halfway — on a local machine that is a 60 ms flash of a
+// barely started animation. Each show records the earliest time the overlay may
+// go away, and hideLoading waits out whatever is left.
+// The floors come from the files' own timelines: the typewriter splash draws the
+// W by 1.5 s, finishes typing the name at 3.05 s and settles its caret at 4.1 s,
+// so 4.3 s shows it whole; the bare W is drawn by 1.5 s.
+DASH.LOADING_FLOOR_MS = { initial: 4300, project: 1700, refresh: 1700 };
+DASH.MARK_SELECTOR = { initial: '.loading-initial', project: '.loading-w', refresh: '.loading-w' };
+
+// A mark that has already played keeps its finished frame when re-shown: the
+// animation timeline belongs to the decoded image document, not to the element,
+// so display:none then block gives you the static end state. A fresh query
+// string makes it a new document, and the stroke draws again from the start.
+DASH.rewindMark = function(el, kind) {
+  const img = el.querySelector(DASH.MARK_SELECTOR[kind]);
+  if (!img) return;
+  const base = (img.getAttribute('src') || '').split('?')[0];
+  DASH._markSeq = (DASH._markSeq || 0) + 1;
+  img.src = base + '?r=' + DASH._markSeq;
+};
+
+DASH.showLoading = function(kind) {
+  const el = document.getElementById('loading-screen');
+  if (!el) return;
+  const k = DASH.LOADING_FLOOR_MS[kind] ? kind : 'initial';
+  el.classList.remove('initial', 'project', 'refresh');
+  el.classList.add(k);
+  el.style.display = 'flex';
+  // Only ever reached for in-app shows; the first paint starts its own mark.
+  DASH.rewindMark(el, k);
+  DASH._loadingUntil = Date.now() + DASH.LOADING_FLOOR_MS[k];
+};
+
+// Only the project kind shows a caption, and it names the story being loaded.
+// The name sits behind /api/projects, so it lands a moment after first paint —
+// an empty caption until then is better than a placeholder that has to change.
+DASH.setLoadingCaption = function(text) {
+  const el = document.getElementById('loading-screen');
+  const cap = el && el.querySelector('.loading-text');
+  if (!cap || el.style.display === 'none') return;
+  cap.textContent = text || '';
+};
+
+DASH.loadingProjectName = async function(slug) {
+  try {
+    const res = await fetch('/api/projects');
+    const data = await res.json();
+    const project = (data.projects || []).find(function(p) { return p.slug === slug; });
+    if (project && project.name) DASH.setLoadingCaption('Loading ' + project.name + '…');
+  } catch (e) { /* the caption is decoration; the load itself is unaffected */ }
+};
+
+// force: the error screen should never wait on an animation.
+// Returns a promise that settles when the overlay is actually gone, for callers
+// that replace #app's markup (the picker would otherwise destroy the overlay
+// before the floor elapses).
+DASH.hideLoading = function(force) {
+  const el = document.getElementById('loading-screen');
+  if (!el) return Promise.resolve();
+  if (DASH._loadingTimer) { clearTimeout(DASH._loadingTimer); DASH._loadingTimer = null; }
+  let reduced = false;
+  try { reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+  // First paint never calls showLoading — the overlay is in the markup, with a
+  // kind class index.html sets from the URL — so take the floor from that class
+  // and count from the stamp taken as the overlay was parsed.
+  let kind = 'initial';
+  for (const k in DASH.LOADING_FLOOR_MS) if (el.classList.contains(k)) kind = k;
+  const until = DASH._loadingUntil || ((window.__wwLoadingStart || Date.now()) + DASH.LOADING_FLOOR_MS[kind]);
+  const wait = (force || reduced) ? 0 : Math.max(0, until - Date.now());
+  if (!wait) { el.style.display = 'none'; return Promise.resolve(); }
+  return new Promise(function(resolve) {
+    DASH._loadingTimer = setTimeout(function() {
+      DASH._loadingTimer = null;
+      el.style.display = 'none';
+      resolve();
+    }, wait);
+  });
+};
+
+// Fetch a project and rebuild every view from it. Shared by boot and by the
+// update banner's refresh, which re-reads in place instead of reloading.
+DASH.loadDashboard = async function(slug) {
+  const res = await fetch('/api/projects/' + encodeURIComponent(slug) + '/dashboard');
+  if (!res.ok) { DASH.showError(); return false; }
+  const data = await res.json();
+  window.__STORY_DATA__ = data.story_data;
+  window.__SECTIONS__ = data.sections;
+  window.__SCREENPLAY_STATS__ = data.screenplay_stats;
+  window.__STRUCTURAL_STATS__ = data.structural_stats;
+  if (DASH.network) { try { DASH.network.destroy(); } catch (e) { /* already gone */ } DASH.network = null; }
+  DASH.hideLoading();
+  DASH.initStory(data.story_data);
+  DASH.watchUpdates(slug);
+  return true;
+};
+
 DASH.boot = async function() {
   try {
     const m = (location.hash || '').match(/^#\/p\/([^/?]+)/);
@@ -23,16 +121,8 @@ DASH.boot = async function() {
       return;
     }
     const slug = decodeURIComponent(m[1]);
-    const res = await fetch('/api/projects/' + encodeURIComponent(slug) + '/dashboard');
-    if (!res.ok) { DASH.showError(); return; }
-    const data = await res.json();
-    window.__STORY_DATA__ = data.story_data;
-    window.__SECTIONS__ = data.sections;
-    window.__SCREENPLAY_STATS__ = data.screenplay_stats;
-    window.__STRUCTURAL_STATS__ = data.structural_stats;
-    document.getElementById('loading-screen').style.display = 'none';
-    DASH.initStory(data.story_data);
-    DASH.watchUpdates(slug);
+    DASH.loadingProjectName(slug);   // fills the caption while the payload is in flight
+    if (!await DASH.loadDashboard(slug)) return;
     if (DASH.routeEditor) DASH.routeEditor();   // a reload on #/p/<slug>/scene/<id>/edit reopens the editor
   } catch (e) {
     DASH.showError();
@@ -45,8 +135,7 @@ DASH.showPicker = async function() {
     const data = await res.json();
     const projects = (data.projects || []);
     const app = document.getElementById('app');
-    const loading = document.getElementById('loading-screen');
-    if (loading) loading.style.display = 'none';
+    await DASH.hideLoading();   // the splash draws out before it is replaced
     let html = '<div style="padding:2rem"><h2>Projects</h2>';
     if (!projects.length) {
       html += '<p>No projects found. Create one under projects/.</p>';
@@ -85,12 +174,22 @@ DASH.showUpdateIndicator = function(slug) {
   el.style.display = 'block';
 };
 
+// Re-read the project in place, under a scrim. Reloading the page threw away the
+// open view for what is only new data; the scrim keeps the app visible, and the
+// mark still draws out so a refresh reads as something happening.
 DASH.refreshProject = async function(slug) {
-  window.location.reload();
+  DASH.hideUpdateIndicator();
+  DASH.showLoading('refresh');
+  try { await DASH.loadDashboard(slug); } catch (e) { DASH.showError(); }
+};
+
+DASH.hideUpdateIndicator = function() {
+  const el = document.getElementById('sa-update-banner');
+  if (el) el.remove();
 };
 
 DASH.showError = function() {
-  document.getElementById('loading-screen').style.display = 'none';
+  DASH.hideLoading(true);
   document.getElementById('error-screen').style.display = 'flex';
 }
 
@@ -170,7 +269,7 @@ DASH.initStory = function(data) {
   DASH.story.story_memory = DASH.story.story_memory || {};
   DASH.story.relationships = DASH.story.relationships || [];
 
-  document.getElementById('loading-screen').style.display = 'none';
+  DASH.hideLoading();
 
   DASH.buildGraphView();
   DASH.buildScenesView();

@@ -37,7 +37,7 @@ DASH.toggleSidebar = function() {
 }
 
 DASH.refreshIndex = function() {
-  document.getElementById('loading-screen').style.display = 'flex';
+  DASH.showLoading('refresh');
   if (DASH.network) { DASH.network.destroy(); DASH.network = null; }
   setTimeout(DASH.boot, 50);
 }

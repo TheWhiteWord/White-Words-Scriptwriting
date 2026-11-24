@@ -40,11 +40,22 @@
 <body>
 <div id="app">
 
-  <!-- Loading -->
-  <div id="loading-screen">
-    <div class="loading-icon"></div>
-    <div class="loading-text">Loading story index…</div>
+  <!-- Loading. Which mark shows, and whether the overlay is opaque or a scrim
+       over the visible app, comes from DASH.showLoading()'s kind: `initial` is
+       the typewriter on app open, `project` the bare W while a project loads,
+       `refresh` the same W over a scrim while data is re-read. -->
+  <div id="loading-screen" class="initial">
+    <img class="loading-mark loading-initial" src="loading/white-words-loading-splash-initial.svg" width="543" height="132" alt="">
+    <img class="loading-mark loading-w" src="loading/white-words-loading-splash-w.svg" width="784" height="726" alt="">
+    <div class="loading-text"></div>
   </div>
+  <script>
+    window.__wwLoadingStart = Date.now();
+    // A URL that already names a project is loading that project, not opening
+    // the app cold. Switch the mark before first paint so the typewriter never
+    // flashes first; hideLoading() reads the floor off whichever class is set.
+    if (/^#\/p\//.test(location.hash)) document.getElementById('loading-screen').className = 'project';
+  </script>
 
   <!-- Error -->
   <div id="error-screen">

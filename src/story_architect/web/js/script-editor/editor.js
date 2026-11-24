@@ -912,9 +912,9 @@ window.DASH = window.DASH || {};
     } catch (e) { console.error('[script-editor] reload failed', e); }
   };
 
-  // The global "Project updated — Refresh" banner reloads the page, which would
-  // discard an open editor. While the editor is open it handles updates itself,
-  // and a person's own save never raises the banner.
+  // The global "Project updated — Refresh" banner re-reads the project and
+  // rebuilds every view, which would discard an open editor. While the editor is
+  // open it handles updates itself, and a person's own save never raises the banner.
   const origIndicator = DASH.showUpdateIndicator;
   DASH.showUpdateIndicator = function (slug) {
     if (S.open) { onExternalUpdate(); return; }

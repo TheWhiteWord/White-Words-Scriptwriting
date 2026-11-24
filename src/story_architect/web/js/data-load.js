@@ -12,7 +12,7 @@ DASH.handleFileLoad = function(input) {
     try {
       const data = jsyaml.load(e.target.result);
       document.getElementById('error-screen').style.display = 'none';
-      document.getElementById('loading-screen').style.display = 'flex';
+      DASH.showLoading('refresh');
       DASH.initStory(data);
     } catch(err) {
       alert('Could not parse YAML: ' + err.message);
@@ -108,6 +108,6 @@ DASH.loadSampleData = function() {
     ]
   };
   document.getElementById('error-screen').style.display = 'none';
-  document.getElementById('loading-screen').style.display = 'flex';
+  DASH.showLoading('refresh');
   DASH.initStory(sample);
 }

@@ -232,15 +232,24 @@
   z-index: 100;
   background: var(--background);
 }
-.loading-icon {
-  width: 32px;
-  height: 32px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+/* The brand marks replace the old border spinner. Both SVGs carry their own
+   draw-on animation and honour prefers-reduced-motion. Which one shows, and how
+   big, is the kind class DASH.showLoading() puts on the overlay. */
+.loading-mark { display: none; }
+#loading-screen.initial .loading-initial,
+#loading-screen.project .loading-w,
+#loading-screen.refresh .loading-w { display: block; }
+.loading-initial { width: min(480px, 72vw); height: auto; }
+.loading-w { width: min(200px, 42vw); height: auto; }
+/* A refresh keeps the app on screen: the overlay becomes a scrim, not a cover. */
+#loading-screen.refresh {
+  background: rgba(14, 14, 16, 0.62);
+  backdrop-filter: blur(1.5px);
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+#loading-screen.refresh .loading-w { width: min(120px, 30vw); }
+/* Only a project load is captioned, with the story's own name. */
+#loading-screen.initial .loading-text,
+#loading-screen.refresh .loading-text { display: none; }
 .loading-text { font-size: var(--font-size-sm); color: var(--muted-foreground); }
 
 #error-screen {
