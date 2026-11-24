@@ -249,7 +249,8 @@
 #loading-screen.refresh .loading-w { width: min(120px, 30vw); }
 /* Only a project load is captioned, with the story's own name. */
 #loading-screen.initial .loading-text,
-#loading-screen.refresh .loading-text { display: none; }
+#loading-screen.refresh .loading-text,
+#loading-screen.picker .loading-text { display: none; }
 .loading-text { font-size: var(--font-size-sm); color: var(--muted-foreground); }
 
 #error-screen {

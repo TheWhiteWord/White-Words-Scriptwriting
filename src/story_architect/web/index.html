@@ -51,10 +51,22 @@
   </div>
   <script>
     window.__wwLoadingStart = Date.now();
-    // A URL that already names a project is loading that project, not opening
-    // the app cold. Switch the mark before first paint so the typewriter never
-    // flashes first; hideLoading() reads the floor off whichever class is set.
-    if (/^#\/p\//.test(location.hash)) document.getElementById('loading-screen').className = 'project';
+    // The mark is picked before first paint so the wrong one never flashes, and
+    // hideLoading() reads the floor off whichever class is set. A URL naming a
+    // project is loading that project. A URL with no project is either a cold
+    // open, which earns the typewriter, or a step back to the projects list,
+    // which must not wait for one.
+    var _ls = document.getElementById('loading-screen');
+    if (/^#\/p\//.test(location.hash)) {
+      _ls.className = 'project';
+    } else {
+      try {
+        if (sessionStorage.getItem('ww:picker')) {
+          sessionStorage.removeItem('ww:picker');
+          _ls.className = 'picker';
+        }
+      } catch (e) { /* storage unavailable: fall back to the cold open */ }
+    }
   </script>
 
   <!-- Error -->
@@ -72,6 +84,10 @@
 
   <!-- Sidebar -->
   <nav id="sidebar">
+    <button class="rail-mark" onclick="DASH.openProjects()" title="All projects" aria-label="All projects">
+      <img src="icons/favicon.svg" width="24" height="24" alt="">
+    </button>
+
     <button class="nav-btn active" data-view="story" onclick="DASH.switchView('story', this)">
       <svg class="nav-icon" viewBox="0 0 48 48" aria-hidden="true">
         <use href="#ww-project"></use>

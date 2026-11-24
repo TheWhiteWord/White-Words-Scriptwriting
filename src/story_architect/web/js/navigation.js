@@ -34,6 +34,16 @@ DASH.toggleSidebar = function() {
   document.getElementById('sidebar').classList.toggle('expanded', DASH.sidebarExpanded);
 }
 
+// Back to the projects list. The picker rewrites #app's markup, so it can only
+// ever be a boot state: clear the project from the URL and start the app over.
+// The flag tells the next boot to skip the typewriter, since this is a step back
+// through the app rather than an app open.
+DASH.openProjects = function() {
+  try { sessionStorage.setItem('ww:picker', '1'); } catch (e) { /* private mode */ }
+  history.replaceState(null, '', location.pathname);
+  location.reload();
+}
+
 DASH.refreshIndex = function() {
   DASH.showLoading('refresh');
   if (DASH.network) { DASH.network.destroy(); DASH.network = null; }

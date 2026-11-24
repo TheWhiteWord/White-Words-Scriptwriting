@@ -23,15 +23,18 @@ document.addEventListener('click', function(e){
 // The floors come from the files' own timelines: the typewriter splash draws the
 // W by 1.5 s, finishes typing the name at 3.05 s and settles its caret at 4.1 s,
 // so 4.3 s shows it whole; the bare W is drawn by 1.5 s.
-DASH.LOADING_FLOOR_MS = { initial: 4300, project: 1700, refresh: 1700 };
+DASH.LOADING_FLOOR_MS = { initial: 4300, project: 1700, refresh: 1700, picker: 0 };
 DASH.MARK_SELECTOR = { initial: '.loading-initial', project: '.loading-w', refresh: '.loading-w' };
 
 // A mark that has already played keeps its finished frame when re-shown: the
 // animation timeline belongs to the decoded image document, not to the element,
 // so display:none then block gives you the static end state. A fresh query
 // string makes it a new document, and the stroke draws again from the start.
+// The picker kind has no mark at all — going back should not cost an animation.
 DASH.rewindMark = function(el, kind) {
-  const img = el.querySelector(DASH.MARK_SELECTOR[kind]);
+  const sel = DASH.MARK_SELECTOR[kind];
+  if (!sel) return;
+  const img = el.querySelector(sel);
   if (!img) return;
   const base = (img.getAttribute('src') || '').split('?')[0];
   DASH._markSeq = (DASH._markSeq || 0) + 1;

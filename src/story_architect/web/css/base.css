@@ -90,6 +90,24 @@ html, body {
 
 #sidebar.expanded { width: var(--sidebar-w-open); }
 
+/* The app mark at the head of the rail. It is the way back to the projects list,
+   so it is a button rather than decoration.
+   The offset is a fixed 10px, never centring: the rail animates its width, and a
+   centred mark would slide as it narrows then snap when it stops. 10px puts the
+   24px mark's centre on 22px, which is where the 20px nav icons' centres sit
+   (12px padding + 10px), so it still lines up with the column below it. */
+.rail-mark {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0 0 10px 10px;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.rail-mark img { display: block; width: 24px; height: 24px; }
+.rail-mark:hover img { opacity: 0.85; }
+
 .nav-btn {
   display: flex;
   align-items: center;
