@@ -24,6 +24,10 @@ pipx upgrade white-words-scriptwriting
 
 white-words --root <projects root>
 
+Without `--root` the projects root is `~/white-words-studio`, the folder the
+White Words apps share, so a second app can open the same projects. The app's
+own settings (port, token, response budget) stay in `~/.config/white-words`.
+
 The server stops on its own a few seconds after you close the last browser tab.
 `--no-idle-exit` keeps it running.
 
