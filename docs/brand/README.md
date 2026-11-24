@@ -58,3 +58,37 @@ I chose to package everything into a single brand kit, `white-words-brand-kit.zi
 2. **The old name.** Your screenshots still show "Message Story Architect…" in the chat box. Search the codebase for "Story Architect" and "Hermes" and replace both with "White Words". I didn't touch your code, so those strings are still there.
 
 The manifest uses the dark ink color for both the splash background and the browser theme, so the app should open without a white flash. It lists the maskable icons separately from the standard ones, which is what Android needs to crop them properly.
+
+## WORDMARK LOCKUP
+
+1. **Mark + serif.** The brush W next to "White Words" in Cormorant Garamond, a classical high-contrast serif. This is the safe default and the one I'd use on an About screen, a website or a README.
+2. **Brush W as the initial.** The brush W is the first letter, followed by "hite Words". It's the most distinctive and the one that feels most like your painting. It works best large, and I'd avoid it below about 24 px tall because the W and the "h" start to merge.
+3. **Icon tile + sans.** The app icon beside "White Words" in Jost, a clean geometric sans. This is for small headers and a title bar, where the tile does the recognising.
+4. **Stacked.** The W above the name, centered, for the splash screen.
+
+Each lockup comes in two color versions: light for dark backgrounds and ink for light ones. After rendering, I made two small fixes. In the initial version I added a little more space after the W so it doesn't touch the "h". In the tile version I lightened the tile slightly in the dark version so it doesn't disappear into the background.
+
+My suggestion is to use 1 as the everyday lockup, 2 on the largest surfaces where it can breathe, and 4 for the splash. If you'd rather commit to one, I'd pick 1, because it's the least likely to look wrong in a context you haven't thought of yet.
+
+The files are in `wordmark/` and also zipped as `wordmark.zip`. Both serif and sans fonts are open licence (SIL OFL), so you can bundle them if you want to set live text in the same typeface.
+
+## LOADING STATE
+
+**How it works**
+- **Splash:** the brush W is written in one stroke over 2.4 seconds, and then "White Words" fades in underneath and the whole thing holds. It plays once and stays on screen until the app is ready.
+- **Inline:** the app icon tile with the W drawing itself, holding for a moment, then wiping away in the same direction, on a 3.2 second loop. This is the loader for anything that takes a moment, like the AI checking continuity in the chat panel, which the board shows.
+- **The brush feel:** the stroke slows down at the two bottom turns and at the middle peak, as a brush does when it changes direction, so it doesn't move at a flat speed.
+- **Reduced motion:** if the system has reduced motion switched on, both files show the finished W with no animation.
+
+**Using them in the app**
+- Load them as an image (`<img src="white-words-loading-splash.svg">`) or paste the SVG inline. Both work, and the animation is built into the file, so no JavaScript is needed.
+- The splash has a transparent background, so put it on your ink color (#0E0E10). The inline tile has its own dark background.
+- To remove the splash when loading finishes, just hide or fade out the element. The animation doesn't need to be told when to stop.
+
+**Caveats**
+- The reveal follows a centerline I drew by hand over your painted W, so the order of the strokes is my best reading of how you made it. If you'd rather the W were drawn in a different order, for example the left stroke first and the right last without doubling back through the middle, tell me and I'll change it.
+- At 24 px the tile loader is small enough that the draw-on mostly reads as a shimmer. At 28 px and up it shows as a W being written.
+
+## FONT
+
+The font is Iowan Old Style BT in Roman
