@@ -13,9 +13,9 @@ from unittest import mock
 
 import uvicorn
 
-from story_architect.app.config import Config
-from story_architect.app.server import create_app
-from story_architect.core.writes import create_entity, edit_entity
+from white_words.scriptwriting.app.config import Config
+from white_words.scriptwriting.app.server import create_app
+from white_words.scriptwriting.core.writes import create_entity, edit_entity
 
 
 def build(root: Path) -> None:
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     port = int(sys.argv[1])
     root = Path(tempfile.mkdtemp())
     build(root)
-    with mock.patch("story_architect.app.token.load_api_key", lambda: "k"):
+    with mock.patch("white_words.scriptwriting.app.token.load_api_key", lambda: "k"):
         app = create_app(Config(root=root, port=port))
         print("READY", flush=True)
         uvicorn.run(app, host="127.0.0.1", port=port, log_level="error")

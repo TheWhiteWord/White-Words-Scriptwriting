@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from story_architect.core import revisions
-from story_architect.core.writes import delete_entity, edit_entity
-from story_architect.tools.story_admin import handler
+from white_words.scriptwriting.core import revisions
+from white_words.scriptwriting.core.writes import delete_entity, edit_entity
+from white_words.scriptwriting.tools.story_admin import handler
 
 SCENE = "central-room-day"
 OTHER = "central-room-night"
@@ -153,7 +153,7 @@ def test_restore_refuses_what_it_should_and_changes_nothing(fixture_path):
 # ─── one hook for both write paths ───
 
 def test_the_script_editors_save_keeps_a_revision_too(fixture_path):
-    from story_architect.core import manual_edits as me
+    from white_words.scriptwriting.core import manual_edits as me
 
     view = me.load_scene_script(fixture_path, SCENE)
     sc = view["scene"]
@@ -199,7 +199,7 @@ def test_purging_an_entity_removes_its_history_and_only_its_history(fixture_path
     _write(fixture_path, "Version B.")
     _write(fixture_path, "Other B.", scene=OTHER)
     delete_entity(fixture_path, "scene", SCENE, "t", True)
-    from story_architect.core.trash import purge_deleted
+    from white_words.scriptwriting.core.trash import purge_deleted
     out = purge_deleted(fixture_path, {"entity_type": "scene", "id": SCENE})
     assert out["success"] is True
     assert _sql(fixture_path, "SELECT count(*) FROM revisions WHERE entity_id=?", (SCENE,))[0][0] == 0
@@ -207,7 +207,7 @@ def test_purging_an_entity_removes_its_history_and_only_its_history(fixture_path
 
 
 def test_a_reimport_keeps_the_history(fixture_path):
-    from story_architect.tools.story_import import handler as imp
+    from white_words.scriptwriting.tools.story_import import handler as imp
     _write(fixture_path, "Version B.")
     before = _sql(fixture_path, "SELECT id, body FROM revisions")
     out = json.loads(imp({"project": str(fixture_path), "confirm": True},
@@ -259,7 +259,7 @@ def test_bad_requests_are_errors_not_crashes(fixture_path, args, fragment):
 # ─── schema ───
 
 def test_a_new_project_has_the_table_and_index(tmp_path):
-    from story_architect.core.writes import create_project
+    from white_words.scriptwriting.core.writes import create_project
 
     root = tmp_path / "v"
     (root / "projects").mkdir(parents=True)

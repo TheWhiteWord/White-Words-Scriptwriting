@@ -22,10 +22,10 @@ def vault(tmp_path, monkeypatch):
     dest = v / "projects" / "stc"
     dest.parent.mkdir(parents=True)
     shutil.copytree(str(FIXTURE), str(dest))
-    import story_architect.core.config
-    monkeypatch.setattr(story_architect.core.config, "load_plugin_config",
+    import white_words.scriptwriting.core.config
+    monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
                         lambda: {"root_path": str(v)})
-    from story_architect.tools.story_import import handler
+    from white_words.scriptwriting.tools.story_import import handler
     handler({"project": "stc", "confirm": True}, root_path=str(v))
     return v
 
@@ -65,7 +65,7 @@ def _unbreak(vault, name):
 
 
 def _call_admin(vault, **args):
-    from story_architect.tools.story_admin import handler
+    from white_words.scriptwriting.tools.story_admin import handler
     return json.loads(handler({"project": "stc", "summary": "t", **args},
                               root_path=str(vault)))
 
@@ -76,7 +76,7 @@ def test_failed_delete_changes_nothing(vault):
     """The entity's own flag is the delete's last write. If it fails, the child
     flagged just before it must be undone too — not left as a scene's beats in
     the trash under a live scene."""
-    from story_architect.core.writes import delete_entity
+    from white_words.scriptwriting.core.writes import delete_entity
 
     before = _snapshot(vault)
     _break(vault, "CREATE TRIGGER boom BEFORE UPDATE OF is_deleted ON entities "
@@ -104,7 +104,7 @@ def test_failed_delete_changes_nothing(vault):
 def test_delete_refusals_leave_database_untouched(vault):
     """The two payload-returning paths (no confirm, structural child) sit
     inside the transaction; they must commit nothing and leave no lock."""
-    from story_architect.core.writes import delete_entity
+    from white_words.scriptwriting.core.writes import delete_entity
 
     before = _snapshot(vault)
     refused = delete_entity(_project(vault), "character", "kael", "t", None)
@@ -124,7 +124,7 @@ def test_delete_refusals_leave_database_untouched(vault):
 # ─── purge ───
 
 def test_failed_purge_removes_nothing(vault):
-    from story_architect.core.writes import delete_entity
+    from white_words.scriptwriting.core.writes import delete_entity
 
     delete_entity(_project(vault), "character", "kael", "t", True)
     c = _db(vault)
@@ -136,7 +136,7 @@ def test_failed_purge_removes_nothing(vault):
     _break(vault, "CREATE TRIGGER boom BEFORE DELETE ON entities "
                   "BEGIN SELECT RAISE(ABORT, 'boom'); END")
     with pytest.raises(sqlite3.Error, match="boom"):
-        from story_architect.core.trash import purge_deleted
+        from white_words.scriptwriting.core.trash import purge_deleted
         purge_deleted(_project(vault), {"entity_type": "character", "id": "kael"})
 
     assert _snapshot(vault) == before
@@ -147,7 +147,7 @@ def test_failed_purge_removes_nothing(vault):
 def test_failed_restore_leaves_parent_deleted(vault):
     """Restore flips the parent, then its children. If the children step fails,
     the parent must not come back alone."""
-    from story_architect.core.writes import delete_entity
+    from white_words.scriptwriting.core.writes import delete_entity
 
     c = _db(vault)
     scene = c.execute("SELECT parent_id FROM entities "
@@ -172,7 +172,7 @@ def test_import_failure_before_the_transaction_is_reported_not_raised(vault, mon
     """A failure before the import's BEGIN (here: the safety backup) used to be
     followed by an unguarded ROLLBACK, which itself raised 'cannot rollback - no
     transaction is active' and replaced the real error with a crash."""
-    from story_architect.tools import story_import
+    from white_words.scriptwriting.tools import story_import
 
     def no_backup(project_path):
         raise OSError("disk full")
@@ -186,7 +186,7 @@ def test_import_failure_before_the_transaction_is_reported_not_raised(vault, mon
 def test_failed_import_keeps_existing_data(vault):
     """The import wipes every table then rebuilds. If the rebuild fails, the
     wipe must be undone."""
-    from story_architect.tools.story_import import handler
+    from white_words.scriptwriting.tools.story_import import handler
 
     before = _snapshot(vault)
     # entities are inserted before sections; fail on the first section row

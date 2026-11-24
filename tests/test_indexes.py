@@ -9,8 +9,8 @@ import sqlite3
 
 import pytest
 
-from story_architect.core.db import create_schema, transaction
-from story_architect.core.writes import create_project
+from white_words.scriptwriting.core.db import create_schema, transaction
+from white_words.scriptwriting.core.writes import create_project
 
 INDEXES = {"idx_relations_to", "idx_entities_type", "idx_entities_parent",
            "idx_entities_deleted"}

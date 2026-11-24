@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "story-architect"
+name = "white-words-scriptwriting"
 version = "0.1.0"
 description = "Story-writing environment"
 readme = "README.md"
@@ -23,9 +23,13 @@ dependencies = [
 dev = ["pytest>=7.0"]
 
 [project.scripts]
-story-architect = "story_architect.app.launcher:main"
+white-words = "white_words.scriptwriting.app.launcher:main"
 
 [tool.setuptools.packages.find]
+# white_words/ is the studio namespace and deliberately has no __init__.py: the
+# apps are its children (white_words.scriptwriting today), so a second one can
+# join as white_words.film — in this repo or in its own distribution — without
+# taking a top-level package name of its own.
 where = ["src"]
 
 [tool.ruff]
@@ -39,4 +43,9 @@ select = ["E", "F"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-story_architect = ["web/**/*", "data/**/*"]
+"white_words.scriptwriting" = ["web/**/*", "data/**/*"]
+
+[tool.pytest.ini_options]
+# The suite is tests/. tasks/ holds historical task artefacts — plans, patches and
+# one importable test — and is deliberately not collected.
+testpaths = ["tests"]

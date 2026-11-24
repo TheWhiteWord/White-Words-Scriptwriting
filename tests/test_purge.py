@@ -30,10 +30,10 @@ def vault(tmp_path, monkeypatch):
     dest = v / "projects" / "stc"
     dest.parent.mkdir(parents=True)
     shutil.copytree(str(FIXTURE), str(dest))
-    import story_architect.core.config
-    monkeypatch.setattr(story_architect.core.config, "load_plugin_config",
+    import white_words.scriptwriting.core.config
+    monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
                         lambda: {"root_path": str(v)})
-    from story_architect.tools.story_import import handler
+    from white_words.scriptwriting.tools.story_import import handler
     handler({"project": "stc", "confirm": True}, root_path=str(v))
     return v
 
@@ -48,7 +48,7 @@ def _edit(vault, action, **args):
     A `target` on purge means "just this one entity" and skips the age floor, so
     these bulk-purge tests must not send one; test_purge_one.py covers that form.
     """
-    from story_architect.tools.story_admin import handler
+    from white_words.scriptwriting.tools.story_admin import handler
     base = {"action": action, "project": "stc", "summary": "test"}
     if action == "restore":
         base["target"] = TARGET
@@ -57,7 +57,7 @@ def _edit(vault, action, **args):
 
 def _purge(vault, **kw):
     """What the approved draft runs: purge_deleted, with no confirmation inside."""
-    from story_architect.core.trash import purge_deleted
+    from white_words.scriptwriting.core.trash import purge_deleted
     return purge_deleted(vault / "projects" / "stc", kw.get("target"),
                          kw.get("older_than_days", 30))
 
@@ -73,7 +73,7 @@ def _exists(vault, entity_id):
 
 
 def _delete(vault):
-    from story_architect.core.writes import delete_entity
+    from white_words.scriptwriting.core.writes import delete_entity
     return delete_entity(vault / "projects" / "stc",
                          "character", "kael", "test", True)
 
@@ -143,9 +143,9 @@ class TestPurgeLeavesNoMarkdownToResurrect:
     """Purged rows must not come back through the Markdown either."""
 
     def test_the_note_is_swept_and_the_entity_stays_gone(self, vault):
-        from story_architect.tools.story_export import handler as export_handler
-        from story_architect.tools.story_import import handler as import_handler
-        from story_architect.tools.story_retrieve import handler as retrieve_handler
+        from white_words.scriptwriting.tools.story_export import handler as export_handler
+        from white_words.scriptwriting.tools.story_import import handler as import_handler
+        from white_words.scriptwriting.tools.story_retrieve import handler as retrieve_handler
         from test_round_trip import note_for, note_rel
 
         # The sweep only touches files a previous export wrote, so the entity
@@ -176,9 +176,9 @@ class TestSoftDeleteSurvivesAnExportImportRoundTrip:
     """A delete must not be undone by an ordinary export → import cycle."""
 
     def test_deleted_entity_is_not_resurrected(self, vault):
-        from story_architect.tools.story_export import handler as export_handler
-        from story_architect.tools.story_import import handler as import_handler
-        from story_architect.tools.story_retrieve import handler as retrieve_handler
+        from white_words.scriptwriting.tools.story_export import handler as export_handler
+        from white_words.scriptwriting.tools.story_import import handler as import_handler
+        from white_words.scriptwriting.tools.story_retrieve import handler as retrieve_handler
         from test_round_trip import note_for, note_rel
         # Export first, so the manifest knows the file exists. The filename is
         # the title, so the path is captured while the note still exists.

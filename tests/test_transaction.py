@@ -4,7 +4,7 @@ import threading
 
 import pytest
 
-from story_architect.core.db import get_db, transaction
+from white_words.scriptwriting.core.db import get_db, transaction
 
 
 @pytest.fixture

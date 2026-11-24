@@ -4,9 +4,9 @@ from pathlib import Path
 
 import yaml
 
-from story_architect.app.mcp_server import build_registry
+from white_words.scriptwriting.app.mcp_server import build_registry
 
-ASSETS = Path("src/story_architect/adapters/hermes/assets")
+ASSETS = Path("src/white_words/scriptwriting/adapters/hermes/assets")
 SOUL = ASSETS / "SOUL.md"
 SKILL = ASSETS / "skills/story-architect/SKILL.md"
 

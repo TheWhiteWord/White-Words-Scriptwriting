@@ -9,7 +9,7 @@ why the "create it first" test is here as a positive case rather than assumed.
 """
 import pytest
 
-from story_architect.core.writes import create_entity
+from white_words.scriptwriting.core.writes import create_entity
 
 
 def _act_and_sequence(project):
@@ -60,7 +60,7 @@ class TestSceneLocation:
         """
         _act_and_sequence(tmp_path)
         assert _scene(tmp_path)["success"] is True
-        from story_architect.core.entity import unfilled_fields
+        from white_words.scriptwriting.core.entity import unfilled_fields
         assert "location" in unfilled_fields("scene", {})
 
     def test_free_text_that_happens_to_match_commits(self, tmp_path):

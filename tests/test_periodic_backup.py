@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from story_architect.core import backups
-from story_architect.core.backups import (create_backup, list_backups,
+from white_words.scriptwriting.core import backups
+from white_words.scriptwriting.core.backups import (create_backup, list_backups,
                                           maybe_periodic_backup)
-from story_architect.core.writes import edit_entity
+from white_words.scriptwriting.core.writes import edit_entity
 
 
 @pytest.fixture
@@ -141,10 +141,10 @@ def test_several_simultaneous_opens_make_one_backup(fixture_path):
 @pytest.fixture
 def web(tmp_path, fixture_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from story_architect.app.config import Config
-    from story_architect.app.server import create_app
+    from white_words.scriptwriting.app.config import Config
+    from white_words.scriptwriting.app.server import create_app
 
-    monkeypatch.setattr("story_architect.app.token.load_api_key", lambda: "k")
+    monkeypatch.setattr("white_words.scriptwriting.app.token.load_api_key", lambda: "k")
     root = tmp_path / "vault"
     shutil.copytree(str(fixture_path), str(root / "projects" / "stc"))
     c = TestClient(create_app(Config(root=root)), base_url="http://127.0.0.1:8731")
@@ -182,7 +182,7 @@ def test_a_failing_backup_never_breaks_the_page(web, monkeypatch, caplog):
 def test_a_slug_with_a_path_in_it_is_not_followed(tmp_path):
     """root/projects/../outside is tmp_path/outside: a real project, but not one
     the slug may reach."""
-    from story_architect.app.routes.projects import periodic_backup
+    from white_words.scriptwriting.app.routes.projects import periodic_backup
     outside = tmp_path / "outside"
     (outside / ".story").mkdir(parents=True)
     c = sqlite3.connect(str(outside / ".story" / "story.db"))

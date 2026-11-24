@@ -8,7 +8,7 @@ import asyncio
 import sqlite3
 import threading
 
-from story_architect.app.routes.projects import DbChangeWatcher, event_stream
+from white_words.scriptwriting.app.routes.projects import DbChangeWatcher, event_stream
 
 
 def _make_db(path):

@@ -17,7 +17,7 @@ import pytest
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 HARNESS = PLUGIN_ROOT / "tests/trash_harness.js"
-TRASH_JS = PLUGIN_ROOT / "src/story_architect/web/js/views/trash.js"
+TRASH_JS = PLUGIN_ROOT / "src/white_words/scriptwriting/web/js/views/trash.js"
 
 pytestmark = pytest.mark.skipif(
     not shutil.which("node"), reason="node not available"

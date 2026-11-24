@@ -17,13 +17,13 @@ import sqlite3
 import pytest
 
 import twin_helpers as twin
-from story_architect.core import db as core_db
-from story_architect.core.manual_entities import load_entity
-from story_architect.core.references import (REFERENCE_COLUMNS, REFERENCE_LISTS,
+from white_words.scriptwriting.core import db as core_db
+from white_words.scriptwriting.core.manual_entities import load_entity
+from white_words.scriptwriting.core.references import (REFERENCE_COLUMNS, REFERENCE_LISTS,
                                              REFERENCE_MAPS, dead_ids, live_column,
                                              live_extra, live_extra_json, references_to)
-from story_architect.core.writes import create_entity, delete_entity, edit_entity
-from story_architect.tools.story_admin import handler as admin
+from white_words.scriptwriting.core.writes import create_entity, delete_entity, edit_entity
+from white_words.scriptwriting.tools.story_admin import handler as admin
 
 SLUG = twin.SLUG
 
@@ -302,9 +302,9 @@ def one_step(monkeypatch):
 def test_every_reader_opens_a_database_one_step_behind(fixture_path, tmp_path, one_step):
     """The readers use the live_relations view. None of them may be the first
     thing to open a behind file without bringing it forward."""
-    from story_architect.app import services
-    from story_architect.core import db, manual_edits, manual_entities, manual_structure, track
-    from story_architect.tools import story_export, story_load, story_retrieve
+    from white_words.scriptwriting.app import services
+    from white_words.scriptwriting.core import db, manual_edits, manual_entities, manual_structure, track
+    from white_words.scriptwriting.tools import story_export, story_load, story_retrieve
     calls = {
         "summary": lambda p, v: db.get_project_summary(p),
         "unfilled_map": lambda p, v: db.get_unfilled_map(p),

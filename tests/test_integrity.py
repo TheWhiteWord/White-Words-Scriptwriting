@@ -12,12 +12,12 @@ import sqlite3
 import pytest
 
 import twin_helpers as twin
-from story_architect.core import drafts
-from story_architect.core.integrity import find_orphans
-from story_architect.core.trash import purge_deleted
-from story_architect.core.writes import create_entity, delete_entity, edit_entity
-from story_architect.tools.story_admin import handler as admin
-from story_architect.tools.story_import import handler as import_handler
+from white_words.scriptwriting.core import drafts
+from white_words.scriptwriting.core.integrity import find_orphans
+from white_words.scriptwriting.core.trash import purge_deleted
+from white_words.scriptwriting.core.writes import create_entity, delete_entity, edit_entity
+from white_words.scriptwriting.tools.story_admin import handler as admin
+from white_words.scriptwriting.tools.story_import import handler as import_handler
 
 
 def _orphans(p):

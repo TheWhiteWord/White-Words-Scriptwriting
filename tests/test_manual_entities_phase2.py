@@ -3,14 +3,14 @@ import json
 
 import pytest
 
-from story_architect.core import manual_entities as me
-from story_architect.core.db import get_db
-from story_architect.core.writes import create_entity, edit_entity
+from white_words.scriptwriting.core import manual_entities as me
+from white_words.scriptwriting.core.db import get_db
+from white_words.scriptwriting.core.writes import create_entity, edit_entity
 
 
 @pytest.fixture
 def project(tmp_path):
-    from story_architect.core.writes import create_project
+    from white_words.scriptwriting.core.writes import create_project
     root = tmp_path
     (root / "projects").mkdir()
     create_project("demo", {"name": "Demo", "logline": "A test"}, root)
@@ -284,10 +284,10 @@ class TestHttp:
     @pytest.fixture
     def client(self, tmp_path, monkeypatch):
         from fastapi.testclient import TestClient
-        from story_architect.app.config import Config
-        from story_architect.app.server import create_app
-        from story_architect.core.writes import create_project
-        monkeypatch.setattr("story_architect.app.token.load_api_key", lambda: "k")
+        from white_words.scriptwriting.app.config import Config
+        from white_words.scriptwriting.app.server import create_app
+        from white_words.scriptwriting.core.writes import create_project
+        monkeypatch.setattr("white_words.scriptwriting.app.token.load_api_key", lambda: "k")
         root = tmp_path / "root"
         (root / "projects").mkdir(parents=True)
         create_project("demo", {"name": "Demo"}, root)

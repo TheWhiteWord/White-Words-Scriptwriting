@@ -7,7 +7,7 @@ ran, so slug='../escape' became a literal path under projects/.
 import pytest
 
 
-from story_architect.core.writes import create_project
+from white_words.scriptwriting.core.writes import create_project
 
 
 def _create(slug, root, **extra):

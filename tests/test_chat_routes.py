@@ -5,11 +5,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from story_architect.app.server import create_app
-from story_architect.app.config import Config
-from story_architect.chat import store
-from story_architect.chat.service import ChatService
-from story_architect.chat.fake_backend import FakeBackend
+from white_words.scriptwriting.app.server import create_app
+from white_words.scriptwriting.app.config import Config
+from white_words.scriptwriting.chat import store
+from white_words.scriptwriting.chat.service import ChatService
+from white_words.scriptwriting.chat.fake_backend import FakeBackend
 
 
 def _proj(tmp):
@@ -22,7 +22,7 @@ def _proj(tmp):
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     # ensure API key present
-    monkeypatch.setattr("story_architect.app.token.load_api_key", lambda: "fake-key")
+    monkeypatch.setattr("white_words.scriptwriting.app.token.load_api_key", lambda: "fake-key")
     root = tmp_path / "root"
     root.mkdir()
     cfg = Config(root=root, port=8731)
@@ -63,7 +63,7 @@ def test_foreign_origin_rejected(client):
 
 
 def test_missing_key_503(tmp_path, monkeypatch):
-    monkeypatch.setattr("story_architect.app.token.load_api_key", lambda: None)
+    monkeypatch.setattr("white_words.scriptwriting.app.token.load_api_key", lambda: None)
     root = tmp_path / "root"
     root.mkdir()
     cfg = Config(root=root, port=8731)

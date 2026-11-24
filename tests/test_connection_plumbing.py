@@ -12,8 +12,8 @@ import sqlite3
 import pytest
 
 import twin_helpers as twin
-from story_architect.core import db, entity, manual_edits, manual_entities, manual_structure, writes
-from story_architect.core.db import get_db, transaction
+from white_words.scriptwriting.core import db, entity, manual_edits, manual_entities, manual_structure, writes
+from white_words.scriptwriting.core.db import get_db, transaction
 
 WORDS = {"p": "loyalty", "c": "complicity", "cd": "betrayal", "nn": "fanatic love"}
 

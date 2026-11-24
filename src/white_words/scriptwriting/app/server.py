@@ -1,0 +1,151 @@
+"""FastAPI app factory."""
+from __future__ import annotations
+
+import asyncio
+import hmac
+import mimetypes
+import os
+import signal
+import time
+
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+
+from white_words.scriptwriting.app.config import Config
+from white_words.scriptwriting.app import token as token_mod
+from white_words.scriptwriting.app.mcp_server import create_mcp_server, StreamableHTTPSessionManager
+from white_words.scriptwriting.app.routes import agent as agent_routes
+from white_words.scriptwriting.app.routes import chat as chat_routes
+from white_words.scriptwriting.app.routes import drafts as drafts_routes
+from white_words.scriptwriting.app.routes import entities as entities_routes
+from white_words.scriptwriting.app.routes import projects as projects_routes
+from white_words.scriptwriting.app.routes import scripts as scripts_routes
+from white_words.scriptwriting.app.routes import trash as trash_routes
+
+# Some systems have no `.webmanifest` entry in /etc/mime.types, and Chrome
+# refuses a manifest served as application/octet-stream.
+mimetypes.add_type("application/manifest+json", ".webmanifest")
+
+IDLE_EXIT_SECONDS = 30
+
+
+def _tick(app, now: float) -> bool:
+    """One watcher pass: refresh while a reply streams, else report staleness."""
+    if app.state.active_replies:
+        app.state.last_heartbeat = now
+        return False
+    return now - app.state.last_heartbeat > IDLE_EXIT_SECONDS
+
+
+async def _watch_idle_exit(app) -> None:
+    """Stop the server once no open page has heartbeated for a while.
+
+    The dashboard pings /api/heartbeat every few seconds, so closing the last
+    tab ends the server shortly after. A streaming reply postpones it.
+    """
+    while True:
+        await asyncio.sleep(5)
+        if _tick(app, time.time()):
+            os.kill(os.getpid(), signal.SIGTERM)
+            return
+
+
+def create_app(config: Config) -> FastAPI:
+    server = create_mcp_server(config)
+    manager = StreamableHTTPSessionManager(app=server, stateless=True, json_response=True)
+
+    @asynccontextmanager
+    async def _lifespan(app):
+        async with manager.run():
+            watcher = asyncio.create_task(_watch_idle_exit(app)) if config.idle_exit else None
+            try:
+                yield
+            finally:
+                if watcher is not None:
+                    watcher.cancel()
+
+    app = FastAPI(docs_url=None, redoc_url=None, lifespan=_lifespan)
+    app.state.config = config
+    app.state.mcp_manager = manager
+    app.state.active_replies = {}
+    app.state.last_heartbeat = time.time()
+    app.state.agent_started_by_app = False
+    # chat service (backend over the profile's API server)
+    try:
+        from white_words.scriptwriting.adapters.hermes.chat_backend import HermesChatBackend
+        from white_words.scriptwriting.chat.service import ChatService
+        from white_words.scriptwriting.app import token as _token_mod
+        _ak = _token_mod.load_api_key()
+        _base = f"http://127.0.0.1:{config.hermes_api_port}/p/{config.hermes_profile}"
+        app.state.chat_service = ChatService(HermesChatBackend(base_url=_base, api_key=_ak or "", model=config.hermes_profile))
+    except Exception:
+        app.state.chat_service = None
+
+    @app.middleware("http")
+    async def host_check(request: Request, call_next):
+        host = request.headers.get("host", "")
+        allowed = {"127.0.0.1", "localhost", f"127.0.0.1:{config.port}", f"localhost:{config.port}"}
+        if host not in allowed:
+            return JSONResponse(status_code=400, content={"error": {"code": "bad_host", "message": "Invalid Host header"}})
+        if request.method != "GET":
+            origin = request.headers.get("origin")
+            if origin is not None:
+                own = {f"http://127.0.0.1:{config.port}", f"http://localhost:{config.port}"}
+                if origin not in own:
+                    return JSONResponse(status_code=403, content={"error": {"code": "forbidden_origin", "message": "Foreign origin"}})
+            if request.headers.get("x-story-architect") != "1" and not request.url.path.startswith("/mcp"):
+                return JSONResponse(status_code=403, content={"error": {"code": "missing_custom_header", "message": "Missing custom header"}})
+        resp = await call_next(request)
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+
+    @app.middleware("http")
+    async def mcp_auth(request: Request, call_next):
+        if request.url.path.startswith("/mcp"):
+            expected = token_mod.load_token()
+            auth = request.headers.get("authorization", "")
+            ok = bool(expected) and auth.startswith("Bearer ") and hmac.compare_digest(auth[7:].encode(), expected.encode())
+            if not ok:
+                return JSONResponse(status_code=401, content={"error": {"code": "unauthorized", "message": "Missing or invalid token"}})
+        return await call_next(request)
+
+    app.include_router(agent_routes.make_router(config, app))
+    app.include_router(chat_routes.make_router(config, app))
+    app.include_router(drafts_routes.make_router(config, app))
+    app.include_router(projects_routes.make_router(config, app))
+    app.include_router(scripts_routes.make_router(config, app))
+    app.include_router(entities_routes.make_router(config, app))
+    app.include_router(trash_routes.make_router(config, app))
+
+    @app.get("/healthz")
+    def healthz():
+        return {"ok": True}
+
+    @app.get("/api/heartbeat")
+    def heartbeat(request: Request):
+        request.app.state.last_heartbeat = time.time()
+        return {"ok": True}
+
+    class _MCPApp:
+        def __init__(self, mgr):
+            self.mgr = mgr
+        async def __call__(self, scope, receive, send):
+            await self.mgr.handle_request(scope, receive, send)
+
+    from starlette.responses import RedirectResponse
+
+    @app.api_route("/mcp", methods=["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS", "HEAD"])
+    async def _mcp_redirect(request: Request):
+        return RedirectResponse(url="/mcp/", status_code=307)
+
+    app.mount("/mcp/", app=_MCPApp(manager))
+
+    from pathlib import Path
+    import white_words.scriptwriting
+    web_dir = Path(white_words.scriptwriting.__file__).parent / "web"
+    if web_dir.exists():
+        app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="web")
+    return app

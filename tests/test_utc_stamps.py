@@ -21,16 +21,16 @@ from pathlib import Path
 
 import pytest
 
-from story_architect.core import clock, db, drafts, revisions
-from story_architect.core.trash import preview_purge
-from story_architect.core.writes import delete_entity, edit_entity
-from story_architect.tools.story_admin import handler as admin
+from white_words.scriptwriting.core import clock, db, drafts, revisions
+from white_words.scriptwriting.core.trash import preview_purge
+from white_words.scriptwriting.core.writes import delete_entity, edit_entity
+from white_words.scriptwriting.tools.story_admin import handler as admin
 
 pytestmark = pytest.mark.skipif(not hasattr(time, "tzset"), reason="needs time.tzset")
 
 STAMP = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+00:00$")
 STAMP_US = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}\+00:00$")
-SRC = Path(__file__).resolve().parent.parent / "src" / "story_architect"
+SRC = Path(__file__).resolve().parent.parent / "src" / "white_words" / "scriptwriting"
 
 SCENE = "central-room-day"            # has a beats child
 

@@ -18,11 +18,11 @@ from pathlib import Path
 
 import pytest
 
-from story_architect.core import db as core_db
-from story_architect.core.db import create_schema, get_db
-from story_architect.core.writes import create_project, delete_entity
-from story_architect.tools.story_admin import handler as admin
-from story_architect.tools.story_import import handler as import_handler
+from white_words.scriptwriting.core import db as core_db
+from white_words.scriptwriting.core.db import create_schema, get_db
+from white_words.scriptwriting.core.writes import create_project, delete_entity
+from white_words.scriptwriting.tools.story_admin import handler as admin
+from white_words.scriptwriting.tools.story_import import handler as import_handler
 import twin_helpers as twin
 
 SLUG = "save-the-children"
@@ -175,26 +175,26 @@ class TestNoGhostsInReaders:
         return p, vault
 
     def test_story_retrieve(self, gone):
-        from story_architect.tools.story_retrieve import handler
+        from white_words.scriptwriting.tools.story_retrieve import handler
         p, vault = gone
         out = json.loads(handler({"project": SLUG, "entity_type": "scene", "id": self.SCENE,
                                   "fields": ["characters"]}, root_path=str(vault)))
         assert out["entities"][0]["fields"]["characters"] == ["mira"]
 
     def test_the_entity_form(self, gone):
-        from story_architect.core.manual_entities import load_entity
+        from white_words.scriptwriting.core.manual_entities import load_entity
         p, _ = gone
         form = load_entity(p, "scene", self.SCENE)
         assert form["values"]["characters"] == ["mira"]
         assert [c["display"] for c in form["computed"]["characters"]] == ["Mira"]
 
     def test_the_script_editor_cast(self, gone):
-        from story_architect.core.manual_edits import load_scene_script
+        from white_words.scriptwriting.core.manual_edits import load_scene_script
         p, _ = gone
         assert [c["id"] for c in load_scene_script(p, self.SCENE)["cast"]] == ["mira"]
 
     def test_the_markdown_export(self, gone):
-        from story_architect.tools.story_export import handler
+        from white_words.scriptwriting.tools.story_export import handler
         p, vault = gone
         assert json.loads(handler({"project": SLUG}, root_path=str(vault)))["success"]
         text = next(f.read_text() for f in (p / "scenes").rglob("*.md")
@@ -205,7 +205,7 @@ class TestNoGhostsInReaders:
 
     def test_a_dead_plots_role_is_not_a_plot_of_the_scene(self, proj):
         """story_load's values view and the retrieve plot_roles field."""
-        from story_architect.tools.story_retrieve import handler
+        from white_words.scriptwriting.tools.story_retrieve import handler
         p, vault = proj
         delete_entity(p, "plot", "the-resistance", "t", True)
         out = json.loads(handler({"project": SLUG, "entity_type": "scene", "id": self.SCENE,
@@ -223,7 +223,7 @@ class TestPreviewAndPurge:
     def test_purge_still_removes_the_rows_for_good(self, proj):
         p, vault = proj
         delete_entity(p, "character", "kael", "t", True)
-        from story_architect.core.trash import purge_deleted
+        from white_words.scriptwriting.core.trash import purge_deleted
         res = purge_deleted(p, {"entity_type": "character", "id": "kael"})
         assert res.get("success"), res
         assert [r for r in _raw(p) if "kael" in r[:2]] == []
@@ -234,7 +234,7 @@ class TestPreviewAndPurge:
 def test_story_load_upgrades_a_database_one_step_behind(proj, one_step):
     """It opens through get_db, not a bare connect, so a behind database is
     brought forward before the readers use it."""
-    from story_architect.tools.story_load import handler
+    from white_words.scriptwriting.tools.story_load import handler
     p, vault = proj
     _sql(p, f"PRAGMA user_version = {core_db.BASELINE_VERSION}")
     for view in (None, "dramatic_elements", "values"):
@@ -305,7 +305,7 @@ class TestWritersSeeOnlyLiveRelations:
     def test_a_dead_plots_role_does_not_block_marking_the_scene_a_transition(self, proj):
         """`transition` requires no plot roles. The only role here belongs to a
         plot that is in the trash, so the scene has none that count."""
-        from story_architect.core.writes import edit_entity
+        from white_words.scriptwriting.core.writes import edit_entity
         p, _ = proj
         scene = "the-core-day"
         roles = [r for r in _sql(p, "SELECT from_id FROM relations WHERE to_id=? "

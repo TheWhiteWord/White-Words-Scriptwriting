@@ -11,8 +11,8 @@ import sys
 
 import pytest
 
-from story_architect.core import budget
-from story_architect.adapters.hermes import budget as hb
+from white_words.scriptwriting.core import budget
+from white_words.scriptwriting.adapters.hermes import budget as hb
 
 ENV = "STORY_ARCHITECT_MAX_RESPONSE_CHARS"
 
@@ -34,16 +34,16 @@ class TestResolution:
         assert budget.max_response_chars() == budget.DEFAULT_MAX_RESPONSE_CHARS
 
     def test_config_file_is_used(self, home):
-        write_toml(home, "[story_architect]\nmax_response_chars = 17000\n")
+        write_toml(home, "[white_words]\nmax_response_chars = 17000\n")
         assert budget.max_response_chars() == 17000
 
     def test_env_beats_config_file(self, home, monkeypatch):
-        write_toml(home, "[story_architect]\nmax_response_chars = 17000\n")
+        write_toml(home, "[white_words]\nmax_response_chars = 17000\n")
         monkeypatch.setenv(ENV, "25000")
         assert budget.max_response_chars() == 25000
 
     def test_a_bad_env_value_falls_through_to_the_file(self, home, monkeypatch):
-        write_toml(home, "[story_architect]\nmax_response_chars = 17000\n")
+        write_toml(home, "[white_words]\nmax_response_chars = 17000\n")
         monkeypatch.setenv(ENV, "banana")
         assert budget.max_response_chars() == 17000
 
@@ -53,7 +53,7 @@ class TestResolution:
                                      'max_response_chars = "lots"',
                                      "max_response_chars = -3"])
     def test_a_bad_file_value_means_not_set(self, home, bad):
-        write_toml(home, f"[story_architect]\n{bad}\n")
+        write_toml(home, f"[white_words]\n{bad}\n")
         assert budget.max_response_chars() == budget.DEFAULT_MAX_RESPONSE_CHARS
 
     def test_a_malformed_file_means_not_set(self, home):
@@ -61,7 +61,7 @@ class TestResolution:
         assert budget.max_response_chars() == budget.DEFAULT_MAX_RESPONSE_CHARS
 
     def test_other_tables_and_keys_are_ignored(self, home):
-        write_toml(home, "[other]\nmax_response_chars = 9000\n[story_architect]\nport = 1\n")
+        write_toml(home, "[other]\nmax_response_chars = 9000\n[white_words]\nport = 1\n")
         assert budget.max_response_chars() == budget.DEFAULT_MAX_RESPONSE_CHARS
 
 
@@ -80,7 +80,7 @@ class TestCoreDoesNotReadHostConfig:
         assert budget.max_response_chars() == budget.DEFAULT_MAX_RESPONSE_CHARS
 
     def test_core_budget_names_no_host(self):
-        src = importlib.util.find_spec("story_architect.core.budget").origin
+        src = importlib.util.find_spec("white_words.scriptwriting.core.budget").origin
         assert "hermes" not in open(src).read().lower()
 
 
@@ -119,7 +119,7 @@ class TestHermesPercentage:
     def test_cli_prints_the_toml_line(self, capsys):
         assert hb.main(["65000"]) == 0
         out = capsys.readouterr().out
-        assert "39,000" in out and "[story_architect]" in out
+        assert "39,000" in out and "[white_words]" in out
         assert "max_response_chars = 35000" in out
 
     def test_the_cli_output_round_trips_through_the_resolver(self, capsys, home):

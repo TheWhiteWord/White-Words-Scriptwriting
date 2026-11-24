@@ -21,9 +21,9 @@ from pathlib import Path
 
 import pytest
 
-from story_architect.core import budget
-from story_architect.core.db import get_project_summary
-from story_architect.tools.story_load import handler as load_handler
+from white_words.scriptwriting.core import budget
+from white_words.scriptwriting.core.db import get_project_summary
+from white_words.scriptwriting.tools.story_load import handler as load_handler
 
 @pytest.fixture(autouse=True)
 def _no_user_config(tmp_path, monkeypatch):
@@ -77,10 +77,10 @@ def _grow(project_dir: Path):
 
 
 def _import(vault: Path, monkeypatch):
-    import story_architect.core.config
-    monkeypatch.setattr(story_architect.core.config, "load_plugin_config",
+    import white_words.scriptwriting.core.config
+    monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
                         lambda: {"root_path": str(vault)})
-    from story_architect.tools.story_import import handler as import_handler
+    from white_words.scriptwriting.tools.story_import import handler as import_handler
     result = json.loads(import_handler(
         {"project": "save-the-children", "confirm": True}, root_path=str(vault)))
     assert "error" not in result, result
@@ -281,7 +281,7 @@ class TestDramaticElementsScopeAndBudget:
 # ── story_retrieve ──────────────────────────────────────────────────────────
 
 def retrieve(project, ids, entity_type="scene", **extra):
-    from story_architect.tools.story_retrieve import handler
+    from white_words.scriptwriting.tools.story_retrieve import handler
     args = {"project": "save-the-children", "entity_type": entity_type, "id": ids,
             "sections": ["all"], "fields": ["all"], **extra}
     return json.loads(handler(args, root_path=str(project.parent.parent)))
@@ -440,7 +440,7 @@ class TestSearchLimit:
 
     @staticmethod
     def search(project, **args):
-        from story_architect.tools.story_search import handler
+        from white_words.scriptwriting.tools.story_search import handler
         return json.loads(handler({"project": "save-the-children", "query": "scene",
                                    **args}, root_path=str(project.parent.parent)))
 
@@ -466,7 +466,7 @@ class TestSearchLimit:
         assert r["total"] == 7 and "brought into range" not in r.get("note", "")
 
     def test_worst_case_stays_small(self, big):
-        from story_architect.tools.story_search import handler
+        from white_words.scriptwriting.tools.story_search import handler
         raw = handler({"project": "save-the-children", "query": "scene", "limit": 9999},
                       root_path=str(big.parent.parent))
         assert len(raw) < 20_000
@@ -481,15 +481,15 @@ class TestDescribeBudget:
 
     @staticmethod
     def describe(monkeypatch, budget=None, **args):
-        from story_architect.tools.story_describe import handler
+        from white_words.scriptwriting.tools.story_describe import handler
         if budget:
             monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", str(budget))
         return json.loads(handler(args))
 
     @staticmethod
     def truth():
-        from story_architect.tools.story_describe import _entity_schemas
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.tools.story_describe import _entity_schemas
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
         return _entity_schemas(list(ENTITY_SCHEMAS))
 
     def test_fitting_response_is_unchanged(self, monkeypatch):
@@ -499,7 +499,7 @@ class TestDescribeBudget:
         assert not {"truncated", "deferred_types", "hint"} & r.keys()
 
     def test_over_budget_returns_complete_types_and_names_the_rest(self, monkeypatch):
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
         truth = self.truth()
         r = self.describe(monkeypatch, budget=9000)
         assert r["truncated"] is True and r["deferred_types"]
@@ -515,7 +515,7 @@ class TestDescribeBudget:
     def test_paging_reads_every_type_once_and_whole(self, monkeypatch, budget):
         truth = self.truth()
         monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", str(budget))
-        from story_architect.tools.story_describe import handler
+        from white_words.scriptwriting.tools.story_describe import handler
         pending, seen, calls = None, [], 0
         while True:
             r = json.loads(handler({"entity_types": pending} if pending else {}))
@@ -577,8 +577,8 @@ class TestDescribeBudget:
         assert "scene" in r["error"] and "Available" in r["error"]
 
     def test_the_schema_offers_entity_types_and_cannot_drift_from_the_data(self):
-        from story_architect.tools.story_describe import SCHEMA
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.tools.story_describe import SCHEMA
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
         prop = SCHEMA["properties"]["entity_types"]
         assert prop["type"] == "array"
         assert prop["items"]["enum"] == list(ENTITY_SCHEMAS)
@@ -587,7 +587,7 @@ class TestDescribeBudget:
         """A single type has to fit the smallest budget anyone should set,
         because a type is the unit that is never split. If a schema grows past
         this, the floor (or the schema) needs a decision — not a silent cut."""
-        from story_architect.tools.story_describe import _entity_schemas
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.tools.story_describe import _entity_schemas
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
         biggest = max(len(json.dumps(_entity_schemas([t]))) for t in ENTITY_SCHEMAS)
         assert biggest < 8_000, f"largest single type is {biggest} chars"

@@ -5,9 +5,9 @@ the agent's own write path stored. The form is a second door into the same room.
 """
 import pytest
 
-from story_architect.core import manual_entities as me
-from story_architect.core.db import get_db
-from story_architect.core.writes import create_entity, edit_entity
+from white_words.scriptwriting.core import manual_entities as me
+from white_words.scriptwriting.core.db import get_db
+from white_words.scriptwriting.core.writes import create_entity, edit_entity
 
 
 @pytest.fixture
@@ -215,7 +215,7 @@ class TestEdit:
 
     def test_untouched_fields_are_not_rewritten(self, project, monkeypatch):
         sent = {}
-        from story_architect.core import writes
+        from white_words.scriptwriting.core import writes
         real = writes.edit_entity
         monkeypatch.setattr(writes, "edit_entity",
                             lambda p, t, i, data, summary, conn=None: sent.update(data) or real(p, t, i, data, summary, conn=conn))
@@ -330,7 +330,7 @@ class TestDelete:
         assert not me.delete_preview(project, "character", "mara")["can_delete"]
 
     def test_delete_is_reversible_with_restore(self, project):
-        from story_architect.tools.story_admin import _restore_entity
+        from white_words.scriptwriting.tools.story_admin import _restore_entity
         me.delete_form_entity(project, "location", "kitchen")
         res = _restore_entity({"target": {"entity_type": "location", "id": "kitchen"},
                                "summary": "undo"}, project)
@@ -344,9 +344,9 @@ class TestHttp:
     @pytest.fixture
     def client(self, tmp_path, monkeypatch):
         from fastapi.testclient import TestClient
-        from story_architect.app.config import Config
-        from story_architect.app.server import create_app
-        monkeypatch.setattr("story_architect.app.token.load_api_key", lambda: "k")
+        from white_words.scriptwriting.app.config import Config
+        from white_words.scriptwriting.app.server import create_app
+        monkeypatch.setattr("white_words.scriptwriting.app.token.load_api_key", lambda: "k")
         root = tmp_path / "root"
         proj = root / "projects" / "demo"
         (proj / ".story").mkdir(parents=True)

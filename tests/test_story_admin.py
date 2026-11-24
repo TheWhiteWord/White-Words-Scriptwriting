@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 
-from story_architect.tools import story_admin
+from white_words.scriptwriting.tools import story_admin
 
 
 def _run(args, root):
@@ -105,7 +105,7 @@ class TestCreateProject:
 
 
 def _exists(project, entity_id):
-    from story_architect.core.db import get_db
+    from white_words.scriptwriting.core.db import get_db
     conn = get_db(project)
     try:
         return bool(conn.execute("SELECT 1 FROM entities WHERE id=?", (entity_id,)).fetchone())
@@ -172,8 +172,8 @@ class TestDeleteProject:
 
 class TestRestore:
     def test_undoes_a_soft_delete_exactly(self, root):
-        from story_architect.core.db import get_db
-        from story_architect.core.writes import delete_entity
+        from white_words.scriptwriting.core.db import get_db
+        from white_words.scriptwriting.core.writes import delete_entity
 
         project = root / "projects" / "save-the-children"
         conn = get_db(project)
@@ -232,8 +232,8 @@ class TestPurge:
     def test_age_floor_keeps_recent_deletes_restorable(self, root):
         """A delete from this session must never be purgeable, even once the
         person has approved a purge."""
-        from story_architect.core import drafts
-        from story_architect.core.writes import delete_entity
+        from white_words.scriptwriting.core import drafts
+        from white_words.scriptwriting.core.writes import delete_entity
         project = root / "projects" / "save-the-children"
         delete_entity(project, "location", "the-garden", "s", confirm=True)
 
@@ -243,8 +243,8 @@ class TestPurge:
         assert _exists(project, "the-garden"), "nothing is old enough yet"
 
     def test_purges_once_past_the_floor(self, root):
-        from story_architect.core.db import get_db
-        from story_architect.core.writes import delete_entity
+        from white_words.scriptwriting.core.db import get_db
+        from white_words.scriptwriting.core.writes import delete_entity
 
         project = root / "projects" / "save-the-children"
         delete_entity(project, "location", "the-garden", "s", confirm=True)
@@ -256,8 +256,8 @@ class TestPurge:
         finally:
             conn.close()
 
-        from story_architect.core import drafts
-        from story_architect.core.backups import list_backups
+        from white_words.scriptwriting.core import drafts
+        from white_words.scriptwriting.core.backups import list_backups
         staged = _run({"action": "purge", "project": "save-the-children"}, root)
         assert staged["purged"] is False and _exists(project, "the-garden")
         assert "the-garden" in staged["preview_md"], "the card names what will go"

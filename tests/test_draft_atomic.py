@@ -19,11 +19,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 import twin_helpers as twin
-from story_architect.app.config import Config
-from story_architect.app.server import create_app
-from story_architect.core import db, drafts
-from story_architect.core.backups import list_backups
-from story_architect.core.writes import create_entity, delete_entity
+from white_words.scriptwriting.app.config import Config
+from white_words.scriptwriting.app.server import create_app
+from white_words.scriptwriting.core import db, drafts
+from white_words.scriptwriting.core.backups import list_backups
+from white_words.scriptwriting.core.writes import create_entity, delete_entity
 
 from test_purge_approval import _age
 
@@ -168,7 +168,7 @@ def test_the_failure_says_nothing_was_changed(fixture_path, bad, bad_label):
 def test_a_write_that_returns_success_false_is_a_failure_too(fixture_path, monkeypatch):
     """No write function returns this today, but the contract is "an error key OR
     success False" (Gotcha 4) and a refusal must never be read as a landed op."""
-    from story_architect.core import writes
+    from white_words.scriptwriting.core import writes
     real = writes.create_entity
 
     def refusing(project_path, etype, slug, *args, **kwargs):
@@ -293,7 +293,7 @@ def test_no_op_opens_a_second_connection_while_the_transaction_is_open(
         return conn
 
     monkeypatch.setattr(db, "get_db", spy)
-    from story_architect.core import (manual_edits, manual_entities,
+    from white_words.scriptwriting.core import (manual_edits, manual_entities,
                                       manual_structure, track)
     for mod in (manual_edits, manual_entities, manual_structure, track):
         monkeypatch.setattr(mod, "get_db", spy)
@@ -398,7 +398,7 @@ def test_a_purge_still_cannot_be_bundled_with_other_changes(fixture_path):
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setattr("story_architect.app.token.load_api_key", lambda: "k")
+    monkeypatch.setattr("white_words.scriptwriting.app.token.load_api_key", lambda: "k")
     root = tmp_path / "root"
     proj = root / "projects" / "demo"
     (proj / ".story").mkdir(parents=True)

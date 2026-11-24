@@ -22,8 +22,8 @@ import sqlite3
 
 import pytest
 
-from story_architect.core.writes import delete_entity
-from story_architect.tools.story_import import handler as import_handler
+from white_words.scriptwriting.core.writes import delete_entity
+from white_words.scriptwriting.tools.story_import import handler as import_handler
 
 
 def _setup(fixture_path, tmp_path, name):
@@ -49,7 +49,7 @@ def _references_to(project, target):
     live entity — plus the one thing storage must still guarantee: no live row
     has a deleted parent.
     """
-    from story_architect.core.manual_entities import load_entity
+    from white_words.scriptwriting.core.manual_entities import load_entity
     conn = sqlite3.connect(str(project / ".story" / "story.db"))
     found = []
     try:
@@ -80,7 +80,7 @@ def _references_to(project, target):
 
 def _shown(project, entity_type, entity_id):
     """What the web form shows for an entity: the values a person would edit."""
-    from story_architect.core.manual_entities import load_entity
+    from white_words.scriptwriting.core.manual_entities import load_entity
     return load_entity(project, entity_type, entity_id)["values"]
 
 
@@ -246,7 +246,7 @@ class TestDefaultsOnReset:
     def test_optional_location_still_lands_in_unfilled_fields(self, fixture_path, tmp_path):
         """location_id is a column so it reads "", but location is optional —
         so unfilled_fields reports it and the UI has its signal."""
-        from story_architect.tools.story_retrieve import handler as retrieve_handler
+        from white_words.scriptwriting.tools.story_retrieve import handler as retrieve_handler
         p, vault = _setup(fixture_path, tmp_path, "def-2")
         _delete(p, "location", "the-garden")
         r = json.loads(retrieve_handler(

@@ -14,8 +14,8 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 
 
-from story_architect.tools.story_draft import handler
-from story_architect.tools.story_draft import SCHEMA
+from white_words.scriptwriting.tools.story_draft import handler
+from white_words.scriptwriting.tools.story_draft import SCHEMA
 
 OPS = [{
     "op": "create", "type": "scene", "id": "mira-tells-kael",
@@ -221,7 +221,7 @@ def _call_tool(monkeypatch, fixture_path, args):
     """
     import asyncio
     from mcp import types as mcp_types
-    from story_architect.app import mcp_server
+    from white_words.scriptwriting.app import mcp_server
 
     published = []
 
@@ -272,7 +272,7 @@ def test_a_refused_stage_publishes_nothing(monkeypatch, fixture_path):
 
 
 def test_an_unavailable_stage_publishes_nothing(monkeypatch, fixture_path):
-    from story_architect.core import drafts
+    from white_words.scriptwriting.core import drafts
 
     monkeypatch.setattr(drafts, "dry_run",
                         lambda project_path, draft_id: {

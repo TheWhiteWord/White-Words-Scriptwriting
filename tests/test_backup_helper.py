@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from story_architect.core import db as core_db
-from story_architect.core.db import backup_database
-from story_architect.core.writes import create_project
+from white_words.scriptwriting.core import db as core_db
+from white_words.scriptwriting.core.db import backup_database
+from white_words.scriptwriting.core.writes import create_project
 
 
 @pytest.fixture

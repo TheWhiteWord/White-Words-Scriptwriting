@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from story_architect.app import server
+from white_words.scriptwriting.app import server
 
 
 def _app(last_heartbeat, busy=False):
@@ -32,9 +32,9 @@ def test_a_streaming_reply_refreshes_the_clock():
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from story_architect.app.config import Config
-    from story_architect.app.server import create_app
-    monkeypatch.setattr("story_architect.app.token.load_api_key", lambda: "k")
+    from white_words.scriptwriting.app.config import Config
+    from white_words.scriptwriting.app.server import create_app
+    monkeypatch.setattr("white_words.scriptwriting.app.token.load_api_key", lambda: "k")
     root = tmp_path / "root"
     (root / ".story").mkdir(parents=True)
     c = TestClient(create_app(Config(root=root)), base_url="http://127.0.0.1:8731")

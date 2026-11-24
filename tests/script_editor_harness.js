@@ -3,7 +3,7 @@
 // running story-architect server (tests/script_editor_serve.py).
 //
 //   python tests/script_editor_serve.py 8741 &
-//   NODE_PATH=<dir containing jsdom> node tests/script_editor_harness.js src/story_architect/web http://127.0.0.1:8741
+//   NODE_PATH=<dir containing jsdom> node tests/script_editor_harness.js src/white_words/scriptwriting/web http://127.0.0.1:8741
 //
 // Not wired into pytest, like dashboard_tabs_harness.js: it needs node and jsdom.
 // The server is real on purpose — what a cue resolves to, what a warning says and

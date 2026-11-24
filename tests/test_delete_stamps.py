@@ -15,9 +15,9 @@ import sqlite3
 
 import pytest
 
-from story_architect.core.writes import delete_entity
-from story_architect.tools.story_admin import handler as admin
-from story_architect.tools.story_import import handler as import_handler
+from white_words.scriptwriting.core.writes import delete_entity
+from white_words.scriptwriting.tools.story_admin import handler as admin
+from white_words.scriptwriting.tools.story_import import handler as import_handler
 
 EARLIER = "2026-01-01T09:00:00"
 
@@ -148,7 +148,7 @@ class TestRestoreBringsBackOnlyWhatThatDeleteFlagged:
         p, vault = proj
         _trash_beats_earlier(p)
         delete_entity(p, "scene", SCENE, "t", True)
-        from story_architect.core.trash import purge_deleted
+        from white_words.scriptwriting.core.trash import purge_deleted
         res = purge_deleted(p, {"entity_type": "scene", "id": SCENE})
         assert res.get("success"), res
         assert [x["id"] for x in res["purged"]] == [SCENE]

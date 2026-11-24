@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from story_architect.core.writes import delete_entity
-from story_architect.core.trash import purge_deleted
-from story_architect.tools.story_admin import handler
+from white_words.scriptwriting.core.writes import delete_entity
+from white_words.scriptwriting.core.trash import purge_deleted
+from white_words.scriptwriting.tools.story_admin import handler
 
 
 def _admin(project: Path, **args):

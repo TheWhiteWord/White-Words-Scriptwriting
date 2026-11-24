@@ -12,12 +12,12 @@ import sqlite3
 
 import pytest
 
-from story_architect.core import drafts
-from story_architect.core.backups import list_backups
-from story_architect.core.trash import preview_purge, purge_deleted
-from story_architect.core.writes import delete_entity
-from story_architect.tools.story_admin import handler as admin
-from story_architect.tools.story_draft import handler as draft_tool
+from white_words.scriptwriting.core import drafts
+from white_words.scriptwriting.core.backups import list_backups
+from white_words.scriptwriting.core.trash import preview_purge, purge_deleted
+from white_words.scriptwriting.core.writes import delete_entity
+from white_words.scriptwriting.tools.story_admin import handler as admin
+from white_words.scriptwriting.tools.story_draft import handler as draft_tool
 
 TARGET = {"entity_type": "character", "id": "kael"}
 

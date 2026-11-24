@@ -13,11 +13,11 @@ import time
 
 import pytest
 
-from story_architect.core import db as core_db
-from story_architect.core.db import (BASELINE_VERSION, LATEST_VERSION,
+from white_words.scriptwriting.core import db as core_db
+from white_words.scriptwriting.core.db import (BASELINE_VERSION, LATEST_VERSION,
                                      SchemaTooNewError, SchemaTooOldError,
                                      apply_migrations, get_db)
-from story_architect.core.writes import create_project
+from white_words.scriptwriting.core.writes import create_project
 
 
 def _version(path_to_db):
@@ -208,7 +208,7 @@ def test_two_connections_opening_a_behind_database_upgrade_it_once(tmp_path):
 
 
 def test_a_backup_one_step_behind_is_upgraded_when_opened(tmp_path, one_step):
-    from story_architect.core.db import backup_database
+    from white_words.scriptwriting.core.db import backup_database
 
     proj = _new_project(tmp_path)
     snap = backup_database(proj)
@@ -239,13 +239,13 @@ def test_a_backup_one_step_behind_is_upgraded_when_opened(tmp_path, one_step):
 # ─── chat.db ───
 
 def test_a_new_chat_db_is_stamped(tmp_path):
-    from story_architect.chat import store
+    from white_words.scriptwriting.chat import store
     store.connect(tmp_path).close()
     assert _version(tmp_path / ".story" / "chat.db") == store.CHAT_LATEST
 
 
 def test_a_chat_db_one_step_behind_is_upgraded_on_open(tmp_path, monkeypatch):
-    from story_architect.chat import store
+    from white_words.scriptwriting.chat import store
     store.connect(tmp_path).close()      # stamped CHAT_BASELINE
     p = tmp_path / ".story" / "chat.db"
     c = sqlite3.connect(str(p))
@@ -274,7 +274,7 @@ def test_a_chat_db_one_step_behind_is_upgraded_on_open(tmp_path, monkeypatch):
 
 
 def test_a_chat_db_below_the_baseline_is_refused(tmp_path):
-    from story_architect.chat import store
+    from white_words.scriptwriting.chat import store
     store.connect(tmp_path).close()
     p = tmp_path / ".story" / "chat.db"
     c = sqlite3.connect(str(p))
@@ -286,7 +286,7 @@ def test_a_chat_db_below_the_baseline_is_refused(tmp_path):
 
 
 def test_chat_db_from_a_newer_build_is_refused(tmp_path):
-    from story_architect.chat import store
+    from white_words.scriptwriting.chat import store
     store.connect(tmp_path).close()
     p = tmp_path / ".story" / "chat.db"
     c = sqlite3.connect(str(p))

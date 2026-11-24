@@ -2,9 +2,9 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from story_architect.chat.fake_backend import FakeBackend
-from story_architect.chat.service import ChatService
-from story_architect.chat import store
+from white_words.scriptwriting.chat.fake_backend import FakeBackend
+from white_words.scriptwriting.chat.service import ChatService
+from white_words.scriptwriting.chat import store
 
 
 def proj(tmp):
@@ -92,9 +92,9 @@ def test_cancellation_midstream(tmp_path):
             import asyncio
             for i in range(5):
                 await asyncio.sleep(0.05)
-                from story_architect.chat.events import TextDelta
+                from white_words.scriptwriting.chat.events import TextDelta
                 yield TextDelta(text="a")
-            from story_architect.chat.events import Done
+            from white_words.scriptwriting.chat.events import Done
             yield Done(backend_state=None)
     svc = ChatService(Slow())
     cid = svc.create_conversation(p)

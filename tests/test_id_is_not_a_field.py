@@ -13,10 +13,10 @@ key — never by a field. So the field carried nothing but a wrong-looking blank
 import pytest
 
 
-from story_architect.core.constants import ENTITY_SCHEMAS
-from story_architect.core.entity import FIELDS_TO_SKIP
+from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+from white_words.scriptwriting.core.entity import FIELDS_TO_SKIP
 
-from story_architect.tools.story_retrieve import handler
+from white_words.scriptwriting.tools.story_retrieve import handler
 
 
 @pytest.fixture

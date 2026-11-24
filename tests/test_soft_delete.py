@@ -30,10 +30,10 @@ def vault(tmp_path, monkeypatch):
     dest = v / "projects" / "stc"
     dest.parent.mkdir(parents=True)
     shutil.copytree(str(FIXTURE), str(dest))
-    import story_architect.core.config
-    monkeypatch.setattr(story_architect.core.config, "load_plugin_config",
+    import white_words.scriptwriting.core.config
+    monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
                         lambda: {"root_path": str(v)})
-    from story_architect.tools.story_import import handler
+    from white_words.scriptwriting.tools.story_import import handler
     handler({"project": "stc", "confirm": True}, root_path=str(v))
     return v
 
@@ -44,8 +44,8 @@ def _db(vault):
 
 def _edit(vault, action, entity_type="character", slug="kael", **extra):
     """route the two admin actions (purge/restore) and the two write ones."""
-    from story_architect.core.writes import delete_entity, edit_entity
-    from story_architect.tools.story_admin import handler
+    from white_words.scriptwriting.core.writes import delete_entity, edit_entity
+    from white_words.scriptwriting.tools.story_admin import handler
     project = vault / "projects" / "stc"
     if action == "delete_entity":
         return delete_entity(project, entity_type, slug, "test",
@@ -107,7 +107,7 @@ class TestDeletedEntitiesAreInvisible:
     """The half that makes a soft delete safe."""
 
     def test_retrieve_cannot_find_it(self, vault):
-        from story_architect.tools.story_retrieve import handler
+        from white_words.scriptwriting.tools.story_retrieve import handler
         _delete(vault)
         r = json.loads(handler({
             "project": "stc", "entity_type": "character", "id": ["kael"],
@@ -116,7 +116,7 @@ class TestDeletedEntitiesAreInvisible:
         assert r.get("not_found"), "a deleted id must not read as found"
 
     def test_story_load_omits_it(self, vault):
-        from story_architect.tools.story_load import handler
+        from white_words.scriptwriting.tools.story_load import handler
         _delete(vault)
         payload = json.loads(handler({"project": "stc"}, root_path=str(vault)))
         # Scoped to the character's own nodes, not the whole JSON: a value turn
@@ -135,8 +135,8 @@ class TestDeletedEntitiesAreInvisible:
         walk(payload)
 
     def test_search_cannot_reach_its_prose(self, vault):
-        from story_architect.tools.story_search import handler
-        from story_architect.core.db import search_sections
+        from white_words.scriptwriting.tools.story_search import handler
+        from white_words.scriptwriting.core.db import search_sections
         # A term that occurs in Kael's own sections.
         own = _q(vault, "SELECT body FROM sections WHERE entity_id='kael' "
                         "AND body LIKE '%curriculum%' LIMIT 1")
@@ -147,14 +147,14 @@ class TestDeletedEntitiesAreInvisible:
 
     def test_search_total_excludes_deleted(self, vault):
         """A count that included invisible rows would mislead the agent."""
-        from story_architect.core.db import search_sections
+        from white_words.scriptwriting.core.db import search_sections
         before = search_sections(vault / "projects" / "stc", "curriculum")["total_matches"]
         _delete(vault)
         after = search_sections(vault / "projects" / "stc", "curriculum")["total_matches"]
         assert after < before
 
     def test_dashboard_omits_it(self, vault):
-        from story_architect.core.db import get_dashboard_data
+        from white_words.scriptwriting.core.db import get_dashboard_data
         _delete(vault)
         data = get_dashboard_data(vault / "projects" / "stc")
 
@@ -176,14 +176,14 @@ class TestDeletedEntitiesAreInvisible:
             _edit(vault, "edit_note", data={"goals_short": "x"})
 
     def test_story_load_arc_view_omits_its_beats(self, vault):
-        from story_architect.tools.story_load import handler
+        from white_words.scriptwriting.tools.story_load import handler
         _delete(vault)
         r = json.loads(handler({"project": "stc", "view": "arc"},
                                root_path=str(vault)))
         assert "kael" not in {a["character"] for a in r.get("arcs", [])}
 
     def test_unfilled_view_omits_it(self, vault):
-        from story_architect.tools.story_load import handler
+        from white_words.scriptwriting.tools.story_load import handler
         _delete(vault)
         r = json.loads(handler({"project": "stc", "view": "unfilled"},
                                root_path=str(vault)))
@@ -194,7 +194,7 @@ class TestDeletedEntitiesAreInvisible:
 class TestRestore:
     def test_round_trip_is_byte_identical(self, vault):
         """The whole point: nothing is reconstructed, so nothing is lost."""
-        from story_architect.tools.story_retrieve import handler
+        from white_words.scriptwriting.tools.story_retrieve import handler
 
         def snap():
             r = json.loads(handler({
@@ -235,7 +235,7 @@ class TestSchema:
 
     def test_migration_is_idempotent(self, vault):
         """Opening twice adds nothing twice — get_db runs on every connection."""
-        from story_architect.core.db import get_db
+        from white_words.scriptwriting.core.db import get_db
         proj = vault / "projects" / "stc"
         get_db(proj).close()
         conn = get_db(proj)

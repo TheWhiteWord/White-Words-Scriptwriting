@@ -8,6 +8,54 @@ import pytest
 FIXTURE = Path(__file__).parent / "fixtures" / "save-the-children"
 
 
+def _alias_legacy_package() -> None:
+    """Let archived task scripts keep importing the package's pre-rename name.
+
+    `tasks/task_40/upgrade_live_db.py` is loaded by test_utc_conversion.py, and it
+    imports `story_architect`, the name the package carried before the White Words
+    rename. tasks/ is history and is deliberately not rewritten, so the old name is
+    answered here by a shim that forwards to the real module. A shim rather than
+    the module itself: handing back the real object lets the import machinery
+    rename it (`__name__`, `__spec__`), which corrupts every later import of the
+    genuine path. Delete this with tasks/ when the archive leaves the tree.
+    """
+    import importlib
+    import importlib.abc
+    import importlib.util
+    import sys
+    import types
+
+    OLD, NEW = "story_architect", "white_words.scriptwriting"
+
+    class _Legacy(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname != OLD and not fullname.startswith(OLD + "."):
+                return None
+            return importlib.util.spec_from_loader(fullname, self)
+
+        def create_module(self, spec):
+            real = importlib.import_module(NEW + spec.name[len(OLD):])
+            shim = types.ModuleType(spec.name)
+
+            def _forward(name, _real=real):
+                return getattr(_real, name)
+
+            shim.__getattr__ = _forward
+            shim.__path__ = list(getattr(real, "__path__", []))
+            return shim
+
+        def exec_module(self, module):
+            pass                                    # everything forwards
+
+    if not any(getattr(f, "_legacy_alias", False) for f in sys.meta_path):
+        finder = _Legacy()
+        finder._legacy_alias = True
+        sys.meta_path.append(finder)
+
+
+_alias_legacy_package()
+
+
 @pytest.fixture(autouse=True)
 def _isolate_root(monkeypatch, tmp_path):
     """Patch load_plugin_config so tests never write to the live story root.
@@ -16,7 +64,7 @@ def _isolate_root(monkeypatch, tmp_path):
     load_plugin_config(). Without this, they'd read ~/.hermes/config.yaml and
     write to the real projects directory.
     """
-    monkeypatch.setattr("story_architect.core.config.load_plugin_config", lambda: {"root_path": str(tmp_path)})
+    monkeypatch.setattr("white_words.scriptwriting.core.config.load_plugin_config", lambda: {"root_path": str(tmp_path)})
 
 
 @pytest.fixture(autouse=True)
@@ -43,21 +91,21 @@ def build_fixture_db(dest: Path, root: str) -> None:
     it, so it is built from it — which removes the whole class of bug rather than
     the one instance that surfaced.
     """
-    from story_architect.tools.story_import import handler as import_handler
+    from white_words.scriptwriting.tools.story_import import handler as import_handler
 
     shutil.rmtree(dest / ".story" / "story.db", ignore_errors=True)
     # This fixture is session-scoped, so `_isolate_root` (function-scoped) has not
     # run yet and `load_plugin_config` still reaches for the real Hermes home.
     # Pass root_path explicitly AND patch the resolver for the duration.
-    import story_architect.core.config
+    import white_words.scriptwriting.core.config
 
-    real = story_architect.core.config.load_plugin_config
-    story_architect.core.config.load_plugin_config = lambda: {"root_path": root}
+    real = white_words.scriptwriting.core.config.load_plugin_config
+    white_words.scriptwriting.core.config.load_plugin_config = lambda: {"root_path": root}
     try:
         result = json.loads(import_handler(
             {"project": str(dest), "confirm": True, "root_path": root}))
     finally:
-        story_architect.core.config.load_plugin_config = real
+        white_words.scriptwriting.core.config.load_plugin_config = real
     assert result.get("success"), f"fixture import failed: {result}"
 
 

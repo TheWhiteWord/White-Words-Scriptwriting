@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from story_architect.tools import story_describe
+from white_words.scriptwriting.tools import story_describe
 
 ALL_TOOLS = [
     "story_draft", "story_export", "story_import", "story_load",
@@ -30,17 +30,17 @@ class TestDescribeScope:
     def test_every_tool_carries_its_own_description(self):
         """What story_describe gave up, each tool now carries itself."""
         for name in ALL_TOOLS:
-            schema = importlib.import_module(f"story_architect.tools.{name}").SCHEMA
+            schema = importlib.import_module(f"white_words.scriptwriting.tools.{name}").SCHEMA
             assert len(schema.get("description", "")) > 20, f"{name} has no description"
 
     def test_destructive_tool_says_so(self):
-        desc = importlib.import_module("story_architect.tools.story_import").SCHEMA["description"]
+        desc = importlib.import_module("white_words.scriptwriting.tools.story_import").SCHEMA["description"]
         assert "DESTRUCTIVE" in desc
 
     def test_no_description_promises_a_missing_parameter(self):
         """A description must never tell the model to pass something the schema lacks."""
         for name in ALL_TOOLS:
-            schema = importlib.import_module(f"story_architect.tools.{name}").SCHEMA
+            schema = importlib.import_module(f"white_words.scriptwriting.tools.{name}").SCHEMA
             description = schema.get("description", "")
             for claim in ("dry_run", "view=", "fields=[", "id="):
                 # story_draft's `dry_run` is a RESPONSE field the agent reads,
@@ -59,7 +59,7 @@ class TestEntityFields:
         # Derived from ENTITY_SCHEMAS, not a remembered number: scene_beats was
         # added after this test first ran, and a literal count is exactly how a
         # new type silently stops being described.
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
         assert len(_handler({})["entity_schemas"]) == len(ENTITY_SCHEMAS)
 
     def test_relation_backed_fields_are_flagged(self):
@@ -96,7 +96,7 @@ class TestStructuredFieldShapesAreVisible:
     """
 
     def test_sub_fields_present_on_every_field_that_has_them(self):
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
 
         out = _handler({})["entity_schemas"]
         expected = {
@@ -132,7 +132,7 @@ class TestStructuredFieldShapesAreVisible:
         This is the assertion that would have caught the original bug, and it
         keeps catching it if someone adds a key to ENTITY_SCHEMAS later.
         """
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
 
         out = _handler({})["entity_schemas"]
         missing = set()
@@ -152,7 +152,7 @@ class TestStorageLabelsAreTrue:
     """
 
     def test_no_field_is_labelled_with_storage_it_does_not_have(self):
-        from story_architect.core.entity import ENTITY_COLUMN_MAP, relation_fields
+        from white_words.scriptwriting.core.entity import ENTITY_COLUMN_MAP, relation_fields
 
         out = _handler({})["entity_schemas"]
         wrong = []
@@ -170,8 +170,8 @@ class TestStorageLabelsAreTrue:
         assert not wrong, wrong
 
     def test_every_declared_reference_is_labelled(self):
-        from story_architect.core.constants import ENTITY_SCHEMAS
-        from story_architect.core.entity import ENTITY_COLUMN_MAP, relation_fields
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.core.entity import ENTITY_COLUMN_MAP, relation_fields
 
         out = _handler({})["entity_schemas"]
         declared = set()
@@ -211,7 +211,7 @@ class TestStorageLabelsAreTrue:
         field could only ever render blank. The guard below therefore has nothing
         left to act on today, and stays only as a backstop should one reappear.
         """
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
         for et in ("scene", "act"):
             assert "id" not in ENTITY_SCHEMAS[et], (
                 f"{et} declares an id field, which the write path discards "
@@ -237,7 +237,7 @@ class TestOneVocabularyAcrossReadAndWrite:
     """
 
     def _load_payload(self, project):
-        from story_architect.core.db import get_project_summary
+        from white_words.scriptwriting.core.db import get_project_summary
         return get_project_summary(project)
 
     def test_story_load_does_not_emit_the_old_abbreviations(self, fixture_db):
@@ -257,7 +257,7 @@ class TestOneVocabularyAcrossReadAndWrite:
         Scoped to entity nodes (dicts carrying an `id`); the `memory` subtree
         has its own vocabulary and is not entity fields.
         """
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
 
         out = _handler({})["entity_schemas"]
         known = {f for fields in out.values() for f in fields}
@@ -304,7 +304,7 @@ class TestOneVocabularyAcrossReadAndWrite:
         This description once ended "an entity's `id` is the `slug` argument of its
         op" — a sentence that exists only because the two names disagreed.
         """
-        from story_architect.tools.story_describe import SCHEMA
+        from white_words.scriptwriting.tools.story_describe import SCHEMA
 
         assert "slug" not in SCHEMA["description"]
 
@@ -322,9 +322,9 @@ class TestEntityTypeEnumsStayInSync:
         ("story_describe", ["entity_type"]),
     ])
     def test_enum_matches_entity_schemas(self, tool, path):
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
 
-        node = importlib.import_module(f"story_architect.tools.{tool}").SCHEMA["properties"]
+        node = importlib.import_module(f"white_words.scriptwriting.tools.{tool}").SCHEMA["properties"]
         for key in path:
             node = node[key]
         assert set(node["enum"]) == set(ENTITY_SCHEMAS), (

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from story_architect.tools import story_admin
-from story_architect.tools.story_admin import TRASH_DIR, handler
+from white_words.scriptwriting.tools import story_admin
+from white_words.scriptwriting.tools.story_admin import TRASH_DIR, handler
 
 SLUG = "stc"
 
@@ -110,7 +110,7 @@ def test_unflushed_writes_in_the_wal_travel_with_the_database(root):
 
 
 def test_the_live_update_watcher_survives_the_folder_moving(root):
-    from story_architect.app.routes.projects import DbChangeWatcher
+    from white_words.scriptwriting.app.routes.projects import DbChangeWatcher
     watcher = DbChangeWatcher(root / "projects" / SLUG / ".story" / "story.db")
     watcher.changed()
     _delete(root)

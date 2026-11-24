@@ -13,7 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const WEB = path.join(__dirname, '..', 'src', 'story_architect', 'web');
+const WEB = path.join(__dirname, '..', 'src', 'white_words', 'scriptwriting', 'web');
 const SRC = path.join(WEB, 'js', 'views', 'trash.js');
 
 // ─── a DOM just big enough for init() to wire itself up ──────────────────────

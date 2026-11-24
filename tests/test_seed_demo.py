@@ -1,6 +1,6 @@
 """`story-architect seed-demo` must leave a project that opens."""
-from story_architect.app.launcher import main
-from story_architect.core.db import LATEST_VERSION, get_db
+from white_words.scriptwriting.app.launcher import main
+from white_words.scriptwriting.core.db import LATEST_VERSION, get_db
 
 
 def test_seed_demo_creates_an_openable_project(tmp_path, capsys):

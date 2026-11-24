@@ -19,9 +19,9 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from story_architect.core import clock
-from story_architect.core.writes import delete_entity, edit_entity
-from story_architect.core import drafts
+from white_words.scriptwriting.core import clock
+from white_words.scriptwriting.core.writes import delete_entity, edit_entity
+from white_words.scriptwriting.core import drafts
 
 pytestmark = pytest.mark.skipif(not hasattr(time, "tzset"), reason="needs time.tzset")
 

@@ -17,11 +17,11 @@ stored message is never rewritten by a read.
 import pytest
 from fastapi.testclient import TestClient
 
-from story_architect.app.config import Config
-from story_architect.app.server import create_app
-from story_architect.chat import store as chat_store
-from story_architect.core import db, drafts
-from story_architect.core.writes import create_entity
+from white_words.scriptwriting.app.config import Config
+from white_words.scriptwriting.app.server import create_app
+from white_words.scriptwriting.chat import store as chat_store
+from white_words.scriptwriting.core import db, drafts
+from white_words.scriptwriting.core.writes import create_entity
 
 H = {"X-Story-Architect": "1"}
 
@@ -173,7 +173,7 @@ def test_many_cards_cost_one_lookup_and_none_when_nothing_can_be_stale(
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setattr("story_architect.app.token.load_api_key", lambda: "k")
+    monkeypatch.setattr("white_words.scriptwriting.app.token.load_api_key", lambda: "k")
     root = tmp_path / "root"
     proj = root / "projects" / "demo"
     (proj / ".story").mkdir(parents=True)

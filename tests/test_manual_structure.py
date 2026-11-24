@@ -8,15 +8,15 @@ import json
 
 import pytest
 
-from story_architect.core import manual_entities as me
-from story_architect.core import manual_structure as ms
-from story_architect.core.db import get_db
-from story_architect.core.writes import create_entity, edit_entity
+from white_words.scriptwriting.core import manual_entities as me
+from white_words.scriptwriting.core import manual_structure as ms
+from white_words.scriptwriting.core.db import get_db
+from white_words.scriptwriting.core.writes import create_entity, edit_entity
 
 
 @pytest.fixture
 def project(tmp_path):
-    from story_architect.core.writes import create_project
+    from white_words.scriptwriting.core.writes import create_project
     (tmp_path / "projects").mkdir()
     create_project("demo", {"name": "Demo"}, tmp_path)
     p = tmp_path / "projects" / "demo"
@@ -100,7 +100,7 @@ class TestCreate:
         assert out["values"]["act_id"] == "a2" and out["values"]["primary_plot"] == "main"
 
     def test_no_acts_yet_says_so(self, tmp_path):
-        from story_architect.core.writes import create_project
+        from white_words.scriptwriting.core.writes import create_project
         (tmp_path / "projects").mkdir()
         create_project("empty", {"name": "E"}, tmp_path)
         with pytest.raises(me.EntityInvalid) as e:
@@ -401,9 +401,9 @@ class TestHttp:
     @pytest.fixture
     def client(self, project, monkeypatch):
         from fastapi.testclient import TestClient
-        from story_architect.app.config import Config
-        from story_architect.app.server import create_app
-        monkeypatch.setattr("story_architect.app.token.load_api_key", lambda: "k")
+        from white_words.scriptwriting.app.config import Config
+        from white_words.scriptwriting.app.server import create_app
+        monkeypatch.setattr("white_words.scriptwriting.app.token.load_api_key", lambda: "k")
         c = TestClient(create_app(Config(root=project.parent.parent, port=8731)), base_url="http://127.0.0.1:8731")
         c.headers.update({"X-Story-Architect": "1"})
         return c

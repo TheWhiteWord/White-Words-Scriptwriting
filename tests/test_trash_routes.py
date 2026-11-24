@@ -13,10 +13,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from story_architect.app.config import Config
-from story_architect.app.server import create_app
-from story_architect.core.backups import list_backups
-from story_architect.core.writes import delete_entity
+from white_words.scriptwriting.app.config import Config
+from white_words.scriptwriting.app.server import create_app
+from white_words.scriptwriting.core.backups import list_backups
+from white_words.scriptwriting.core.writes import delete_entity
 
 SLUG = "save-the-children"
 HDR = {"X-Story-Architect": "1", "Origin": "http://127.0.0.1:8731"}
@@ -387,7 +387,7 @@ def test_purge_leaves_a_live_location_link_blank_rather_than_dangling(client):
 # ─── the agent and the tab agree ─────────────────────────────────────────────
 
 def test_the_tab_and_the_agent_report_the_same_bundle(client):
-    from story_architect.tools.story_admin import handler as admin
+    from white_words.scriptwriting.tools.story_admin import handler as admin
 
     tc, project = client
     scene = _first_scene_with_beats(project)

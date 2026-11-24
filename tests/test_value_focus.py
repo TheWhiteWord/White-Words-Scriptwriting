@@ -15,9 +15,9 @@ import json
 
 import pytest
 
-from story_architect.core.value_focus import for_act, for_plot, for_project, for_sequence
-from story_architect.core.writes import create_entity, create_project
-from story_architect.tools.story_retrieve import handler as retrieve_handler
+from white_words.scriptwriting.core.value_focus import for_act, for_plot, for_project, for_sequence
+from white_words.scriptwriting.core.writes import create_entity, create_project
+from white_words.scriptwriting.tools.story_retrieve import handler as retrieve_handler
 
 WORDS = {"p": "p1", "c": "c1", "cd": "cd1", "nn": "nn1"}
 

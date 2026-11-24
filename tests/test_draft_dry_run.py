@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from story_architect.core import drafts
+from white_words.scriptwriting.core import drafts
 
 from test_drafts import _counts
 

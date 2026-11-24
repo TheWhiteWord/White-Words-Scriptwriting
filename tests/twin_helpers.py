@@ -18,7 +18,7 @@ SLUG = "save-the-children"
 
 
 def build(fixture_path, tmp_path, name):
-    from story_architect.tools.story_import import handler as import_handler
+    from white_words.scriptwriting.tools.story_import import handler as import_handler
     vault = tmp_path / name
     p = vault / "projects" / SLUG
     p.parent.mkdir(parents=True)
@@ -80,9 +80,9 @@ def scrub_references(p):
 
 def everything_a_reader_can_say(p, vault):
     """The output of every reader, per live entity, as comparable text."""
-    from story_architect.app import services
-    from story_architect.core import db, manual_edits, manual_entities, manual_structure, track
-    from story_architect.tools import (story_export, story_load, story_retrieve,
+    from white_words.scriptwriting.app import services
+    from white_words.scriptwriting.core import db, manual_edits, manual_entities, manual_structure, track
+    from white_words.scriptwriting.tools import (story_export, story_load, story_retrieve,
                                        story_search)
     out = {}
 
@@ -145,7 +145,7 @@ def snapshot(p):
 
 def assert_no_orphans(project_path):
     """No row points at something that is not there (core.integrity)."""
-    from story_architect.core.integrity import find_orphans
+    from white_words.scriptwriting.core.integrity import find_orphans
     conn = sqlite3.connect(str(project_path / ".story" / "story.db"))
     try:
         assert find_orphans(conn) == {}

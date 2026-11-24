@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from story_architect.core import backups
-from story_architect.core.backups import (create_backup, list_backups,
+from white_words.scriptwriting.core import backups
+from white_words.scriptwriting.core.backups import (create_backup, list_backups,
                                           prune_automatic_backups, restore_backup)
-from story_architect.core.writes import edit_entity
-from story_architect.tools.story_backup import handler
+from white_words.scriptwriting.core.writes import edit_entity
+from white_words.scriptwriting.tools.story_backup import handler
 
 
 @pytest.fixture
@@ -145,13 +145,13 @@ def test_prune_returns_what_it_removed_and_always_keeps_one(fixture_path):
 
 
 def test_import_and_purge_take_automatic_backups(fixture_path):
-    from story_architect.core.writes import delete_entity
-    from story_architect.tools.story_admin import handler as admin
-    from story_architect.tools.story_import import handler as imp
+    from white_words.scriptwriting.core.writes import delete_entity
+    from white_words.scriptwriting.tools.story_admin import handler as admin
+    from white_words.scriptwriting.tools.story_import import handler as imp
 
     imp({"project": str(fixture_path), "confirm": True}, root_path=str(fixture_path.parent))
     delete_entity(fixture_path, "character", "kael", "t", True)
-    from story_architect.core.trash import purge_deleted
+    from white_words.scriptwriting.core.trash import purge_deleted
     purge_deleted(fixture_path, {"entity_type": "character", "id": "kael"})
     kinds = [b["kind"] for b in list_backups(fixture_path)]
     assert kinds.count("automatic") == 2 and kinds.count("manual") == 0
@@ -184,7 +184,7 @@ def test_a_restore_is_undone_by_restoring_its_safety_backup(fixture_path):
 
 
 def test_restore_covers_every_table(fixture_path):
-    from story_architect.core.writes import delete_entity
+    from white_words.scriptwriting.core.writes import delete_entity
     snap = Path(create_backup(fixture_path)).name
     edit_entity(fixture_path, "scene", "central-room-day", {"Content": "REWRITTEN"}, "x")
     delete_entity(fixture_path, "character", "mira", "t", True)
@@ -198,8 +198,8 @@ def test_restore_covers_every_table(fixture_path):
 def test_restoring_a_backup_one_step_behind_upgrades_it(fixture_path, monkeypatch):
     """The version number travels with the backup; a snapshot one step behind
     is brought forward after it is restored."""
-    from story_architect.core import db as core_db
-    from story_architect.core.db import BASELINE_VERSION
+    from white_words.scriptwriting.core import db as core_db
+    from white_words.scriptwriting.core.db import BASELINE_VERSION
 
     def step(conn):
         conn.execute("CREATE TABLE test_only_step (x)")
@@ -217,7 +217,7 @@ def test_restoring_a_backup_one_step_behind_upgrades_it(fixture_path, monkeypatc
 
 
 def test_a_backup_below_the_baseline_is_refused(fixture_path):
-    from story_architect.core.db import BASELINE_VERSION
+    from white_words.scriptwriting.core.db import BASELINE_VERSION
     snap = Path(create_backup(fixture_path)).name
     c = sqlite3.connect(str(fixture_path / ".story" / snap))
     c.execute(f"PRAGMA user_version = {BASELINE_VERSION - 1}")
@@ -230,7 +230,7 @@ def test_a_backup_below_the_baseline_is_refused(fixture_path):
 
 
 def test_other_open_connections_see_the_restore_and_the_watcher_fires(fixture_path):
-    from story_architect.app.routes.projects import DbChangeWatcher
+    from white_words.scriptwriting.app.routes.projects import DbChangeWatcher
 
     snap = Path(create_backup(fixture_path)).name
     _rename(fixture_path, "Changed")
@@ -384,7 +384,7 @@ _RENAME_OP = {"op": "edit", "entity_type": "character", "entity_id": "kael",
 
 
 def test_old_committed_draft_rows_are_pruned_but_recent_and_open_ones_stay(fixture_path):
-    from story_architect.core import drafts
+    from white_words.scriptwriting.core import drafts
 
     def row(id_, status, created):
         _sql(fixture_path, "INSERT INTO drafts (id, ops, summary, created_at, status) "
@@ -401,7 +401,7 @@ def test_old_committed_draft_rows_are_pruned_but_recent_and_open_ones_stay(fixtu
 
 
 def test_the_draft_just_committed_keeps_its_receipt_even_if_it_was_staged_long_ago(fixture_path):
-    from story_architect.core import drafts
+    from white_words.scriptwriting.core import drafts
     staged = drafts.stage(fixture_path, [_RENAME_OP], "rename")
     _sql(fixture_path, "UPDATE drafts SET created_at='2020-01-01T00:00:00' WHERE id=?",
          (staged["draft_id"],))

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from story_architect.core.writes import delete_entity
-from story_architect.tools.story_admin import handler
+from white_words.scriptwriting.core.writes import delete_entity
+from white_words.scriptwriting.tools.story_admin import handler
 
 
 def _admin(project: Path, **args):
@@ -125,5 +125,5 @@ def test_unknown_project_is_an_error_not_a_crash(fixture_path):
 
 
 def test_action_is_advertised_in_the_tool_schema():
-    from story_architect.tools.story_admin import SCHEMA
+    from white_words.scriptwriting.tools.story_admin import SCHEMA
     assert "list_deleted" in SCHEMA["properties"]["action"]["enum"]
