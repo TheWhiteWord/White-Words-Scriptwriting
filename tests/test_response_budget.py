@@ -27,7 +27,7 @@ from white_words.scriptwriting.tools.story_load import handler as load_handler
 
 @pytest.fixture(autouse=True)
 def _no_user_config(tmp_path, monkeypatch):
-    """A developer's own ~/.config/story-architect/config.toml must not change
+    """A developer's own ~/.config/white-words/config.toml must not change
     what these tests expect from the default budget."""
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     monkeypatch.delenv("WHITE_WORDS_MAX_RESPONSE_CHARS", raising=False)

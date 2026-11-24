@@ -5,7 +5,16 @@ from typing import Any
 from white_words.scriptwriting.adapters.hermes import wrapper as W
 from white_words.scriptwriting.app.config import Config
 
-PROFILE = "story-architect"
+PROFILE = "ww-scriptwriter"
+# What a person reads in the profile list. The id above has to be a slug
+# (^[a-z0-9][a-z0-9_-]{0,63}$) and is also the model id the host serves, so the
+# human name lives in the profile's profile.yaml as `display_name`.
+PROFILE_DISPLAY_NAME = "WW Scriptwriter"
+# The MCP server key. The host prefixes the tools it exposes with it, as
+# mcp__ww_script__load, so this is the name the agent sees on every call.
+MCP_SERVER = "ww-script"
+# The variable the profile's .env carries the /mcp bearer token in.
+TOKEN_ENV = "WW_SCRIPTWRITER_TOKEN"
 
 
 def _base_url(config: Config, profile: str = PROFILE) -> str:

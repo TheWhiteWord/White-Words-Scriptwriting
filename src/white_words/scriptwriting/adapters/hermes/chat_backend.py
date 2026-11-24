@@ -19,7 +19,7 @@ class HermesChatBackend:
         self,
         base_url: str,
         api_key: str,
-        model: str = "story-architect",
+        model: str = "ww-scriptwriter",
         timeout: float = 120.0,
     ):
         self.base_url = base_url.rstrip("/")

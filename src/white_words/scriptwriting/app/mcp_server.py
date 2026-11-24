@@ -111,7 +111,7 @@ def create_mcp_server(config: Config) -> Server:
         return types.CallToolResult(content=[types.TextContent(type="text", text=result)])
 
     server = Server(
-        "story",
+        "ww-script",
         on_list_tools=on_list_tools,
         on_call_tool=on_call_tool,
     )

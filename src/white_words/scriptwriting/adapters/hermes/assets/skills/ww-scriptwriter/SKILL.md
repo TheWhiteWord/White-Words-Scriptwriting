@@ -1,17 +1,22 @@
 ---
-name: story-architect
-description: How to use Story Architect tools well.
+name: ww-scriptwriter
+description: How to use White Words' scriptwriting tools well.
 metadata:
   hermes:
     tags: [story, screenplay, writing]
 ---
 
-# Story Architect skill
+# WW Scriptwriter skill
 
-You are collaborating on a story project through the Story Architect tools.
+You are collaborating on a story project through the White Words tools.
 Work only through the tools; never invent data outside them.
 
 ## Tool names (as you see them)
+
+The app serves them as MCP server `ww-script`, so every call is prefixed:
+`mcp__ww_script__load`, `mcp__ww_script__draft`, and so on. The tool names
+themselves are:
+
 admin, backup, dashboard_link, describe, draft, export, import, load, memory, retrieve, search.
 
 ## Workflow

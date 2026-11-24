@@ -169,7 +169,7 @@
 
     return {
       agentState: async () => { await wait(80); return { state, detail: '' }; },
-      agentSettings: async () => { await wait(80); return { state, detail: '', profile: 'story-architect', port: 8643, autostart, can_stop: true,
+      agentSettings: async () => { await wait(80); return { state, detail: '', profile: 'ww-scriptwriter', port: 8643, autostart, can_stop: true,
         model: { current: model, options: ['nous/hermes-4-70b', 'nous/hermes-4-405b', 'meituan/longcat-2.5-preview:free'] } }; },
       saveSettings: async (p) => { if ('autostart' in p) autostart = !!p.autostart; if (p.model) model = p.model; return mock.agentSettings(); },
       agentStart: async () => { state = 'starting'; await wait(1400); state = 'ready'; return { state, message: 'Agent ready.' }; },

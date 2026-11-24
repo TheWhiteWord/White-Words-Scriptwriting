@@ -7,11 +7,17 @@ import shutil
 from pathlib import Path
 
 from white_words.scriptwriting.adapters.hermes import wrapper as W
+from white_words.scriptwriting.adapters.hermes.gateway import (
+    MCP_SERVER,
+    PROFILE,
+    PROFILE_DISPLAY_NAME,
+    TOKEN_ENV,
+)
 from white_words.scriptwriting.app import config as C
 from white_words.scriptwriting.app import token as T
 
 
-MARKER = "<!-- story-architect adapter -->"
+MARKER = f"<!-- {PROFILE} adapter -->"
 ASSETS = Path(__file__).resolve().parent / "assets"
 
 
@@ -19,7 +25,7 @@ def _profile(name):
     return W.profile_dir(name)
 
 
-def setup(argv=None, dry_run=False, force=False, profile_name="story-architect"):
+def setup(argv=None, dry_run=False, force=False, profile_name=PROFILE):
     parser = argparse.ArgumentParser(prog="white-words hermes setup")
     parser.add_argument("--profile", default=profile_name)
     parser.add_argument("--dry-run", action="store_true", default=dry_run)
@@ -58,6 +64,20 @@ def setup(argv=None, dry_run=False, force=False, profile_name="story-architect")
             out.append("cleared parked marker")
         except OSError:
             pass
+    # 2b. the name a person reads. The profile id is a slug, so the roster would
+    # otherwise show `ww-scriptwriter`; profile.yaml carries the display name.
+    meta_path = pd / "profile.yaml"
+    if not dry and pd.exists():
+        import yaml
+        try:
+            meta = yaml.safe_load(meta_path.read_text()) if meta_path.exists() else {}
+        except Exception:
+            meta = {}
+        meta = meta if isinstance(meta, dict) else {}
+        if meta.get("display_name") != PROFILE_DISPLAY_NAME:
+            meta["display_name"] = PROFILE_DISPLAY_NAME
+            meta_path.write_text(yaml.safe_dump(meta, sort_keys=False))
+            out.append(f"display name set: {PROFILE_DISPLAY_NAME}")
     # ensure the profile has a session store (state.db).
     # --clone lacks state.db; without it the gateway parks the profile and every
     # ticket minted for it is refused ("Invalid gateway ticket response").
@@ -90,6 +110,11 @@ def setup(argv=None, dry_run=False, force=False, profile_name="story-architect")
     if not is_default:
         src = ASSETS / "SOUL.md"
         content = src.read_text() if src.exists() else ""
+        # The template carries the marker itself, so that it reads as ours at a
+        # glance; stamp it only when it is missing, or the profile ends up with
+        # the marker twice.
+        if MARKER not in content:
+            content = MARKER + "\n" + content
         if soul_path.exists():
             existing = soul_path.read_text()
             foreign = MARKER not in existing
@@ -108,14 +133,14 @@ def setup(argv=None, dry_run=False, force=False, profile_name="story-architect")
                 if soul_path.exists() and (force or identical_to_default):
                     shutil.copy2(soul_path, soul_path.with_suffix(".md.bak"))
                 soul_path.parent.mkdir(parents=True, exist_ok=True)
-                soul_path.write_text(MARKER + "\n" + content)
+                soul_path.write_text(content)
                 out.append("SOUL.md written")
 
     else:
         out.append("default profile: skipping persona")
     # skill
-    skill_dir = pd / "skills" / "story-architect"
-    src_skill = ASSETS / "skills" / "story-architect"
+    skill_dir = pd / "skills" / PROFILE
+    src_skill = ASSETS / "skills" / PROFILE
     if dry:
         out.append("[dry-run] would install skill")
     else:
@@ -135,8 +160,8 @@ def setup(argv=None, dry_run=False, force=False, profile_name="story-architect")
         out.append("[dry-run] would write token to .env")
     else:
         lines = env_path.read_text().splitlines() if env_path.exists() else []
-        lines = [l for l in lines if not l.startswith("STORY_ARCHITECT_TOKEN=")]
-        lines.append(f"STORY_ARCHITECT_TOKEN={tok}")
+        lines = [l for l in lines if not l.startswith(f"{TOKEN_ENV}=")]
+        lines.append(f"{TOKEN_ENV}={tok}")
         env_path.write_text("\n".join(lines) + "\n")
         out.append("token written (not printed)")
     # API key for Hermes API server
@@ -183,9 +208,9 @@ def setup(argv=None, dry_run=False, force=False, profile_name="story-architect")
         cfg["platforms"].pop("api_server", None)
         if not cfg["platforms"]:
             cfg.pop("platforms", None)
-    cfg["mcp_servers"]["story"] = {
+    cfg["mcp_servers"][MCP_SERVER] = {
         "url": f"http://127.0.0.1:{port}/mcp",
-        "headers": {"Authorization": "Bearer ${STORY_ARCHITECT_TOKEN}"},
+        "headers": {"Authorization": f"Bearer ${{{TOKEN_ENV}}}"},
     }
     # API key for Hermes API server (served via host multiplexer at /p/<profile>/)
     api_key = T.ensure_api_key() if hasattr(T, "ensure_api_key") else None
@@ -207,7 +232,7 @@ def setup(argv=None, dry_run=False, force=False, profile_name="story-architect")
     return 0
 
 
-def status(argv=None, profile_name="story-architect"):
+def status(argv=None, profile_name=PROFILE):
     parser = argparse.ArgumentParser(prog="white-words hermes status")
     parser.add_argument("--profile", default=profile_name)
     args = parser.parse_args(argv or [])
@@ -226,7 +251,7 @@ def status(argv=None, profile_name="story-architect"):
     pd = _profile(pname)
     check("profile exists", pd.exists())
     check("SOUL.md present", (pd / "SOUL.md").exists() if pd.exists() else False)
-    check("skill present", (pd / "skills" / "story-architect" / "SKILL.md").exists() if pd.exists() else False)
+    check("skill present", (pd / "skills" / PROFILE / "SKILL.md").exists() if pd.exists() else False)
     cfg = {}
     cp = pd / "config.yaml" if pd.exists() else None
     if cp and cp.exists():
@@ -235,8 +260,8 @@ def status(argv=None, profile_name="story-architect"):
             cfg = yaml.safe_load(cp.read_text()) or {}
         except Exception:
             cfg = {}
-    mcp_cfg = (cfg.get("mcp_servers") or {}).get("story") or {}
-    check("MCP entry", "story" in (cfg.get("mcp_servers") or {}))
+    mcp_cfg = (cfg.get("mcp_servers") or {}).get(MCP_SERVER) or {}
+    check("MCP entry", MCP_SERVER in (cfg.get("mcp_servers") or {}))
     port = C.load_config().port
     expected_url = f"http://127.0.0.1:{port}/mcp"
     check("MCP URL", mcp_cfg.get("url") == expected_url, f"expected {expected_url}")
@@ -287,7 +312,9 @@ def status(argv=None, profile_name="story-architect"):
                 import httpx
             except ImportError:
                 import httpx2 as httpx
-            r = httpx.get(f"http://127.0.0.1:{ap}/v1/models", headers={"Authorization": f"Bearer {ak}"}, timeout=2.0)
+            # The host multiplexes profiles under /p/<profile>/; the bare /v1
+            # path answers for the default profile and rejects this key.
+            r = httpx.get(f"http://127.0.0.1:{ap}/p/{pname}/v1/models", headers={"Authorization": f"Bearer {ak}"}, timeout=2.0)
             api_ok = r.status_code == 200
             if api_ok:
                 data = r.json()

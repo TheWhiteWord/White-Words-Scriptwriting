@@ -9,12 +9,12 @@ from white_words.scriptwriting.app.mcp_server import build_registry
 APP = Path(__file__).resolve().parents[1]
 ASSETS = APP / "src" / "white_words" / "scriptwriting" / "adapters" / "hermes" / "assets"
 SOUL = ASSETS / "SOUL.md"
-SKILL = ASSETS / "skills/story-architect/SKILL.md"
+SKILL = ASSETS / "skills/ww-scriptwriter/SKILL.md"
 
 
 def test_soul_has_marker():
     text = SOUL.read_text()
-    assert "<!-- story-architect adapter -->" in text
+    assert "<!-- ww-scriptwriter adapter -->" in text
 
 
 def test_skill_frontmatter_parses():
@@ -22,7 +22,7 @@ def test_skill_frontmatter_parses():
     m = re.match(r"^---\n(.*?)\n---\n", text, re.S)
     assert m, "no frontmatter"
     fm = yaml.safe_load(m.group(1))
-    assert fm["name"] == "story-architect"
+    assert fm["name"] == "ww-scriptwriter"
     assert "description" in fm
 
 

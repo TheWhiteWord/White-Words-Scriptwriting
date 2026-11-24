@@ -1,1 +1,1 @@
-"""Hermes adapter: setup/status for the story-architect agent profile."""
+"""Hermes adapter: setup/status for the ww-scriptwriter agent profile."""

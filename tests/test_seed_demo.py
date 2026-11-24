@@ -1,4 +1,4 @@
-"""`story-architect seed-demo` must leave a project that opens."""
+"""`white-words seed-demo` must leave a project that opens."""
 from white_words.scriptwriting.app.launcher import main
 from white_words.scriptwriting.core.db import LATEST_VERSION, get_db
 
