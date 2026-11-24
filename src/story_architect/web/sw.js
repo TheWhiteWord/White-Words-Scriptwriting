@@ -1,4 +1,4 @@
-// Story Architect service worker.
+// White Words service worker.
 //
 // No caching: the dashboard is a live local app, and a cached copy would go
 // stale between runs. The fetch handler is here because Chrome requires one
