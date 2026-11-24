@@ -26,10 +26,9 @@ dev = ["pytest>=7.0"]
 white-words = "white_words.scriptwriting.app.launcher:main"
 
 [tool.setuptools.packages.find]
-# white_words/ is the studio namespace and deliberately has no __init__.py: the
-# apps are its children (white_words.scriptwriting today), so a second one can
-# join as white_words.film — in this repo or in its own distribution — without
-# taking a top-level package name of its own.
+# white_words/ is a namespace and deliberately has no __init__.py, so another
+# app in the family (white_words.film, in its own repository) can contribute to
+# the same import root instead of taking a top-level package name of its own.
 where = ["src"]
 
 [tool.ruff]

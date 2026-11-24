@@ -1,30 +1,82 @@
-# White Words Studio
+# White Words
 
-The workspace for White Words, a studio of writing tools that share one story data
-model. The studio and app names here are structural: what a user reads is the
-app's own name, never the studio's.
+Standalone local app for story/screenplay development.
+
+## Install
+
+Python 3.11+ and pipx (`sudo apt install pipx`, or `brew install pipx`).
+
+```
+pipx install git+https://github.com/TheWhiteWord/hermes-story-architect
+white-words --install-desktop     # icon in the desktop app grid
+white-words --uninstall-desktop   # remove it again
+```
+
+Development, from a clone: `pip install -e .`
+
+## Update
+
+```
+pipx upgrade white-words-scriptwriting
+```
+
+## Run
+
+white-words --root <projects root>
+
+The server stops on its own a few seconds after you close the last browser tab.
+`--no-idle-exit` keeps it running.
+
+## Demo data
+
+white-words seed-demo --root /tmp/sa-demo
+
+## Tests
+
+pytest
+
+## Using with Hermes
+
+Prerequisites: Hermes Agent v0.22.5+ installed and on PATH; a working model/provider in the default profile (so cloning produces a usable profile).
+
+1. Start the app: `white-words --root <projects root>` (default port 8731, 127.0.0.1 only).
+2. Run `white-words hermes setup` (idempotent; `--dry-run` to preview, `--profile NAME` to change profile). This creates the `story-architect` profile, writes SOUL.md and the skill, distributes the token, and registers the MCP server `story`.
+3. Start Hermes with the profile:
+4. **Host gateway must be running as a service** (so the app's agent API is reachable even when the Hermes desktop is closed): `hermes gateway install` (user-level) or `sudo hermes gateway install --system`. The app never manages the gateway lifecycle.
+   - CLI: `hermes -p story-architect chat`
+   - Desktop: select the `story-architect` profile (supported).
+4. If the app was not running when Hermes started, start it and run `hermes mcp test` or restart Hermes; tools appear as `mcp_story_*`.
+5. Diagnostics: `white-words hermes status` (exit code non-zero on any failure).
+
+Security: the app binds to 127.0.0.1 only; `/mcp` requires a bearer token (constant-time check) and rejects unexpected Host headers. The token is stored with 0600 permissions in the app config dir and written to the profile `.env` as `STORY_ARCHITECT_TOKEN` (never printed). The browser UI/API are token-free and read-only.
+
+## Chat
+
+The dashboard has an in-app chat panel (drawer) that talks to the story agent through the app, so Hermes Desktop is not required for day-to-day work. The browser never talks to Hermes directly; the app holds the API key server-side and forwards requests.
+
+Requirements: run `white-words hermes setup` (idempotent). Setup now also enables the API server for the `story-architect` profile on a dedicated port (default 8642, override via `WHITE_WORDS_HERMES_API_PORT`), creates an API key stored 0600 in the app config dir and written to the profile `.env` as `API_SERVER_KEY` (never printed), and applies a conservative toolset: the agent has no terminal/file-system write tools by default and web search/fetch is disabled. The owner can change toolsets in the profile config.
+
+Starting the agent: use the "Start agent" button in the chat panel (or the fallback CLI command `hermes -p story-architect gateway start`), which waits up to 15s for the API to become ready. Autostart is off by default (`WHITE_WORDS_AGENT_AUTOSTART=1` to enable). `white-words hermes status` now also reports API server reachability/auth and that the model id matches the profile. The app never kills a gateway it did not start.
+
+What the agent can do: read/query project data via the `story` MCP tools (load, search, get entity, etc.) and stage/commit changes through the drafts protocol (it asks for approval before committing). What it cannot do by default: run shell commands, write files, or search/fetch the web. Chats are stored per project in `<root>/projects/<slug>/.story/chat.db` (separate from `story.db`); conversations and the last-open conversation per project are restored across reloads and app restarts. Partial replies cancelled mid-stream are kept and marked. A "Project updated / Refresh" banner appears after a committed change.
+
+## Writes from the browser (the one exception)
+
+The browser UI is read-only **except** the scene script editor: `PUT /api/projects/{slug}/scenes/{scene}/script`. A person editing a script is the approval, so this path writes directly through `core.writes` (via `core/manual_edits.py`) instead of staging a draft. It sits behind the same middleware as every other non-GET request (localhost Host, own/absent Origin, `X-White-Words: 1`); there is no second auth model. A save carries a content hash and is refused with 409 if the scene changed since it was loaded. Agent writes still go through drafts and `/mcp`.
 
 ## Layout
 
-- `apps/scriptwriting/` — the scriptwriting app. Distribution
-  `white-words-scriptwriting`, command `white-words`, importable as
-  `white_words.scriptwriting`.
-- `packages/` — where code goes once a second app needs to share it. Empty today;
-  see its README for what belongs there.
-- `docs/` — design material: the brand kit, dashboard inventories, research notes.
-- `tasks/`, `archieved/` — historical artefacts. `tasks/` is not collected by the
-  test suite.
+- `src/white_words/scriptwriting/core/` engine (no framework imports)
+- `src/white_words/scriptwriting/app/` HTTP server, config, routes, launcher
+- `src/white_words/scriptwriting/adapters/hermes/` Hermes adapter (setup, status, MCP registration)
+- `src/white_words/scriptwriting/tools/` tool modules
+- `src/white_words/scriptwriting/web/` static UI
 
-The import root is the `white_words` namespace, which deliberately has no
-`__init__.py`: apps and shared packages are its children, so a film app can join
-as `white_words.film` — in this repository or as a distribution of its own —
-without taking a top-level package name.
+The distribution is `white-words-scriptwriting` and the command is `white-words`.
+`white_words` is a namespace and deliberately has no `__init__.py`: a second app
+in the family ships as `white_words.film` from its own repository and
+distribution, without taking a top-level import name of its own. What the apps
+share is the story data, not this code.
 
-## Running it
-
-    cd apps/scriptwriting
-    python -m pytest                     # the suite
-    white-words --root <projects root>   # the app
-
-`apps/scriptwriting/README.md` covers installation, the Hermes agent profile, the
-dashboard and the MCP surface in detail.
+`docs/` is design material and `tasks/` holds historical artefacts; the suite
+does not collect `tasks/`.
