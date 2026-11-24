@@ -25,7 +25,9 @@ from white_words.scriptwriting.core import drafts
 
 pytestmark = pytest.mark.skipif(not hasattr(time, "tzset"), reason="needs time.tzset")
 
-SCRIPT = Path(__file__).resolve().parent.parent / "tasks" / "task_40" / "upgrade_live_db.py"
+# tasks/ sits at the workspace root, two levels above this app.
+WORKSPACE = Path(__file__).resolve().parents[3]
+SCRIPT = WORKSPACE / "tasks" / "task_40" / "upgrade_live_db.py"
 ROME = ZoneInfo("Europe/Rome")
 SCENE = "central-room-day"
 
