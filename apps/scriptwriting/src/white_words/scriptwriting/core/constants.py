@@ -1,4 +1,4 @@
-"""Story Architect — shared constants and validation rules."""
+"""White Words — shared constants and validation rules."""
 from pathlib import Path
 
 VALID_ROLES = ["Protagonist", "Antagonist", "Supporting", "Minor", "Cameo"]

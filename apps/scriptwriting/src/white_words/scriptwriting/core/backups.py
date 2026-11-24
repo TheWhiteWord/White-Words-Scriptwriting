@@ -191,7 +191,7 @@ def restore_backup(project_path: Path, name: str) -> dict:
             raise ValueError(f"{name} is not a project database (no entities table).")
         if version > LATEST_VERSION:
             raise ValueError(
-                f"{name} was made by a newer version of Story Architect (schema "
+                f"{name} was made by a newer version of White Words (schema "
                 f"{version}, this build knows {LATEST_VERSION}). Update the app first.")
         if version < BASELINE_VERSION:
             raise ValueError(

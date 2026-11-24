@@ -1,4 +1,4 @@
-/* Story Architect chat: tiny safe markdown renderer.
+/* White Words chat: tiny safe markdown renderer.
    Input is escaped FIRST, then a small subset is turned into HTML:
    paragraphs, headings, bold/italic, inline + fenced code, lists, quotes, rules, http(s) links. */
 (function () {

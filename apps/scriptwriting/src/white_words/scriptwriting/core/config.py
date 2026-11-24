@@ -1,4 +1,4 @@
-"""Story Architect — plugin config loader.
+"""White Words — plugin config loader.
 
 The configured directory is ``root_path``: the folder that holds
 ``projects/<slug>/.story/story.db``. The SQLite DB is the source of truth;

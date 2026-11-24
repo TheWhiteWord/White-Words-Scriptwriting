@@ -5,7 +5,7 @@ from __future__ import annotations
 def build_bootstrap(project_slug: str, project_name: str, attachments: list | None = None) -> str:
     attachments = attachments or []
     parts = [
-        "You are working inside Story Architect, a local screenwriting and story-development app. "
+        "You are working inside White Words, a local screenwriting and story-development app. "
         f'The user has the project "{project_name}" ({project_slug}) open in the app and is talking to you in its side panel. '
         'Read and change the project only through the story tools (MCP server "story"); don\'t guess project facts. '
         "Propose changes by staging a draft: the app shows each draft to the user as a card with Approve and Reject buttons. "

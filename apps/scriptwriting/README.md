@@ -1,4 +1,4 @@
-# Story Architect
+# White Words
 
 Standalone local app for story/screenplay development.
 

@@ -1,4 +1,4 @@
-/* Story Architect chat: rendering of icons, messages, tool cards and draft cards.
+/* White Words chat: rendering of icons, messages, tool cards and draft cards.
    Pure DOM builders; no network, no app state. */
 (function () {
   const SA = (window.SAChat = window.SAChat || {});
@@ -231,7 +231,7 @@
       return { root, role: 'user', data: msg };
     }
     root.className = 'sa-msg sa-assistant';
-    root.innerHTML = '<div class="sa-avatar" aria-hidden="true">SA</div><div class="sa-mbody"><div class="sa-who">Story Architect</div>' +
+    root.innerHTML = '<div class="sa-avatar" aria-hidden="true">WW</div><div class="sa-mbody"><div class="sa-who">White Words</div>' +
       '<div class="sa-tools"></div><div class="sa-typing"><i></i><i></i><i></i></div><div class="sa-text sa-md"></div><div class="sa-drafts"></div><div class="sa-note" hidden></div>' +
       '<div class="sa-actions"><button class="sa-icon-btn" data-act="copy" title="Copy reply">' + icon('copy', 13) + '</button></div></div>';
     const q = (s) => root.querySelector(s);

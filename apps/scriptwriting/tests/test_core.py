@@ -1,4 +1,4 @@
-"""Test suite for Story Architect core modules."""
+"""Test suite for White Words core modules."""
 import pytest
 import json
 from pathlib import Path

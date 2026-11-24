@@ -1,4 +1,4 @@
-/* Story Architect chat: API layer (real backend + ?mock=1 stand-in).
+/* White Words chat: API layer (real backend + ?mock=1 stand-in).
    Everything the UI needs from the server goes through window.SAChat.api. */
 (function () {
   const SA = (window.SAChat = window.SAChat || {});

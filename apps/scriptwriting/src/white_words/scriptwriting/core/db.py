@@ -181,7 +181,7 @@ def apply_migrations(conn: sqlite3.Connection, migrations: list, *,
 def _too_new(name: str, version: int, target: int) -> SchemaTooNewError:
     return SchemaTooNewError(
         f"{name} has schema version {version}, but this build only understands "
-        f"up to {target}. It was written by a newer version of Story Architect: "
+        f"up to {target}. It was written by a newer version of White Words: "
         f"update the app, or restore an older backup.")
 
 

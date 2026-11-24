@@ -33,7 +33,7 @@ class HermesChatBackend:
         instructions: str,
         backend_state: Any,
     ) -> AsyncIterator[Any]:
-        system_text = instructions or "You are the Story Architect assistant."
+        system_text = instructions or "You are the White Words assistant."
         payload_messages = [{"role": "system", "content": system_text}] + [
             {"role": m.get("role", "user"), "content": m.get("content", m.get("text", ""))}
             for m in (messages or [])

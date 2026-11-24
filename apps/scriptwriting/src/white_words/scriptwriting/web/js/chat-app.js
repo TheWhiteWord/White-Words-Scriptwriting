@@ -1,4 +1,4 @@
-/* Story Architect chat: controller. Builds the right rail/panel, owns state, wires API <-> render.
+/* White Words chat: controller. Builds the right rail/panel, owns state, wires API <-> render.
    Drop-in: creates its own DOM inside #app (after the other panels) once a project is loaded. */
 (function () {
   const SA = (window.SAChat = window.SAChat || {});
@@ -49,7 +49,7 @@
             '<button class="sa-pillbtn sa-jump" hidden>' + icon('down', 12) + 'Latest</button></div>' +
           '<div class="sa-notice" hidden><span></span><button class="sa-btn" data-act="start">Start agent</button></div>' +
           '<div class="sa-composer"><div class="sa-chips"></div>' +
-            '<textarea class="sa-input" rows="1" placeholder="Message Story Architect…" aria-label="Message"></textarea>' +
+            '<textarea class="sa-input" rows="1" placeholder="Message White Words…" aria-label="Message"></textarea>' +
             '<div class="sa-bar"><div class="sa-bar-l">' +
               '<button class="sa-icon-btn" data-act="attach" title="Attach what\'s open">' + icon('plus', 16) + '</button>' +
               '<button class="sa-icon-btn" data-act="new" title="New chat">' + icon('newchat', 16) + '</button>' +
@@ -347,7 +347,7 @@
         ? '<div class="sa-row"><label for="sa-model">Model</label><select id="sa-model" class="sa-select">' + model.options.map((o) => '<option' + (o === model.current ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select></div>'
         : '<div class="sa-row"><span class="k">Model</span><span class="v">' + esc(model.current || 'not available') + '</span></div>') +
       '<div class="sa-help" id="sa-msg"></div>' +
-      (S.agent === 'not_configured' ? '<div class="sa-help">Set it up once from a terminal:<br><code>story-architect hermes setup</code></div>' : '');
+      (S.agent === 'not_configured' ? '<div class="sa-help">Set it up once from a terminal:<br><code>white-words hermes setup</code></div>' : '');
     const msg = (t) => { const m = pane.querySelector('#sa-msg'); if (m) m.textContent = t; };
     pane.querySelector('[data-act=toggle]').onclick = async () => { await toggleAgent(); };
     pane.querySelector('#sa-auto').onclick = async (e) => {
