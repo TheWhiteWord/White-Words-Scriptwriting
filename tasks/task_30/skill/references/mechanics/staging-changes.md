@@ -53,22 +53,28 @@ only the drafts table moves.*
   dropped list** if there is one — a silently dropped op is a change the user
   did not agree to.
 
-## A failed commit may have partly landed
+## A commit lands everything or nothing
 
-*The reason a commit's result is read rather than assumed.*
+*The reason a commit's result is still read rather than assumed.*
 
-- **A commit is not all-or-nothing.** Verified with a two-op batch whose second
-  op failed: the first op **was written**, the response was `success: false`,
-  and the response named how many landed and which failed.
-- The response is well-behaved about this: it reports the count, **keeps the
-  draft** so the remainder can be re-staged, and says so in the message.
-- **So the discipline is: report what the response says landed, and do not
-  re-send the whole batch.** Re-staging the failed op alone is the intended
-  recovery, and re-sending everything risks applying the successful half twice.
-- **A repeated commit is not an error.** Verified: committing the same draft
-  again returns success with `already_committed: true` and writes nothing. An
-  earlier note claimed a commit could report a missing draft for a write that had
-  landed; that is fixed, and the remaining case is the partial one above.
+- **A commit is all-or-nothing.** If any op in the batch fails, **none** of it is
+  written: the response is `success: false`, `committed` is `[]`, `failed` names the
+  op that was refused, and the message says nothing was changed. The project is
+  exactly as it was.
+- **The draft is kept.** Fix the problem, **re-stage the whole batch** under the same
+  `draft_id` (a restage replaces — see above), and commit again. There is no
+  "remainder" to work out: nothing landed, so nothing is repeated.
+- **Relay the failure plainly**: which change failed and why, and that nothing was
+  saved. Do not tell the user part of it went in.
+- **Ops in one batch can depend on each other.** A new location and the scene that
+  names it, a new character and the plot that lists them, commit together — the
+  later op sees the earlier one.
+- **A repeated commit is not an error.** Committing the same draft again returns
+  success with `already_committed: true` and writes nothing.
+- **The one exception is a purge**, which is staged on its own by
+  `story_admin(action="purge")` and cannot be undone. A single purge is all-or-nothing
+  like any other. Only if a draft held several purges could an earlier one stay done
+  when a later one fails; then `committed` lists exactly what was purged.
 
 ## One batch per decision
 

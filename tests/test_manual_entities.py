@@ -5,9 +5,9 @@ the agent's own write path stored. The form is a second door into the same room.
 """
 import pytest
 
-from story_architect.core import manual_entities as me
-from story_architect.core.db import get_db
-from story_architect.core.writes import create_entity, edit_entity
+from white_words.scriptwriting.core import manual_entities as me
+from white_words.scriptwriting.core.db import get_db
+from white_words.scriptwriting.core.writes import create_entity, edit_entity
 
 
 @pytest.fixture
@@ -215,10 +215,10 @@ class TestEdit:
 
     def test_untouched_fields_are_not_rewritten(self, project, monkeypatch):
         sent = {}
-        from story_architect.core import writes
+        from white_words.scriptwriting.core import writes
         real = writes.edit_entity
         monkeypatch.setattr(writes, "edit_entity",
-                            lambda p, t, i, data, summary: sent.update(data) or real(p, t, i, data, summary))
+                            lambda p, t, i, data, summary, conn=None: sent.update(data) or real(p, t, i, data, summary, conn=conn))
         cur = self._load(project)
         me.edit_form_entity(project, "character", "mara",
                             {"base_version": cur["version"],
@@ -284,9 +284,12 @@ class TestDelete:
         prev = me.delete_preview(project, "location", "kitchen")
         assert any("Dinner" in e and "no location" in e for e in prev["effects"])
         me.delete_form_entity(project, "location", "kitchen")
+        # The scene reads as having no location; the column keeps its value, so a
+        # restore of the location gives it back (test_live_references.py).
+        assert me.load_entity(project, "scene", "sc1")["values"]["location"] in ("", None)
         conn = get_db(project)
         try:
-            assert conn.execute("SELECT location_id FROM entities WHERE id='sc1'").fetchone()[0] in ("", None)
+            assert conn.execute("SELECT location_id FROM entities WHERE id='sc1'").fetchone()[0] == "kitchen"
         finally:
             conn.close()
 
@@ -327,7 +330,7 @@ class TestDelete:
         assert not me.delete_preview(project, "character", "mara")["can_delete"]
 
     def test_delete_is_reversible_with_restore(self, project):
-        from story_architect.tools.story_admin import _restore_entity
+        from white_words.scriptwriting.tools.story_admin import _restore_entity
         me.delete_form_entity(project, "location", "kitchen")
         res = _restore_entity({"target": {"entity_type": "location", "id": "kitchen"},
                                "summary": "undo"}, project)
@@ -341,16 +344,16 @@ class TestHttp:
     @pytest.fixture
     def client(self, tmp_path, monkeypatch):
         from fastapi.testclient import TestClient
-        from story_architect.app.config import Config
-        from story_architect.app.server import create_app
-        monkeypatch.setattr("story_architect.app.token.load_api_key", lambda: "k")
+        from white_words.scriptwriting.app.config import Config
+        from white_words.scriptwriting.app.server import create_app
+        monkeypatch.setattr("white_words.scriptwriting.app.token.load_api_key", lambda: "k")
         root = tmp_path / "root"
         proj = root / "projects" / "demo"
         (proj / ".story").mkdir(parents=True)
         create_entity(proj, "world", "gilead", {"name": "Gilead", "one_sentence": "x"})
         create_entity(proj, "character", "mara", {"name": "Mara", "one_sentence": "x"})
         c = TestClient(create_app(Config(root=root, port=8731)), base_url="http://127.0.0.1:8731")
-        c.headers.update({"X-Story-Architect": "1"})
+        c.headers.update({"X-White-Words": "1"})
         return c
 
     def test_spec_and_load(self, client):
@@ -359,7 +362,7 @@ class TestHttp:
         assert d["values"]["name"] == "Mara" and d["version"]
 
     def test_writes_need_the_custom_header(self, client):
-        del client.headers["X-Story-Architect"]
+        del client.headers["X-White-Words"]
         r = client.post("/api/projects/demo/entities/character", json={"values": {"name": "X"}})
         assert r.status_code == 403
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // The script editor, executed for real: the dashboard's own JS in jsdom, talking to a
-// running story-architect server (tests/script_editor_serve.py).
+// running white-words server (tests/script_editor_serve.py).
 //
 //   python tests/script_editor_serve.py 8741 &
-//   NODE_PATH=<dir containing jsdom> node tests/script_editor_harness.js src/story_architect/web http://127.0.0.1:8741
+//   NODE_PATH=<dir containing jsdom> node tests/script_editor_harness.js src/white_words/scriptwriting/web http://127.0.0.1:8741
 //
 // Not wired into pytest, like dashboard_tabs_harness.js: it needs node and jsdom.
 // The server is real on purpose — what a cue resolves to, what a warning says and
@@ -13,7 +13,7 @@ const fs = require('fs'), path = require('path'), assert = require('assert');
 const { JSDOM } = require('jsdom');
 
 const WEB = process.argv[2], BASE = process.argv[3];
-const H = { 'Content-Type': 'application/json', 'X-Story-Architect': '1' };
+const H = { 'Content-Type': 'application/json', 'X-White-Words': '1' };
 const get = (p) => fetch(BASE + p).then(r => r.json());
 const put = (p, b) => fetch(BASE + p, { method: 'PUT', headers: H, body: JSON.stringify(b) });
 const tick = (ms) => new Promise(r => setTimeout(r, ms || 30));

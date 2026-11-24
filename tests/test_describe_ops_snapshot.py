@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from story_architect.core import drafts
+from white_words.scriptwriting.core import drafts
 
 
 def test_describe_ops_create(fixture_path):

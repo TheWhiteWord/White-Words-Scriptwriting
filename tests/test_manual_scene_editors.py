@@ -9,9 +9,9 @@ import json
 
 import pytest
 
-from story_architect.core import manual_entities as me
-from story_architect.core.db import get_db
-from story_architect.core.writes import create_entity, edit_entity
+from white_words.scriptwriting.core import manual_entities as me
+from white_words.scriptwriting.core.db import get_db
+from white_words.scriptwriting.core.writes import create_entity, edit_entity
 
 TURN = {"plot": "main", "value": "trust", "from": "trust", "to": "betrayal",
         "effects": [{"character": "kael", "levels": [
@@ -21,7 +21,7 @@ TURN = {"plot": "main", "value": "trust", "from": "trust", "to": "betrayal",
 
 @pytest.fixture
 def project(tmp_path):
-    from story_architect.core.writes import create_project
+    from white_words.scriptwriting.core.writes import create_project
     (tmp_path / "projects").mkdir()
     create_project("demo", {"name": "Demo"}, tmp_path)
     p = tmp_path / "projects" / "demo"
@@ -133,7 +133,7 @@ class TestValueTurns:
         assert chk["ok"] and "ends where it started" in chk["warnings"]["value_turns.0.to"]
 
     def test_whatever_the_form_accepts_the_core_accepts(self, project):
-        from story_architect.core.entity import validate_scene_value_turns
+        from white_words.scriptwriting.core.entity import validate_scene_value_turns
         turns = me.load_entity(project, "scene", "sc1")["values"]["value_turns"] + [TURN]
         assert _errors(project, {"value_turns": turns})["ok"]
         validate_scene_value_turns(project, turns)                     # raises if the core disagrees
@@ -195,9 +195,9 @@ class TestBeatSheet:
     def test_second_save_edits_only_what_changed(self, project, monkeypatch):
         _save(project, beat_sheet=SHEET)
         sent = []
-        from story_architect.core import writes
+        from white_words.scriptwriting.core import writes
         real = writes.edit_entity
-        monkeypatch.setattr(writes, "edit_entity", lambda p, t, i, d, s: sent.append((t, i, d)) or real(p, t, i, d, s))
+        monkeypatch.setattr(writes, "edit_entity", lambda p, t, i, d, s, conn=None: sent.append((t, i, d)) or real(p, t, i, d, s, conn=conn))
         cur = me.load_entity(project, "scene", "sc1")["values"]["beat_sheet"]
         cur["turning_point"] = "The door swings wide."
         _save(project, beat_sheet=cur)
@@ -206,9 +206,9 @@ class TestBeatSheet:
     def test_a_scene_only_edit_leaves_the_record_alone(self, project, monkeypatch):
         _save(project, beat_sheet=SHEET)
         sent = []
-        from story_architect.core import writes
+        from white_words.scriptwriting.core import writes
         real = writes.edit_entity
-        monkeypatch.setattr(writes, "edit_entity", lambda p, t, i, d, s: sent.append(t) or real(p, t, i, d, s))
+        monkeypatch.setattr(writes, "edit_entity", lambda p, t, i, d, s, conn=None: sent.append(t) or real(p, t, i, d, s, conn=conn))
         _save(project, one_sentence="Only the scene.")
         assert sent == ["scene"]
 
@@ -245,7 +245,7 @@ class TestBeatSheet:
         assert _errors(project, {"beat_sheet": ok})["ok"]                # changes[].entity = a relationship: fine
 
     def test_whatever_the_form_accepts_the_core_accepts(self, project):
-        from story_architect.core.entity import validate_scene_beats
+        from white_words.scriptwriting.core.entity import validate_scene_beats
         assert _errors(project, {"beat_sheet": SHEET})["ok"]
         _save(project, beat_sheet=SHEET)                                # the write path ran its own validation
 
@@ -258,20 +258,28 @@ class TestBeatSheet:
                                                           "values": {**cur["values"], "one_sentence": "x"}})
         assert me.load_entity(project, "scene", "sc1")["values"]["beat_sheet"]["turning_point"] == "Agent rewrote this."
 
-    def test_scene_saved_but_beats_failed_says_which(self, project, monkeypatch):
-        from story_architect.core import writes
+    def test_beats_failure_saves_nothing(self, project, monkeypatch):
+        # T4 rewrote this: the save is one transaction now, so a beats failure
+        # rolls the scene edit back with it. The old test pinned the partial
+        # landing ("scene was saved, beats were not") that no longer exists.
+        from white_words.scriptwriting.core import writes
         real = writes.create_entity
-        def boom(p, t, i, fm, sec=None):
+        def boom(p, t, i, fm, sec=None, conn=None):
             if t == "scene_beats":
                 raise ValueError("beats exploded")
-            return real(p, t, i, fm, sec or {})
+            return real(p, t, i, fm, sec or {}, conn=conn)
         monkeypatch.setattr(writes, "create_entity", boom)
         cur = me.load_entity(project, "scene", "sc1")
         with pytest.raises(me.EntityInvalid) as e:
             me.edit_form_entity(project, "scene", "sc1", {"base_version": cur["version"], "values": {
                 **cur["values"], "one_sentence": "Saved.", "beat_sheet": SHEET}})
-        assert "The scene was saved, but the beats were not: beats exploded" in e.value.errors["_form"]
-        assert me.load_entity(project, "scene", "sc1")["values"]["one_sentence"] == "Saved."
+        assert "Nothing was saved" in e.value.errors["_form"]
+        assert "beats exploded" in e.value.errors["_form"]
+        after = me.load_entity(project, "scene", "sc1")
+        assert after["values"]["one_sentence"] == cur["values"]["one_sentence"]
+        assert after["values"]["beat_sheet"] == me.BLANK_SHEET
+        assert _extra(project, "sc1-beats") is None
+        assert after["version"] == cur["version"]
 
     def test_deleting_the_scene_takes_its_beats_and_says_so(self, project):
         _save(project, beat_sheet=SHEET)
@@ -287,11 +295,11 @@ class TestBeatSheet:
 class TestHttp:
     def test_turns_and_beats_round_trip(self, project, monkeypatch):
         from fastapi.testclient import TestClient
-        from story_architect.app.config import Config
-        from story_architect.app.server import create_app
-        monkeypatch.setattr("story_architect.app.token.load_api_key", lambda: "k")
+        from white_words.scriptwriting.app.config import Config
+        from white_words.scriptwriting.app.server import create_app
+        monkeypatch.setattr("white_words.scriptwriting.app.token.load_api_key", lambda: "k")
         c = TestClient(create_app(Config(root=project.parent.parent, port=8731)), base_url="http://127.0.0.1:8731")
-        c.headers.update({"X-Story-Architect": "1"})
+        c.headers.update({"X-White-Words": "1"})
         d = c.get("/api/projects/demo/entities/scene/sc1/form").json()
         r = c.put("/api/projects/demo/entities/scene/sc1", json={"base_version": d["version"], "values": {
             **d["values"], "value_turns": [TURN], "beat_sheet": SHEET}})

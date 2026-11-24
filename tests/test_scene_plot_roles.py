@@ -5,19 +5,17 @@ through where it is already writing the scene, so a plot is never reopened to
 add a scene to it. The plot's six role fields became `computed` — the same
 rows, seen from the other side.
 
-Two of these tests fail without the fix and are marked as such below: the
+One of these tests fails without the fix and is marked as such below: the
 export round-trip (silent loss — the markdown loses every role and re-import
-has nothing to complain about) and the delete sweep (a dead plot's rows
-outlive the plot they name).
+has nothing to complain about).
 
 One correction to the plan, measured while implementing: the sweep was
 specified to stop a deleted plot's rows *reattaching* when a plot is recreated
 with the same slug. That is not reachable — `delete_entity` soft-deletes, so
 the slug stays taken and `create_entity` refuses it ("Entity already exists").
-The rows are still unreachable while the plot is dead (every reader filters on
-`to_id`, and db.py filters `from_id` on `is_deleted`), so the sweep is right —
-but its real cost lands on `restore`, not on reattachment. That cost is pinned
-in `test_restore_brings_the_plot_back_without_its_roles`.
+The rows are hidden while the plot is dead, by the `live_relations` view that
+every reader uses, and they come back with it on `restore` (TestDelete). They
+used to be deleted by a sweep in `delete_entity`, which made restore lossy.
 """
 import json
 import shutil
@@ -29,8 +27,8 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 
 
-from story_architect.core.constants import PLOT_ROLES, UNIQUE_PLOT_ROLES
-from story_architect.core.writes import create_entity, create_project, delete_entity, edit_entity
+from white_words.scriptwriting.core.constants import PLOT_ROLES, UNIQUE_PLOT_ROLES
+from white_words.scriptwriting.core.writes import create_entity, create_project, delete_entity, edit_entity
 
 
 @pytest.fixture
@@ -139,7 +137,7 @@ class TestThePlotSideIsReadOnly:
         """Same rows, other direction — so nothing downstream had to change."""
         write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
                                    "description": "the door"}])
-        from story_architect.core.db import get_dashboard_data
+        from white_words.scriptwriting.core.db import get_dashboard_data
         plot = next(p for p in get_dashboard_data(vault)["story_data"]["plots"]
                     if p["id"] == "the-resistance")
         assert plot["setups"] == [{"scene_id": "s1", "description": "the door"}]
@@ -239,55 +237,54 @@ class TestValidation:
 
 
 class TestDelete:
-    def test_deleting_a_plot_removes_its_rows(self, vault):
-        """FAILS WITHOUT THE FIX. The plot owns the row (`from_id`), so the
-        `to_id` sweep in delete_entity never sees it: the row survives, every
-        reader filters on `to_id` so it is unreachable while dead, and it
-        reattaches silently if a plot takes the same slug again."""
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
-                                   "description": "d"}])
+    """Delete only flags. The role rows stay in the table and drop out of view."""
+
+    ROLE = {"plot": "the-resistance", "role": "setup", "description": "d"}
+
+    def _plot_rows(self, vault):
+        return [r for r in rows(vault) if r[2].startswith("plot_")]
+
+    def _visible_plot_rows(self, vault):
+        conn = sqlite3.connect(str(Path(vault) / ".story" / "story.db"))
+        try:
+            return conn.execute(
+                "SELECT from_id, to_id, kind FROM live_relations "
+                "WHERE kind LIKE 'plot\\_%' ESCAPE '\\'").fetchall()
+        finally:
+            conn.close()
+
+    def test_deleting_a_plot_keeps_its_rows_but_hides_them(self, vault):
+        write_roles(vault, "s1", [self.ROLE])
         delete_entity(vault, "plot", "the-resistance", "cut it", confirm=True)
-        assert [r for r in rows(vault) if r[2].startswith("plot_")] == []
+        assert len(self._plot_rows(vault)) == 1
+        assert self._visible_plot_rows(vault) == []
 
     def test_a_deleted_plot_role_is_unreachable_while_the_plot_is_dead(self, vault):
-        """The row is gone AND the plot is gone, so nothing dangles.
-
-        Checked on the delete side because that is the sweep's whole purpose.
-        See the module docstring for why a *recreated* plot was the original
-        worry and why it is not reachable.
-        """
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
-                                   "description": "d"}])
+        """Seen from the scene side, which is where the role is written."""
+        from white_words.scriptwriting.core.manual_entities import load_entity
+        write_roles(vault, "s1", [self.ROLE])
+        assert load_entity(vault, "scene", "s1")["values"]["plot_roles"]
         delete_entity(vault, "plot", "the-resistance", "cut it", confirm=True)
-        assert [r for r in rows(vault) if r[2].startswith("plot_")] == []
+        assert load_entity(vault, "scene", "s1")["values"]["plot_roles"] == []
 
-    def test_restore_brings_the_plot_back_without_its_roles(self, vault):
-        """The accepted cost, pinned so it cannot change unnoticed.
-
-        `restore` is documented as exact — prose and relations included. That
-        is now false for a plot's role rows: the delete sweep took them, and
-        putting them back would mean resurrecting rows nobody can vouch for.
-        A test is the only thing that makes a documented exception real.
-        """
-        from story_architect.tools.story_admin import _restore_entity
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
-                                   "description": "d"}])
+    def test_restore_brings_the_plot_back_with_its_roles(self, vault):
+        """Restore is exact for roles now: the rows were never removed."""
+        from white_words.scriptwriting.core.db import get_dashboard_data
+        from white_words.scriptwriting.tools.story_admin import _restore_entity
+        write_roles(vault, "s1", [self.ROLE])
         delete_entity(vault, "plot", "the-resistance", "cut it", confirm=True)
         _restore_entity({"target": {"entity_type": "plot", "id": "the-resistance"},
-                         "summary": "put it back"},
-                        vault)
-        from story_architect.core.db import get_dashboard_data
+                         "summary": "put it back"}, vault)
         plot = next(p for p in get_dashboard_data(vault)["story_data"]["plots"]
                     if p["id"] == "the-resistance")
-        assert plot["setups"] == [], \
-            "if this passes, restore is exact again — drop the exception note"
+        assert len(plot["setups"]) == 1
+        assert self._visible_plot_rows(vault) == [("the-resistance", "s1", "plot_setup")]
 
-    def test_deleting_a_scene_still_removes_its_rows(self, vault):
-        """The other direction, which already worked via the `to_id` sweep."""
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
-                                   "description": "d"}])
+    def test_deleting_a_scene_keeps_its_rows_but_hides_them(self, vault):
+        write_roles(vault, "s1", [self.ROLE])
         delete_entity(vault, "scene", "s1", "cut it", confirm=True)
-        assert [r for r in rows(vault) if r[2].startswith("plot_")] == []
+        assert len(self._plot_rows(vault)) == 1
+        assert self._visible_plot_rows(vault) == []
 
 
 class TestExportRoundTrip:
@@ -305,11 +302,11 @@ class TestExportRoundTrip:
         root = tmp_path / "root"
         project = root / "projects" / "stc"
         shutil.copytree(REPO / "tests" / "fixtures" / "save-the-children", project)
-        import story_architect.core.config
-        monkeypatch.setattr(story_architect.core.config, "load_plugin_config",
+        import white_words.scriptwriting.core.config
+        monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
                             lambda: {"root_path": str(root)})
-        from story_architect.tools.story_import import handler as import_handler
-        from story_architect.tools.story_export import handler as export_handler
+        from white_words.scriptwriting.tools.story_import import handler as import_handler
+        from white_words.scriptwriting.tools.story_export import handler as export_handler
         import_handler({"project": "stc", "confirm": True}, root_path=str(root))
         export_handler({"project": "stc", "root_path": str(root)})
         return project
@@ -341,13 +338,13 @@ class TestExportRoundTrip:
         before = self._plot_roles(round_tripped, "central-room-day")
         assert before, "the fixture's scene has no role to begin with"
 
-        import story_architect.core.config
+        import white_words.scriptwriting.core.config
         root2 = tmp_path / "root2"
         project2 = root2 / "projects" / "stc"
         shutil.copytree(round_tripped, project2)
-        monkeypatch.setattr(story_architect.core.config, "load_plugin_config",
+        monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
                             lambda: {"root_path": str(root2)})
-        from story_architect.tools.story_import import handler as import_handler
+        from white_words.scriptwriting.tools.story_import import handler as import_handler
         import_handler({"project": "stc", "confirm": True}, root_path=str(root2))
         assert self._plot_roles(project2, "central-room-day") == before
 
@@ -355,7 +352,7 @@ class TestExportRoundTrip:
                                                         tmp_path, monkeypatch):
         """The round trip has to be invisible from the plot's side as well —
         that is what makes it a round trip rather than a relocation."""
-        from story_architect.core.db import get_dashboard_data
+        from white_words.scriptwriting.core.db import get_dashboard_data
         plot = next(p for p in get_dashboard_data(round_tripped)["story_data"]["plots"]
                     if p["id"] == "the-resistance")
         assert plot["climax"], "the plot reads empty after export → import"
@@ -364,13 +361,13 @@ class TestExportRoundTrip:
 
 class TestSchema:
     def test_the_plot_role_fields_are_computed(self):
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
         for field in ("setups", "inciting_incident", "complications", "crisis", "climax", "resolutions"):
             assert ENTITY_SCHEMAS["plot"][field]["computed"] is True, \
                 f"plot.{field} is still writable"
 
     def test_plot_roles_is_a_scene_field_with_the_right_shape(self):
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
         field = ENTITY_SCHEMAS["scene"]["plot_roles"]
         assert field["type"] == "list"
         assert not field.get("computed"), "the write side cannot be computed"
@@ -379,7 +376,7 @@ class TestSchema:
     def test_a_malformed_plot_roles_shape_is_reported(self):
         """The read side shows the shape; this is the write side catching it
         when the display is not consulted. See test_write_shape.py."""
-        from story_architect.core.entity import validate_entity
+        from white_words.scriptwriting.core.entity import validate_entity
         warnings = validate_entity("scene", {"plot_roles": "the first scene"})
         assert any("plot_roles must be a list" in w for w in warnings), warnings
         assert any("plot, role, description" in w for w in warnings), warnings
@@ -390,7 +387,7 @@ class TestSchema:
         `validate_scene_plot_roles` still checks the same enum at write time —
         that is not duplication: it raises, and the shape validator warns.
         """
-        from story_architect.core.entity import validate_entity
+        from white_words.scriptwriting.core.entity import validate_entity
         warnings = validate_entity("scene", {
             "plot_roles": [{"plot": "p", "role": "transition", "description": "d"}]})
         assert any("role" in w and "one of" in w for w in warnings), warnings
@@ -414,9 +411,9 @@ class TestImport:
             (project / "scenes" / f"S{i}.md").write_text(
                 f"---\nid: s{i}\ntitle: S{i}\nplot_roles:\n"
                 "  - plot: the-resistance\n    role: climax\n    description: d\n---\n")
-        import story_architect.core.config
-        monkeypatch.setattr(story_architect.core.config, "load_plugin_config",
+        import white_words.scriptwriting.core.config
+        monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
                             lambda: {"root_path": str(root)})
-        from story_architect.tools.story_import import handler
+        from white_words.scriptwriting.tools.story_import import handler
         out = json.loads(handler({"project": "stc", "confirm": True}, root_path=str(root)))
         assert "already has its climax on scene 's1'" in out["error"], out

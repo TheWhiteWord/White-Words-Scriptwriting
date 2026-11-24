@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=White Words
+GenericName=Story writing
+Comment=Structure-first writing for novels and screenplays
+# TODO: replace with the command that starts the app (keep the quotes if the path has spaces)
+Exec=/PATH/TO/START-WHITE-WORDS
+Icon=white-words
+Terminal=false
+Categories=Office;TextEditor;
+Keywords=writing;screenplay;novel;story;
+StartupNotify=true

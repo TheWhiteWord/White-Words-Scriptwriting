@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from story_architect.core.writes import (create_entity, delete_entity, edit_entity,
+from white_words.scriptwriting.core.writes import (create_entity, delete_entity, edit_entity,
                           reorder)
-from story_architect.tools.story_import import handler as import_handler
-from story_architect.tools.story_load import handler as load_handler
-from story_architect.tools.story_retrieve import handler as retrieve_handler
+from white_words.scriptwriting.tools.story_import import handler as import_handler
+from white_words.scriptwriting.tools.story_load import handler as load_handler
+from white_words.scriptwriting.tools.story_retrieve import handler as retrieve_handler
 
 
 @pytest.fixture

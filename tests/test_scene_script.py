@@ -6,8 +6,8 @@ scene content, not only on hand-picked strings.
 """
 import pytest
 
-from story_architect.core import scene_script as ss
-from story_architect.core.fountain_lexer import parse as lex
+from white_words.scriptwriting.core import scene_script as ss
+from white_words.scriptwriting.core.fountain_lexer import parse as lex
 
 CHARS = [
     {"id": "mara-chen", "name": "Mara Chen", "story_role": "Protagonist"},
@@ -149,7 +149,7 @@ class TestHeading:
 
     def test_the_composer_and_the_validator_agree_on_the_enum(self):
         """Both read `INT_EXT_CHOICES`, so a value one accepts the other does."""
-        from story_architect.core.constants import INT_EXT_CHOICES
+        from white_words.scriptwriting.core.constants import INT_EXT_CHOICES
 
         for value in INT_EXT_CHOICES:
             assert ss.compose_heading(value, "Kitchen", "", "DAY") == \

@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 
-from story_architect.tools import story_admin
+from white_words.scriptwriting.tools import story_admin
 
 
 def _run(args, root):
@@ -104,64 +104,66 @@ class TestCreateProject:
         assert not (root.parent / "escape").exists()
 
 
+def _exists(project, entity_id):
+    from white_words.scriptwriting.core.db import get_db
+    conn = get_db(project)
+    try:
+        return bool(conn.execute("SELECT 1 FROM entities WHERE id=?", (entity_id,)).fetchone())
+    finally:
+        conn.close()
+
+
 # ─── delete_project ───
 
 class TestDeleteProject:
-    def test_refused_without_the_confirmation_string(self, root):
-        """A boolean would be guessable. A string the agent cannot invent is
-        the whole point — so a missing one must change nothing at all."""
+    def test_no_confirmation_is_asked_for(self, root):
+        """Nothing is lost by it: the folder goes to the trash whole. The old typed
+        string was printed in its own refusal, so it stopped nobody."""
         project = root / "projects" / "save-the-children"
-        result = _run({"action": "delete_project",
-                       "project": "save-the-children"}, root)
-        assert "error" in result
-        assert "DELETE save-the-children" in result["action_required"]
-        assert project.exists(), "the project must survive a refused delete"
-        assert (project / ".story" / "story.db").exists()
+        result = _run({"action": "delete_project", "project": "save-the-children"}, root)
+        assert result["success"] is True
+        assert "action_required" not in result and "error" not in result
+        assert not project.exists()
+        assert "restore_project" in result["note"]
 
-    def test_a_confirm_for_another_project_is_refused(self, root):
-        """The string names the project, so a right-shaped string for the
-        wrong project must not pass."""
-        project = root / "projects" / "save-the-children"
+    def test_a_stray_delete_confirm_changes_nothing(self, root):
+        """An old client may still send it. It is not a parameter any more."""
         result = _run({"action": "delete_project", "project": "save-the-children",
                        "delete_confirm": "DELETE some-other-film"}, root)
-        assert "error" in result
-        assert project.exists()
-
-    def test_with_the_confirmation_the_project_is_gone(self, root):
-        project = root / "projects" / "save-the-children"
-        result = _run({"action": "delete_project", "project": "save-the-children",
-                       "delete_confirm": "DELETE save-the-children"}, root)
         assert result["success"] is True
-        assert not project.exists()
 
-    def test_the_backup_survives_the_delete(self, root):
-        """A backup written inside the project folder would be destroyed by
-        the very delete it was taken for, so it has to land outside."""
-        result = _run({"action": "delete_project", "project": "save-the-children",
-                       "delete_confirm": "DELETE save-the-children"}, root)
-        backup = Path(result["backup"])
-        assert backup.exists(), f"backup missing: {backup}"
-        assert backup.parent == root / "backups", \
-            "the backup must be outside the deleted tree"
-        # And it must be a usable database, not an empty file.
-        conn = sqlite3.connect(str(backup))
+    def test_it_can_be_undone(self, root):
+        project = root / "projects" / "save-the-children"
+        trashed = _run({"action": "delete_project", "project": "save-the-children"}, root)
+        back = _run({"action": "restore_project", "trash_id": trashed["trash_id"]}, root)
+        assert back["success"] is True
+        assert (project / ".story" / "story.db").exists()
+
+    def test_the_project_survives_the_delete_outside_the_deleted_tree(self, root):
+        """Deleting moves the folder to the trash instead of removing it, so
+        everything in it — not only the database — is still there, in a usable
+        form, somewhere the delete did not touch."""
+        result = _run({"action": "delete_project", "project": "save-the-children"}, root)
+        trashed = Path(result["trashed_to"])
+        assert trashed.is_dir(), f"trashed project missing: {trashed}"
+        assert (root / "projects") not in trashed.parents, \
+            "the trashed copy must be outside projects/"
+        conn = sqlite3.connect(str(trashed / ".story" / "story.db"))
         try:
             n = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
         finally:
             conn.close()
-        assert n > 0, "the backup must contain the project's data"
+        assert n > 0, "the trashed project must contain its data"
 
     def test_a_folder_that_is_not_a_project_is_refused(self, root):
         (root / "projects" / "just-a-folder").mkdir()
-        result = _run({"action": "delete_project", "project": "just-a-folder",
-                       "delete_confirm": "DELETE just-a-folder"}, root)
+        result = _run({"action": "delete_project", "project": "just-a-folder"}, root)
         assert "error" in result
         assert (root / "projects" / "just-a-folder").exists(), \
             "rmtree must not run on something that is not a project"
 
     def test_unknown_project_reports_rather_than_deleting(self, root):
-        result = _run({"action": "delete_project", "project": "no-such-film",
-                       "delete_confirm": "DELETE no-such-film"}, root)
+        result = _run({"action": "delete_project", "project": "no-such-film"}, root)
         assert "error" in result
         assert (root / "projects" / "save-the-children").exists()
 
@@ -170,8 +172,8 @@ class TestDeleteProject:
 
 class TestRestore:
     def test_undoes_a_soft_delete_exactly(self, root):
-        from story_architect.core.db import get_db
-        from story_architect.core.writes import delete_entity
+        from white_words.scriptwriting.core.db import get_db
+        from white_words.scriptwriting.core.writes import delete_entity
 
         project = root / "projects" / "save-the-children"
         conn = get_db(project)
@@ -218,27 +220,31 @@ class TestRestore:
 # ─── purge ───
 
 class TestPurge:
-    def test_refused_without_the_confirmation_string(self, root):
+    def test_it_only_proposes(self, root):
+        """No string to type and nothing to echo back: the answer to a purge request
+        is a draft for the person, and it says so."""
         result = _run({"action": "purge", "project": "save-the-children"}, root)
-        assert "error" in result
-        assert "DELETE save-the-children" in result["action_required"]
+        assert result["success"] is True and result["purged"] is False
+        assert "draft_id" in result and "preview_md" in result
+        assert "action_required" not in result
+        assert "purge_confirm" not in json.dumps(result)
 
     def test_age_floor_keeps_recent_deletes_restorable(self, root):
-        """A delete from this session must never be purgeable, however the
-        caller words the confirmation."""
-        from story_architect.core.writes import delete_entity
-        delete_entity(root / "projects" / "save-the-children",
-                      "location", "the-garden", "s", confirm=True)
+        """A delete from this session must never be purgeable, even once the
+        person has approved a purge."""
+        from white_words.scriptwriting.core import drafts
+        from white_words.scriptwriting.core.writes import delete_entity
+        project = root / "projects" / "save-the-children"
+        delete_entity(project, "location", "the-garden", "s", confirm=True)
 
-        result = _run({"action": "purge", "project": "save-the-children",
-                       "purge_confirm": "DELETE save-the-children"}, root)
-        assert result["success"] is True
-        assert result["purged"] == [], "nothing is old enough yet"
-        assert "restorable" in result["message"]
+        staged = _run({"action": "purge", "project": "save-the-children"}, root)
+        assert staged["success"] is True and staged["purged"] is False
+        assert drafts.commit(project, staged["draft_id"])["committed"]
+        assert _exists(project, "the-garden"), "nothing is old enough yet"
 
     def test_purges_once_past_the_floor(self, root):
-        from story_architect.core.db import get_db
-        from story_architect.core.writes import delete_entity
+        from white_words.scriptwriting.core.db import get_db
+        from white_words.scriptwriting.core.writes import delete_entity
 
         project = root / "projects" / "save-the-children"
         delete_entity(project, "location", "the-garden", "s", confirm=True)
@@ -250,11 +256,15 @@ class TestPurge:
         finally:
             conn.close()
 
-        result = _run({"action": "purge", "project": "save-the-children",
-                       "purge_confirm": "DELETE save-the-children"}, root)
-        assert result["success"] is True
-        assert [p["id"] for p in result["purged"]] == ["the-garden"]
-        assert Path(result["backup"]).exists(), "purge takes a backup first"
+        from white_words.scriptwriting.core import drafts
+        from white_words.scriptwriting.core.backups import list_backups
+        staged = _run({"action": "purge", "project": "save-the-children"}, root)
+        assert staged["purged"] is False and _exists(project, "the-garden")
+        assert "the-garden" in staged["preview_md"], "the card names what will go"
+
+        before = len(list_backups(project))
+        assert drafts.commit(project, staged["draft_id"])["committed"]   # the person approves
+        assert len(list_backups(project)) == before + 1, "purge takes a backup first"
 
         conn = get_db(project)
         try:

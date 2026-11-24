@@ -2,16 +2,16 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from story_architect.app.config import Config
-from story_architect.app.server import create_app
-from story_architect.core.writes import create_entity, edit_entity
+from white_words.scriptwriting.app.config import Config
+from white_words.scriptwriting.app.server import create_app
+from white_words.scriptwriting.core.writes import create_entity, edit_entity
 
-H = {"X-Story-Architect": "1"}
+H = {"X-White-Words": "1"}
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setattr("story_architect.app.token.load_api_key", lambda: "k")
+    monkeypatch.setattr("white_words.scriptwriting.app.token.load_api_key", lambda: "k")
     root = tmp_path / "root"
     proj = root / "projects" / "demo"
     (proj / ".story").mkdir(parents=True)

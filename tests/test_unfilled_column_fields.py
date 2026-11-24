@@ -25,9 +25,9 @@ from pathlib import Path
 
 import pytest
 
-from story_architect.core.constants import ENTITY_SCHEMAS
-from story_architect.core.db import get_db, get_unfilled_map
-from story_architect.core.entity import ENTITY_COLUMN_MAP, unfilled_fields
+from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+from white_words.scriptwriting.core.db import get_db, get_unfilled_map
+from white_words.scriptwriting.core.entity import ENTITY_COLUMN_MAP, unfilled_fields
 
 
 @pytest.fixture
@@ -44,7 +44,7 @@ def project(tmp_path):
 
 def reported(project, entity_type, entity_id):
     """What story_retrieve reports as unfilled, through its own path."""
-    from story_architect.tools.story_retrieve import _resolve, _row_data, _unfilled
+    from white_words.scriptwriting.tools.story_retrieve import _resolve, _row_data, _unfilled
     conn = get_db(project)
     try:
         row, err = _resolve(conn, entity_type, entity_id)
@@ -55,7 +55,7 @@ def reported(project, entity_type, entity_id):
 
 
 def field_value(project, entity_type, entity_id, field):
-    from story_architect.tools.story_retrieve import _resolve, _row_data, _entity_fields
+    from white_words.scriptwriting.tools.story_retrieve import _resolve, _row_data, _entity_fields
     conn = get_db(project)
     try:
         row, err = _resolve(conn, entity_type, entity_id)

@@ -12,8 +12,8 @@ import shutil
 
 import pytest
 
-from story_architect.tools.story_import import handler as import_handler
-from story_architect.tools.story_retrieve import handler as retrieve_handler
+from white_words.scriptwriting.tools.story_import import handler as import_handler
+from white_words.scriptwriting.tools.story_retrieve import handler as retrieve_handler
 
 
 def _get(project, vault, **args):

@@ -10,8 +10,8 @@ import json
 import pytest
 
 
-from story_architect.core.constants import ENTITY_SCHEMAS
-from story_architect.core.drafts import commit, render_preview_md, stage, validate_shape
+from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+from white_words.scriptwriting.core.drafts import commit, render_preview_md, stage, validate_shape
 
 BATCH = [
     {"op": "create", "type": "scene", "id": "mira-tells-kael",
@@ -236,22 +236,27 @@ def test_a_commit_report_is_terse_and_names_what_landed(fixture_path):
     assert "| field | value |" not in md
 
 
-def test_a_partial_failure_report_warns_that_the_project_is_mixed(fixture_path):
-    """The user is now looking at a partly-saved project; this message is the
-    only thing that says so."""
+def test_a_failure_report_says_nothing_was_changed(fixture_path):
+    """T5 rewrote this (it was "...warns_that_the_project_is_mixed"). A failed
+    commit used to leave a partly-saved project and this report said so with
+    "Partly saved". Now the project is untouched, and this report is the thing
+    that tells the user it is safe."""
     ops = BATCH + [{"op": "reorder", "entity_type": "sequence",
                     "entity_id": "act-two", "ordered_ids": ["a", "b"],
                     "summary": "Resequence act two"}]
     staged = stage(fixture_path, ops, "five changes")
     md = commit(fixture_path, staged["draft_id"])["preview_md"]
-    assert "⚠️ Partly saved" in md
+    assert "Not saved" in md and "Partly" not in md
     assert "❌" in md
-    assert "still open, so nothing is lost" in md
+    assert "Nothing was changed" in md
+    assert "still open" in md
+    # Nothing landed, so nothing is shown as saved — not even the valid ops.
+    assert "✅" not in md
 
 
 def test_rendering_reads_but_never_writes(fixture_path):
     """A preview is presentation. Rendering it must not change the story."""
-    from story_architect.core.db import get_db
+    from white_words.scriptwriting.core.db import get_db
     conn = get_db(fixture_path)
     try:
         before = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
@@ -351,7 +356,7 @@ def test_a_dict_field_renders_one_line_per_entry():
     """`perspectives` is the field a writer most wants to *see* when approving a
     relationship: two characters, two readings, side by side. A dict repr
     hides exactly that — single quotes, no breaks, wrapping mid-sentence."""
-    from story_architect.core.drafts import _fmt
+    from white_words.scriptwriting.core.drafts import _fmt
 
     out = _fmt({"kael": {"label": "Kael", "feeling": "wary", "strength": 0.6,
                          "secret": False},
@@ -368,7 +373,7 @@ def test_a_dict_field_renders_one_line_per_entry():
 def test_a_list_of_objects_renders_one_line_per_item():
     """The same defect in the other shape, which the entry only suspected:
     `plot.setups` held a bare `{'scene_id': ...}` for the same reason."""
-    from story_architect.core.drafts import _fmt
+    from white_words.scriptwriting.core.drafts import _fmt
 
     out = _fmt([{"scene_id": "s1", "description": "The lie is told here."},
                 {"scene_id": "s2", "description": "And here it costs."}])
@@ -380,7 +385,7 @@ def test_a_list_of_objects_renders_one_line_per_item():
 def test_scalars_are_unchanged_by_the_structured_fix():
     """The one-line cases must not move: a fix that also reformats the common
     path is a fix nobody can review."""
-    from story_architect.core.drafts import _fmt
+    from white_words.scriptwriting.core.drafts import _fmt
 
     assert _fmt("prose") == "prose"
     assert _fmt(True) == "yes"

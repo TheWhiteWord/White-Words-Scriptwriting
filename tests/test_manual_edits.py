@@ -6,9 +6,9 @@ scene's fields must agree after every save.
 """
 import pytest
 
-from story_architect.core import manual_edits as me
-from story_architect.core.db import get_db
-from story_architect.core.writes import create_entity, edit_entity
+from white_words.scriptwriting.core import manual_edits as me
+from white_words.scriptwriting.core.db import get_db
+from white_words.scriptwriting.core.writes import create_entity, edit_entity
 
 
 @pytest.fixture
@@ -119,7 +119,7 @@ class TestSave:
                         "place": "pantry", "time_of_day": "NIGHT"}))
         assert out["scene"]["heading"] == "INT. KITCHEN - PANTRY - NIGHT"
         assert out["scene"]["place"] == "pantry"
-        from story_architect.core.db import get_screenplay_text
+        from white_words.scriptwriting.core.db import get_screenplay_text
         assert "INT. KITCHEN - PANTRY - NIGHT" in get_screenplay_text(project)
 
     def test_cast_is_script_speakers_plus_hand_added(self, project):
@@ -179,7 +179,7 @@ class TestSave:
         assert (out["scene"]["int_ext"], out["scene"]["place"],
                 out["scene"]["time_of_day"]) == ("INT./EXT.", "pantry", "DUSK")
         assert out["scene"]["heading"] == "INT./EXT. KITCHEN - PANTRY - DUSK"
-        from story_architect.core.db import get_screenplay_text
+        from white_words.scriptwriting.core.db import get_screenplay_text
         assert "INT./EXT. KITCHEN - PANTRY - DUSK" in get_screenplay_text(project)
 
     def test_stale_save_is_refused_and_nothing_is_written(self, project):
@@ -222,7 +222,7 @@ class TestSave:
         s = me.load_scene_script(project, "the-kitchen")
         me.save_scene_script(project, "the-kitchen", _payload(
             s, blocks=[{"type": "action", "text": "A new line."}]))
-        from story_architect.core.db import get_screenplay_text
+        from white_words.scriptwriting.core.db import get_screenplay_text
         assert "A new line." in get_screenplay_text(project)
 
 

@@ -10,8 +10,8 @@ location, world or relationship reduces to the scenes whose state changed.
 """
 import json
 
-from story_architect.core.writes import create_entity, create_project
-from story_architect.tools.story_load import handler as load_handler
+from white_words.scriptwriting.core.writes import create_entity, create_project
+from white_words.scriptwriting.tools.story_load import handler as load_handler
 
 WORDS = {"p": "p1", "c": "c1", "cd": "cd1", "nn": "nn1"}
 

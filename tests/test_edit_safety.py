@@ -16,9 +16,9 @@ import sqlite3
 
 import pytest
 
-from story_architect.core.writes import current_values, delete_entity, edit_entity
-from story_architect.tools.story_import import handler as import_handler
-from story_architect.tools.story_retrieve import handler as retrieve_handler
+from white_words.scriptwriting.core.writes import current_values, delete_entity, edit_entity
+from white_words.scriptwriting.tools.story_import import handler as import_handler
+from white_words.scriptwriting.tools.story_retrieve import handler as retrieve_handler
 
 
 @pytest.fixture
@@ -96,7 +96,7 @@ class TestColumnMap:
     def test_no_local_map_remains(self):
         """The duplication is the bug; a test that only checks behaviour can
         regress to a second copy without noticing."""
-        from story_architect.core import writes
+        from white_words.scriptwriting.core import writes
         assert not hasattr(writes, "ENTITY_COLUMN_MAP")
 
     def test_other_types_still_write_their_columns(self, proj):
@@ -182,13 +182,14 @@ class TestDeleteGuard:
         with pytest.raises(ValueError, match="not found"):
             _delete(p, "character", "ghost", confirm=True)
 
-    def test_deleting_a_scene_leaves_no_dangling_relations(self, proj):
+    def test_deleting_a_scene_leaves_no_visible_relations(self, proj):
+        """The rows stay (restore needs them); no reader can see one."""
         p, _ = proj
         _delete(p, "scene", "central-room-day", confirm=True)
         conn = sqlite3.connect(str(p / ".story" / "story.db"))
         try:
             dangling = conn.execute(
-                "SELECT COUNT(*) FROM relations WHERE from_id='central-room-day' "
+                "SELECT COUNT(*) FROM live_relations WHERE from_id='central-room-day' "
                 "OR to_id='central-room-day'").fetchone()[0]
         finally:
             conn.close()

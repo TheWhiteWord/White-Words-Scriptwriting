@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>White Words</title>
+<meta name="theme-color" content="#0E0E10">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="icons/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+
+<!-- vis-network from CDN (MIT/Apache 2.0) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/standalone/umd/vis-network.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+
+<!-- Better Fountain screenplay styling -->
+<link rel="stylesheet" href="screenplay.css">
+
+<!-- D3.js for statistics charts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<link rel="stylesheet" href="screenplay.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/views.css">
+<link rel="stylesheet" href="css/statistics.css">
+<link rel="stylesheet" href="css/graph.css">
+<link rel="stylesheet" href="css/value-graph.css">
+<link rel="stylesheet" href="css/panel-tabs.css">
+<link rel="stylesheet" href="css/scene-beats.css">
+<link rel="stylesheet" href="css/character-journey.css">
+<link rel="stylesheet" href="css/script-editor.css">
+<link rel="stylesheet" href="css/entity-form.css">
+<link rel="stylesheet" href="css/reorder.css">
+<link rel="stylesheet" href="css/trash.css">
+<link rel="stylesheet" href="css/chat.css">
+</head>
+
+<body>
+<div id="app">
+
+  <!-- Loading. Which mark shows, and whether the overlay is opaque or a scrim
+       over the visible app, comes from DASH.showLoading()'s kind: `initial` is
+       the typewriter on app open, `project` the bare W while a project loads,
+       `refresh` the same W over a scrim while data is re-read. -->
+  <div id="loading-screen" class="initial">
+    <img class="loading-mark loading-initial" src="loading/white-words-loading-splash-initial.svg" width="543" height="132" alt="">
+    <img class="loading-mark loading-w" src="loading/white-words-loading-splash-w.svg" width="784" height="726" alt="">
+    <div class="loading-text"></div>
+  </div>
+  <script>
+    window.__wwLoadingStart = Date.now();
+    // The mark is picked before first paint so the wrong one never flashes, and
+    // hideLoading() reads the floor off whichever class is set. A URL naming a
+    // project is loading that project. A URL with no project is either a cold
+    // open, which earns the typewriter, or a step back to the projects list,
+    // which must not wait for one.
+    var _ls = document.getElementById('loading-screen');
+    if (/^#\/p\//.test(location.hash)) {
+      _ls.className = 'project';
+    } else {
+      try {
+        if (sessionStorage.getItem('ww:picker')) {
+          sessionStorage.removeItem('ww:picker');
+          _ls.className = 'picker';
+        }
+      } catch (e) { /* storage unavailable: fall back to the cold open */ }
+    }
+  </script>
+
+  <!-- Error -->
+  <div id="error-screen">
+    <div class="error-title">No story index found</div>
+    <div class="error-body">
+      Place this file in your project root and make sure <code>.story/index.yaml</code> exists, or
+      use the button below to load a file manually.
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn btn-primary" onclick="DASH.loadFromFile()">Load index.yaml</button>
+      <button class="btn" onclick="DASH.loadSampleData()">Preview with sample data</button>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <nav id="sidebar">
+    <button class="rail-mark" onclick="DASH.openProjects()" title="All projects" aria-label="All projects">
+      <img src="icons/favicon.svg" width="24" height="24" alt="">
+    </button>
+
+    <button class="nav-btn active" data-view="story" onclick="DASH.switchView('story', this)">
+      <svg class="nav-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <use href="#ww-project"></use>
+      </svg>
+      <span class="nav-label">Story</span>
+    </button>
+
+    <button class="nav-btn" data-view="scenes" onclick="DASH.switchView('scenes', this)">
+      <svg class="nav-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <use href="#ww-scenes"></use>
+      </svg>
+      <span class="nav-label">Scenes</span>
+    </button>
+
+    <button class="nav-btn" data-view="graph" onclick="DASH.switchView('graph', this)">
+      <svg class="nav-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <use href="#ww-characters"></use>
+      </svg>
+      <span class="nav-label">Characters</span>
+    </button>
+
+    <button class="nav-btn" data-view="relationships" onclick="DASH.switchView('relationships', this)">
+      <svg class="nav-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <use href="#ww-sequences"></use>
+      </svg>
+      <span class="nav-label">Relationships</span>
+    </button>
+
+    <button class="nav-btn" data-view="locations" onclick="DASH.switchView('locations', this)">
+      <svg class="nav-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <use href="#ww-locations"></use>
+      </svg>
+      <span class="nav-label">Locations</span>
+    </button>
+
+    <button class="nav-btn" data-view="worlds" onclick="DASH.switchView('worlds', this)">
+      <svg class="nav-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <use href="#ww-worlds"></use>
+      </svg>
+      <span class="nav-label">Worlds</span>
+    </button>
+
+    <button class="nav-btn" data-view="plots" onclick="DASH.switchView('plots', this)">
+      <svg class="nav-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <use href="#ww-plots"></use>
+      </svg>
+      <span class="nav-label">Plots</span>
+    </button>
+
+    <button class="nav-btn" data-view="values" onclick="DASH.switchView('values', this)">
+      <svg class="nav-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <use href="#ww-value-arc"></use>
+      </svg>
+      <span class="nav-label">Values</span>
+    </button>
+
+    <button class="nav-btn" data-view="script" onclick="DASH.switchView('script', this)">
+      <svg class="nav-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <use href="#ww-script"></use>
+      </svg>
+      <span class="nav-label">Script</span>
+    </button>
+
+    <div class="nav-separator"></div>
+
+    <button class="nav-btn" onclick="DASH.openMemoryDialog()" title="Memory">
+      <svg class="nav-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <use href="#ww-notes"></use>
+      </svg>
+      <span class="nav-label">Memory</span>
+    </button>
+
+    <button class="nav-btn" data-view="trash" id="nav-trash"
+            onclick="DASH.switchView('trash', this)" title="Trash">
+      <svg class="nav-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <use href="#ww-trash"></use>
+      </svg>
+      <span class="nav-label">Trash</span>
+      <span class="nav-badge" id="nav-trash-count" aria-hidden="true" hidden>0</span>
+    </button>
+
+    <button class="nav-btn" onclick="DASH.refreshIndex()" title="Refresh index">
+      <svg class="nav-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <use href="#ww-sync"></use>
+      </svg>
+      <span class="nav-label">Refresh</span>
+    </button>
+
+    <button class="sidebar-toggle" onclick="DASH.toggleSidebar()" title="Toggle sidebar">
+      <svg class="sidebar-toggle-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <use href="#ww-expand"></use>
+      </svg>
+    </button>
+  </nav>
+
+  <div class="memory-dialog" id="memory-dialog" role="dialog" aria-modal="true" aria-label="Story Memory">
+    <div class="memory-dialog-card" id="memory-dialog-content"></div>
+  </div>
+
+  <!-- Main -->
+  <main id="main">
+
+    <!-- Story View -->
+    <div class="view active" id="story-view">
+      <div class="view-header">
+        <div class="view-title" id="story-project-name">Story</div>
+        <div class="view-subtitle" id="story-subtitle">—</div>
+        <div class="view-header-actions">
+          <button class="btn" onclick="DASH.openProjectForm()" title="Edit title, genre, structure and title page">Edit project</button>
+        </div>
+      </div>
+      <div class="view-body" id="story-body"></div>
+    </div>
+
+    <!-- Graph View -->
+    <div class="view" id="graph-view">
+      <div class="view-header">
+        <div class="view-title">Character web</div>
+        <div class="view-subtitle" id="graph-subtitle">—</div>
+        <div class="view-header-actions">
+          <button class="btn" onclick="DASH.openEntityForm({type:'character'})" title="Add a character">+ New</button>
+          <button class="btn" onclick="DASH.resetGraphLayout()" title="Reset layout">Reset</button>
+        </div>
+      </div>
+      <div class="graph-tabs">
+        <div class="graph-tab" id="tab-network" onclick="DASH.switchGraphTab('network')">Network</div>
+      </div>
+      <div class="view-body">
+        <div id="graph-tab-network" class="graph-tab-content active">
+          <div id="network-canvas"></div>
+          <div class="graph-legend" id="graph-legend"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scenes View -->
+    <div class="view" id="scenes-view">
+      <div class="view-header">
+        <div class="view-title">Scenes</div>
+        <div class="view-subtitle" id="scenes-subtitle">—</div>
+        <div class="view-header-actions">
+          <button class="btn" id="btn-new-struct" onclick="DASH.openStructureMenu(this)" title="Add a scene, sequence or act">+ New ▾</button>
+          <button class="btn" id="btn-reorder" onclick="DASH.toggleReorder()" title="Move scenes between sequences and sequences between acts">Reorder</button>
+          <div class="reorder-bar" id="reorder-bar">
+            <span class="reorder-hint">Drag to move, or use ↑ ↓ and “Move to…”.</span>
+            <button class="btn" onclick="DASH.reorderCancel()">Cancel</button>
+            <button class="btn btn-primary" id="reorder-review" onclick="DASH.reorderReview()" disabled>Review changes</button>
+          </div>
+          <div class="search-bar">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="4.5" cy="4.5" r="3" stroke="currentColor" stroke-width="1.2"/><line x1="7" y1="7" x2="9" y2="9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            <input type="text" placeholder="Filter scenes…" id="scene-search" oninput="DASH.filterScenes(this.value)">
+          </div>
+        </div>
+      </div>
+      <div class="view-body">
+        <div class="scene-list" id="scene-list"></div>
+      </div>
+    </div>
+
+    <!-- Locations View -->
+    <div class="view entity-list-view" id="locations-view">
+      <div class="view-header">
+        <div class="view-title">Locations</div>
+        <div class="view-subtitle" id="locations-subtitle">—</div>
+        <div class="view-header-actions">
+          <button class="btn" onclick="DASH.openEntityForm({type:'location'})" title="Add a location">+ New</button>
+        </div>
+      </div>
+      <div class="view-body">
+        <div class="entity-grid" id="location-list"></div>
+      </div>
+    </div>
+
+    <!-- Plots View -->
+    <div class="view entity-list-view" id="plots-view">
+      <div class="view-header">
+        <div class="view-title">Plots</div>
+        <div class="view-subtitle" id="plots-subtitle">—</div>
+        <div class="view-header-actions">
+          <button class="btn" onclick="DASH.openEntityForm({type:'plot'})" title="Add a plot">+ New</button>
+        </div>
+      </div>
+      <div class="view-body">
+        <div class="entity-grid" id="plot-list"></div>
+      </div>
+    </div>
+
+
+
+    <!-- Worlds View -->
+    <div class="view entity-list-view" id="relationships-view">
+      <div class="view-header">
+        <div class="view-title">Relationships</div>
+        <div class="view-subtitle" id="relationships-subtitle">—</div>
+        <div class="view-header-actions">
+          <button class="btn" onclick="DASH.openEntityForm({type:'relationship'})" title="Add a relationship">+ New</button>
+        </div>
+      </div>
+      <div class="view-body">
+        <div class="entity-grid" id="relationship-list"></div>
+      </div>
+    </div>
+
+    <!-- Worlds View -->
+    <div class="view entity-list-view" id="worlds-view">
+      <div class="view-header">
+        <div class="view-title">Worlds</div>
+        <div class="view-subtitle" id="worlds-subtitle">—</div>
+        <div class="view-header-actions">
+          <button class="btn" onclick="DASH.openEntityForm({type:'world'})" title="Add a world">+ New</button>
+        </div>
+      </div>
+      <div class="view-body">
+        <div class="entity-grid" id="world-list"></div>
+      </div>
+    </div>
+
+    <!-- Values View -->
+    <div class="view" id="values-view">
+      <div class="view-header">
+        <div class="view-title">Values</div>
+        <div class="view-subtitle" id="values-subtitle">—</div>
+        <div class="view-header-actions">
+          <button class="btn" onclick="DASH.openValuesMenu(this)" title="Add or edit a value">Edit values ▾</button>
+        </div>
+      </div>
+      <div class="view-body" id="values-body"></div>
+    </div>
+
+    <!-- Script View -->
+    <div class="view" id="script-view">
+      <div class="view-header">
+        <div class="view-title">Script</div>
+        <div class="view-subtitle" id="script-subtitle">—</div>
+        <div class="view-header-actions">
+          <button class="btn btn-hermes" onclick="DASH.openStatsPanel()">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <rect x="1" y="7" width="2" height="4" rx="0.5" fill="currentColor"/>
+              <rect x="5" y="4" width="2" height="7" rx="0.5" fill="currentColor"/>
+              <rect x="9" y="1" width="2" height="10" rx="0.5" fill="currentColor"/>
+            </svg>
+            Statistics
+          </button>
+        </div>
+      </div>
+      <div class="view-body">
+        <div id="screenplay-container">
+          <div class="script-empty">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+              <rect x="6" y="3" width="20" height="26" rx="2" stroke="currentColor" stroke-width="1.5"/>
+              <line x1="10" y1="10" x2="22" y2="10" stroke="currentColor" stroke-width="1.2"/>
+              <line x1="10" y1="14" x2="22" y2="14" stroke="currentColor" stroke-width="1.2"/>
+              <line x1="10" y1="18" x2="18" y2="18" stroke="currentColor" stroke-width="1.2"/>
+            </svg>
+            <div>No screenplay loaded</div>
+            <div style="font-size:var(--font-size-xs);opacity:0.6">Ensure <code>window.__SCREENPLAY_TEXT__</code> is injected by the backend</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trash View: what a delete only hid, and the way back -->
+    <div class="view" id="trash-view">
+      <div class="view-header">
+        <div class="view-title">Trash</div>
+        <div class="view-subtitle" id="trash-subtitle">—</div>
+        <div class="view-header-actions">
+          <div class="search-bar">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="4.5" cy="4.5" r="3" stroke="currentColor" stroke-width="1.2"/><line x1="7" y1="7" x2="9" y2="9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            <input type="text" placeholder="Filter deleted items…" id="trash-search">
+          </div>
+          <button class="btn" id="trash-select-all" disabled>Select all</button>
+          <button class="btn" id="trash-restore" disabled>Restore</button>
+          <button class="btn btn-danger" id="trash-purge" disabled>Delete permanently</button>
+        </div>
+      </div>
+      <div class="view-body">
+        <div class="trash-list" id="trash-list"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Statistics Panel (separate aside — entity panels remain independent) -->
+  <aside id="stats-panel">
+    <div class="stats-header">
+      <div class="stats-header-row">
+        <span class="stats-title">Statistics</span>
+        <button class="stats-close" onclick="DASH.closeStatsPanel()">✕</button>
+      </div>
+      <div class="stats-subnav">
+        <button class="stats-tab active" data-group="overview" onclick="DASH.switchStatsGroup('overview', this)">Overview</button>
+        <button class="stats-tab" data-group="characters" onclick="DASH.switchStatsGroup('characters', this)">Characters</button>
+        <button class="stats-tab" data-group="scenes" onclick="DASH.switchStatsGroup('scenes', this)">Scenes</button>
+        <button class="stats-tab" data-group="structure" onclick="DASH.switchStatsGroup('structure', this)">Structure</button>
+      </div>
+    </div>
+
+    <div class="stats-body">
+
+      <!-- ── Overview ── -->
+      <div class="stats-group active" id="stats-group-overview">
+
+        <div class="stats-section-label">Length</div>
+        <div class="stat-grid cols-3">
+          <div class="stat-block"><div class="stat-block-value" id="lengthStats-pagesWhole">—</div><div class="stat-block-label">Pages</div></div>
+          <div class="stat-block"><div class="stat-block-value" id="lengthStats-scenes">—</div><div class="stat-block-label">Scenes</div></div>
+          <div class="stat-block"><div class="stat-block-value" id="lengthStats-words">—</div><div class="stat-block-label">Words</div></div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-block"><div class="stat-block-value" id="lengthStats-lines">—</div><div class="stat-block-label">Lines</div></div>
+          <div class="stat-block"><div class="stat-block-value" id="lengthStats-characters">—</div><div class="stat-block-label">Characters</div></div>
+        </div>
+
+        <div class="stats-section-label">Duration</div>
+        <div class="stat-grid cols-3">
+          <div class="stat-block"><div class="stat-block-value" id="durationStats-total">—</div><div class="stat-block-label">Total</div></div>
+          <div class="stat-block"><div class="stat-block-value" id="durationStats-action">—</div><div class="stat-block-label">Action</div></div>
+          <div class="stat-block"><div class="stat-block-value" id="durationStats-dialogue">—</div><div class="stat-block-label">Dialogue</div></div>
+        </div>
+        <div class="stat-summary" id="durationStats-summary">—</div>
+
+        <div class="stats-section-label">Action vs. Dialogue</div>
+        <div class="chart-container" id="durationStats-lengthchart" style="height:80px;"></div>
+
+      </div>
+
+      <!-- ── Characters ── -->
+      <div class="stats-group" id="stats-group-characters">
+
+        <div class="stat-grid">
+          <div class="stat-block"><div class="stat-block-value" id="characterStats-count">—</div><div class="stat-block-label">Speaking characters</div></div>
+          <div class="stat-block"><div class="stat-block-value" id="characterStats-monologues">—</div><div class="stat-block-label">Monologues (&gt;30s)</div></div>
+        </div>
+
+        <div class="stats-section-label">Speaking time</div>
+        <div class="chart-container" id="characterStats-lengthchart" style="height:120px;"></div>
+
+        <div class="stats-section-label">Character detail</div>
+        <div style="overflow-x:auto;">
+          <table class="stats-table" id="characterStats-table">
+            <thead>
+              <tr>
+                <th onclick="DASH.sortTable('characterStats-table',0)">Name</th>
+                <th onclick="DASH.sortTable('characterStats-table',1)" data-type="num">Duration</th>
+                <th onclick="DASH.sortTable('characterStats-table',2)" data-type="num">Lines</th>
+                <th onclick="DASH.sortTable('characterStats-table',3)" data-type="num">Words</th>
+                <th onclick="DASH.sortTable('characterStats-table',4)" data-type="num">Mono</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <button class="btn btn-hermes" data-hermes-send="Analyze the dialogue balance between characters in this screenplay. Which characters dominate, and are there any speaking-time imbalances worth addressing?">Ask Hermes about dialogue balance</button>
+
+      </div>
+
+      <!-- ── Scenes ── -->
+      <div class="stats-group" id="stats-group-scenes">
+
+        <div class="stat-grid">
+          <div class="stat-block"><div class="stat-block-value" id="sceneStats-count">—</div><div class="stat-block-label">Scenes</div></div>
+          <div class="stat-block"><div class="stat-block-value" id="locationStats-count">—</div><div class="stat-block-label">Locations</div></div>
+        </div>
+
+        <div class="stats-section-label">INT / EXT / Mixed</div>
+        <div class="duration-bar-group">
+          <div class="duration-bar-row">
+            <span class="duration-bar-label">Interior</span>
+            <div class="duration-bar-track"><div class="duration-bar-fill" id="sceneprop-type_int_bar" style="background:#7b9cf0;width:0%"></div></div>
+            <span class="duration-bar-value" id="sceneprop-type_int">—</span>
+          </div>
+          <div class="duration-bar-row">
+            <span class="duration-bar-label">Exterior</span>
+            <div class="duration-bar-track"><div class="duration-bar-fill" id="sceneprop-type_ext_bar" style="background:#6bbfb0;width:0%"></div></div>
+            <span class="duration-bar-value" id="sceneprop-type_ext">—</span>
+          </div>
+          <div class="duration-bar-row">
+            <span class="duration-bar-label">Mixed</span>
+            <div class="duration-bar-track"><div class="duration-bar-fill" id="sceneprop-type_mixed_bar" style="background:#e0a86b;width:0%"></div></div>
+            <span class="duration-bar-value" id="sceneprop-type_mixed">—</span>
+          </div>
+        </div>
+
+        <div class="stats-section-label">Time of day</div>
+        <div class="duration-bar-group">
+          <div class="duration-bar-row">
+            <span class="duration-bar-label">Day</span>
+            <div class="duration-bar-track"><div class="duration-bar-fill" id="sceneprop-time_day_bar"     style="background:#e0c96b;width:0%"></div></div>
+            <span class="duration-bar-value" id="sceneprop-time_day">—</span>
+          </div>
+          <div class="duration-bar-row">
+            <span class="duration-bar-label">Night</span>
+            <div class="duration-bar-track"><div class="duration-bar-fill" id="sceneprop-time_night_bar"   style="background:#7b9cf0;width:0%"></div></div>
+            <span class="duration-bar-value" id="sceneprop-time_night">—</span>
+          </div>
+          <div class="duration-bar-row">
+            <span class="duration-bar-label">Morning</span>
+            <div class="duration-bar-track"><div class="duration-bar-fill" id="sceneprop-time_morning_bar" style="background:#e07070;width:0%"></div></div>
+            <span class="duration-bar-value" id="sceneprop-time_morning">—</span>
+          </div>
+          <div class="duration-bar-row">
+            <span class="duration-bar-label">Evening</span>
+            <div class="duration-bar-track"><div class="duration-bar-fill" id="sceneprop-time_evening_bar" style="background:#b07be0;width:0%"></div></div>
+            <span class="duration-bar-value" id="sceneprop-time_evening">—</span>
+          </div>
+          <div class="duration-bar-row">
+            <span class="duration-bar-label">Dawn</span>
+            <div class="duration-bar-track"><div class="duration-bar-fill" id="sceneprop-time_dawn_bar"    style="background:#e06b9b;width:0%"></div></div>
+            <span class="duration-bar-value" id="sceneprop-time_dawn">—</span>
+          </div>
+          <div class="duration-bar-row">
+            <span class="duration-bar-label">Dusk</span>
+            <div class="duration-bar-track"><div class="duration-bar-fill" id="sceneprop-time_dusk_bar"    style="background:#6bbfb0;width:0%"></div></div>
+            <span class="duration-bar-value" id="sceneprop-time_dusk">—</span>
+          </div>
+        </div>
+
+        <div class="stats-section-label">Scene barcode</div>
+        <div class="chart-container" id="sceneStats-timechart" style="height:52px;padding:4px;"></div>
+        <div class="barcode-controls">
+          <label><input type="radio" name="barcode-mode" value="type" checked onchange="DASH.renderBarcodeChart(this.value)"> INT/EXT</label>
+          <label><input type="radio" name="barcode-mode" value="time" onchange="DASH.renderBarcodeChart(this.value)"> Time of day</label>
+        </div>
+
+        <div class="stats-section-label">Locations</div>
+        <div style="overflow-x:auto;">
+          <table class="stats-table" id="locationStats-table">
+            <thead>
+              <tr>
+                <th onclick="DASH.sortTable('locationStats-table',0)">Location</th>
+                <th onclick="DASH.sortTable('locationStats-table',1)" data-type="num">Scenes</th>
+                <th onclick="DASH.sortTable('locationStats-table',2)">Type</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <button class="btn btn-hermes" data-hermes-send="Analyze the scene structure and pacing of this screenplay. Comment on the INT/EXT balance, time-of-day variety, and any pacing concerns.">Ask Hermes about pacing</button>
+
+      </div>
+
+      <!-- ── Structure ── -->
+      <div class="stats-group" id="stats-group-structure">
+
+        <div class="stat-grid cols-3">
+          <div class="stat-block"><div class="stat-block-value" id="structStats-scenes">—</div><div class="stat-block-label">Scenes</div></div>
+          <div class="stat-block"><div class="stat-block-value" id="structStats-sequences">—</div><div class="stat-block-label">Sequences</div></div>
+          <div class="stat-block"><div class="stat-block-value" id="structStats-acts">—</div><div class="stat-block-label">Acts</div></div>
+        </div>
+
+        <div class="stats-section-label">Scene status</div>
+        <div class="duration-bar-group" id="structStats-status-bars"></div>
+
+        <div class="stats-section-label">Dramatic role distribution</div>
+        <div class="duration-bar-group" id="structStats-role-bars"></div>
+
+        <div class="stats-section-label">Plot coverage</div>
+        <div class="duration-bar-group" id="structStats-plot-coverage"></div>
+
+        <div class="stats-section-label">Acts</div>
+        <div id="structStats-act-list"></div>
+
+        <button class="btn btn-hermes" data-hermes-send="Analyze the dramatic structure of this story. Comment on the distribution of scene roles, the balance of acts, and any structural patterns or gaps.">Ask Hermes about structure</button>
+
+      </div>
+
+    </div><!-- /.stats-body -->
+  </aside>
+
+  <!-- Detail Panel -->
+  <aside id="detail-panel">
+    <div class="panel-header">
+      <div class="panel-title-block">
+        <div class="panel-entity-type" id="panel-type">—</div>
+        <div class="panel-name" id="panel-name">—</div>
+      </div>
+      <button class="panel-edit" id="panel-edit" title="Edit by hand">Edit</button>
+      <button class="panel-close" onclick="DASH.closePanel()">✕</button>
+    </div>
+    <div class="panel-body" id="panel-body"></div>
+    <div class="panel-footer" id="panel-footer"></div>
+  </aside>
+
+</div>
+
+<!-- Hidden file input for manual load -->
+<input type="file" id="file-input" accept=".yaml,.yml" style="display:none" onchange="DASH.handleFileLoad(this)">
+
+<script src="js/core.js"></script>
+<script src="js/colors.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/navigation.js"></script>
+<script src="js/data-load.js"></script>
+<script src="js/views/scenes.js"></script>
+<script src="js/views/locations.js"></script>
+<script src="js/views/plots.js"></script>
+<script src="js/views/relationships.js"></script>
+<script src="js/views/worlds.js"></script>
+<script src="js/views/story.js"></script>
+<script src="js/panels/panel-manager.js"></script>
+<script src="js/panels/entity-panels.js"></script>
+<script src="js/panels/memory-dialog.js"></script>
+<script src="js/panels/panel-tabs.js"></script>
+<script src="js/graph/network.js"></script>
+<script src="js/graph/value-graph.js"></script>
+<script src="js/graph/track-data.js"></script>
+<script src="js/panels/scene-beats-tab.js"></script>
+<script src="js/panels/character-journey-tab.js"></script>
+<script src="js/statistics/statistics.js"></script>
+<script src="js/statistics/charts.js"></script>
+<script src="js/script-editor/model.js"></script>
+<script src="js/script-editor/editor.js"></script>
+<script src="js/script-view.js"></script>
+<script src="js/forms/entity-form.js"></script>
+<script src="js/forms/scene-editors.js"></script>
+<script src="js/views/reorder.js"></script>
+<script src="js/views/trash.js"></script>
+<script src="js/chat-api.js"></script><script src="js/chat-md.js"></script><script src="js/chat-render.js"></script><script src="js/chat-app.js"></script><script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
+<script>setInterval(() => fetch('/api/heartbeat').catch(() => {}), 10000);</script>
+<script>DASH.boot();</script>
+</body>
+</html>

@@ -21,16 +21,16 @@ from pathlib import Path
 
 import pytest
 
-from story_architect.core import budget
-from story_architect.core.db import get_project_summary
-from story_architect.tools.story_load import handler as load_handler
+from white_words.scriptwriting.core import budget
+from white_words.scriptwriting.core.db import get_project_summary
+from white_words.scriptwriting.tools.story_load import handler as load_handler
 
 @pytest.fixture(autouse=True)
 def _no_user_config(tmp_path, monkeypatch):
-    """A developer's own ~/.config/story-architect/config.toml must not change
+    """A developer's own ~/.config/white-words/config.toml must not change
     what these tests expect from the default budget."""
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-    monkeypatch.delenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", raising=False)
+    monkeypatch.delenv("WHITE_WORDS_MAX_RESPONSE_CHARS", raising=False)
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "save-the-children"
@@ -77,10 +77,10 @@ def _grow(project_dir: Path):
 
 
 def _import(vault: Path, monkeypatch):
-    import story_architect.core.config
-    monkeypatch.setattr(story_architect.core.config, "load_plugin_config",
+    import white_words.scriptwriting.core.config
+    monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
                         lambda: {"root_path": str(vault)})
-    from story_architect.tools.story_import import handler as import_handler
+    from white_words.scriptwriting.tools.story_import import handler as import_handler
     result = json.loads(import_handler(
         {"project": "save-the-children", "confirm": True}, root_path=str(vault)))
     assert "error" not in result, result
@@ -126,16 +126,16 @@ COMPACT_KEYS = {"id", "title", "status"}
 
 class TestBudgetHelper:
     def test_default_when_unset(self, monkeypatch):
-        monkeypatch.delenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", raising=False)
+        monkeypatch.delenv("WHITE_WORDS_MAX_RESPONSE_CHARS", raising=False)
         assert budget.max_response_chars() == budget.DEFAULT_MAX_RESPONSE_CHARS
 
     @pytest.mark.parametrize("bad", ["", "abc", "-5", "10", "1e5"])
     def test_bad_values_fall_back(self, monkeypatch, bad):
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", bad)
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", bad)
         assert budget.max_response_chars() == budget.DEFAULT_MAX_RESPONSE_CHARS
 
     def test_env_value_is_used(self, monkeypatch):
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", "12345")
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "12345")
         assert budget.max_response_chars() == 12345
 
     def test_largest_fitting_is_exact(self):
@@ -158,14 +158,14 @@ class TestBudgetHelper:
 class TestBaseMapBudget:
     def test_fitting_response_is_unchanged(self, small, monkeypatch):
         """A small project must not see the budget at all."""
-        monkeypatch.delenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", raising=False)
+        monkeypatch.delenv("WHITE_WORDS_MAX_RESPONSE_CHARS", raising=False)
         assert load(small) == get_project_summary(small)
         assert "detail" not in load(small) and "scope" not in load(small)
 
     def test_over_budget_compacts_from_the_end_and_removes_nothing(
             self, big, monkeypatch):
         full = get_project_summary(big)                       # unbudgeted truth
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", SMALL)
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", SMALL)
         result = load(big)
 
         assert scenes_of(result).keys() == scenes_of(full).keys()   # complete
@@ -182,7 +182,7 @@ class TestBaseMapBudget:
 
     def test_leading_sequences_keep_full_rows(self, big, monkeypatch):
         full = scenes_of(get_project_summary(big))
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", "20000")
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "20000")
         result = load(big)
         compacted = set(result.get("detail", {}).get("compacted", []))
         kept = [q for a in result["acts"] for q in a["sequences"]
@@ -194,7 +194,7 @@ class TestBaseMapBudget:
 
     def test_the_expand_hint_actually_expands(self, big, monkeypatch):
         full = scenes_of(get_project_summary(big))
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", SMALL)
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", SMALL)
         target = load(big)["detail"]["compacted"][-1]
         expanded = load(big, sequence=target)
         rows = [s for a in expanded["acts"] for q in a["sequences"]
@@ -202,7 +202,7 @@ class TestBaseMapBudget:
         assert rows and all(s == full[s["id"]] for s in rows)
 
     def test_sequence_scope_ignores_the_budget(self, big, monkeypatch):
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", "2000")
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "2000")
         result = load(big, sequence="gen-seq-2")
         assert "detail" not in result
         assert result["scope"]["sequence"] == "gen-seq-2"
@@ -239,7 +239,7 @@ class TestDramaticElementsScopeAndBudget:
         return [q for a in result["acts"] for q in a["sequences"]]
 
     def test_fitting_view_has_no_detail_and_keeps_scenes(self, small, monkeypatch):
-        monkeypatch.delenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", raising=False)
+        monkeypatch.delenv("WHITE_WORDS_MAX_RESPONSE_CHARS", raising=False)
         result = load(small, view="dramatic_elements")
         assert "detail" not in result
         assert all("scenes" in q for q in self._seqs(result))
@@ -252,7 +252,7 @@ class TestDramaticElementsScopeAndBudget:
         assert result["sequence"] == "gen-seq-3"
 
     def test_sequence_scope_ignores_the_budget(self, big, monkeypatch):
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", "2000")
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "2000")
         result = load(big, view="dramatic_elements", sequence="gen-seq-3")
         assert "detail" not in result
         assert len(self._seqs(result)[0]["scenes"]) == PER_SEQ
@@ -260,7 +260,7 @@ class TestDramaticElementsScopeAndBudget:
     def test_over_budget_collapses_to_counts_with_a_hint(self, big, monkeypatch):
         full = load(big, view="dramatic_elements")
         n_full = {q["id"]: len(q["scenes"]) for q in self._seqs(full)}
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", "9000")
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "9000")
         result = load(big, view="dramatic_elements")
         compacted = result["detail"]["compacted"]
         assert compacted
@@ -281,7 +281,7 @@ class TestDramaticElementsScopeAndBudget:
 # ── story_retrieve ──────────────────────────────────────────────────────────
 
 def retrieve(project, ids, entity_type="scene", **extra):
-    from story_architect.tools.story_retrieve import handler
+    from white_words.scriptwriting.tools.story_retrieve import handler
     args = {"project": "save-the-children", "entity_type": entity_type, "id": ids,
             "sections": ["all"], "fields": ["all"], **extra}
     return json.loads(handler(args, root_path=str(project.parent.parent)))
@@ -294,7 +294,7 @@ def gen_ids():
 def unbudgeted(project, monkeypatch, ids):
     """Ground truth: every entity, read with a budget too big to bite. The
     default budget would truncate the truth itself."""
-    monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", "100000000")
+    monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "100000000")
     r = retrieve(project, ids)
     assert "truncated" not in r
     return {e["id"]: e for e in r["entities"]}
@@ -302,7 +302,7 @@ def unbudgeted(project, monkeypatch, ids):
 
 class TestRetrieveBudget:
     def test_fitting_response_is_unchanged(self, small, monkeypatch):
-        monkeypatch.delenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", raising=False)
+        monkeypatch.delenv("WHITE_WORDS_MAX_RESPONSE_CHARS", raising=False)
         r = retrieve(small, ["central-room-day", "central-room-night"])
         assert len(r["entities"]) == 2
         assert not {"truncated", "deferred_ids", "hint", "over_budget"} & r.keys()
@@ -311,7 +311,7 @@ class TestRetrieveBudget:
             self, big, monkeypatch):
         ids = gen_ids()
         truth = unbudgeted(big, monkeypatch, ids)
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", SMALL)
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", SMALL)
         r = retrieve(big, ids)
 
         assert r["truncated"] is True
@@ -327,7 +327,7 @@ class TestRetrieveBudget:
             self, big, monkeypatch):
         ids = gen_ids()
         truth = unbudgeted(big, monkeypatch, ids)
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", SMALL)
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", SMALL)
         pending, seen, calls = ids, [], 0
         while pending:
             r = retrieve(big, pending)
@@ -347,7 +347,7 @@ class TestRetrieveBudget:
                      "AND rowid=(SELECT min(rowid) FROM sections "
                      "WHERE entity_id='gen-scene-0')", ("x" * 20000,))
         conn.commit(); conn.close()
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", "8000")
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "8000")
 
         r = retrieve(big, ["gen-scene-0", "gen-scene-1"])
         assert [e["id"] for e in r["entities"]] == ["gen-scene-0"]
@@ -361,7 +361,7 @@ class TestRetrieveBudget:
         assert "deferred_ids" not in alone and "over_budget" in alone
 
     def test_not_found_and_deferral_both_reported(self, big, monkeypatch):
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", SMALL)
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", SMALL)
         r = retrieve(big, ["no-such-scene"] + gen_ids())
         assert [n["id"] for n in r["not_found"]] == ["no-such-scene"]
         assert r["truncated"] is True
@@ -369,7 +369,7 @@ class TestRetrieveBudget:
 
     def test_a_scoped_request_is_never_truncated(self, big, monkeypatch):
         """Asking for one section is the way to stay under budget."""
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", SMALL)
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", SMALL)
         r = retrieve(big, gen_ids()[:3], sections=["Content"], fields=None)
         assert len(r["entities"]) == 3 and "truncated" not in r
 
@@ -382,16 +382,16 @@ class TestRelationshipViewBudget:
         return load(project, view="relationship", **args)
 
     def test_fitting_view_is_unchanged(self, small, monkeypatch):
-        monkeypatch.delenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", raising=False)
+        monkeypatch.delenv("WHITE_WORDS_MAX_RESPONSE_CHARS", raising=False)
         r = self.rels(small)
         assert "detail" not in r and r["relationships"]
         assert all("perspectives" in x for x in r["relationships"])
 
     def test_over_budget_compacts_but_lists_every_relationship(
             self, big, monkeypatch):
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", "100000000")
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "100000000")
         full = self.rels(big)["relationships"]
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", "6000")
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "6000")
         r = self.rels(big)
 
         assert [x["id"] for x in r["relationships"]] == [x["id"] for x in full]
@@ -408,9 +408,9 @@ class TestRelationshipViewBudget:
 
     def test_character_filter_returns_that_characters_relationships_in_full(
             self, big, monkeypatch):
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", "100000000")
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "100000000")
         full = self.rels(big)["relationships"]
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", "2000")  # ignored
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "2000")  # ignored
         r = self.rels(big, character="kael")
         expected = [x for x in full if "kael" in x["characters"]]
         assert expected and r["relationships"] == expected
@@ -418,7 +418,7 @@ class TestRelationshipViewBudget:
         assert len(expected) < len(full), "the filter must actually narrow"
 
     def test_the_expand_hint_actually_expands(self, big, monkeypatch):
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", "6000")
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "6000")
         r = self.rels(big)
         left_out = [x for x in r["relationships"] if x["id"] in r["detail"]["compacted"]]
         char = left_out[0]["characters"][0]
@@ -440,7 +440,7 @@ class TestSearchLimit:
 
     @staticmethod
     def search(project, **args):
-        from story_architect.tools.story_search import handler
+        from white_words.scriptwriting.tools.story_search import handler
         return json.loads(handler({"project": "save-the-children", "query": "scene",
                                    **args}, root_path=str(project.parent.parent)))
 
@@ -466,7 +466,7 @@ class TestSearchLimit:
         assert r["total"] == 7 and "brought into range" not in r.get("note", "")
 
     def test_worst_case_stays_small(self, big):
-        from story_architect.tools.story_search import handler
+        from white_words.scriptwriting.tools.story_search import handler
         raw = handler({"project": "save-the-children", "query": "scene", "limit": 9999},
                       root_path=str(big.parent.parent))
         assert len(raw) < 20_000
@@ -481,15 +481,15 @@ class TestDescribeBudget:
 
     @staticmethod
     def describe(monkeypatch, budget=None, **args):
-        from story_architect.tools.story_describe import handler
+        from white_words.scriptwriting.tools.story_describe import handler
         if budget:
-            monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", str(budget))
+            monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", str(budget))
         return json.loads(handler(args))
 
     @staticmethod
     def truth():
-        from story_architect.tools.story_describe import _entity_schemas
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.tools.story_describe import _entity_schemas
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
         return _entity_schemas(list(ENTITY_SCHEMAS))
 
     def test_fitting_response_is_unchanged(self, monkeypatch):
@@ -499,7 +499,7 @@ class TestDescribeBudget:
         assert not {"truncated", "deferred_types", "hint"} & r.keys()
 
     def test_over_budget_returns_complete_types_and_names_the_rest(self, monkeypatch):
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
         truth = self.truth()
         r = self.describe(monkeypatch, budget=9000)
         assert r["truncated"] is True and r["deferred_types"]
@@ -514,8 +514,8 @@ class TestDescribeBudget:
     @pytest.mark.parametrize("budget", [2000, 6000, 9000, 17000, 25000])
     def test_paging_reads_every_type_once_and_whole(self, monkeypatch, budget):
         truth = self.truth()
-        monkeypatch.setenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", str(budget))
-        from story_architect.tools.story_describe import handler
+        monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", str(budget))
+        from white_words.scriptwriting.tools.story_describe import handler
         pending, seen, calls = None, [], 0
         while True:
             r = json.loads(handler({"entity_types": pending} if pending else {}))
@@ -577,8 +577,8 @@ class TestDescribeBudget:
         assert "scene" in r["error"] and "Available" in r["error"]
 
     def test_the_schema_offers_entity_types_and_cannot_drift_from_the_data(self):
-        from story_architect.tools.story_describe import SCHEMA
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.tools.story_describe import SCHEMA
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
         prop = SCHEMA["properties"]["entity_types"]
         assert prop["type"] == "array"
         assert prop["items"]["enum"] == list(ENTITY_SCHEMAS)
@@ -587,7 +587,7 @@ class TestDescribeBudget:
         """A single type has to fit the smallest budget anyone should set,
         because a type is the unit that is never split. If a schema grows past
         this, the floor (or the schema) needs a decision — not a silent cut."""
-        from story_architect.tools.story_describe import _entity_schemas
-        from story_architect.core.constants import ENTITY_SCHEMAS
+        from white_words.scriptwriting.tools.story_describe import _entity_schemas
+        from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
         biggest = max(len(json.dumps(_entity_schemas([t]))) for t in ENTITY_SCHEMAS)
         assert biggest < 8_000, f"largest single type is {biggest} chars"

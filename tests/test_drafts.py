@@ -13,9 +13,9 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 
 
-from story_architect.core import drafts
-from story_architect.core.constants import ENTITY_SCHEMAS
-from story_architect.core.db import get_db
+from white_words.scriptwriting.core import drafts
+from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+from white_words.scriptwriting.core.db import get_db
 
 
 def _counts(project_path):
@@ -157,7 +157,7 @@ def test_drafts_table_exists_on_a_fresh_project(tmp_path):
     actually happen: a project created now has the table, without get_db
     creating anything.
     """
-    from story_architect.core.writes import create_project
+    from white_words.scriptwriting.core.writes import create_project
 
     create_project("fresh", {"name": "Fresh", "logline": "x"}, tmp_path)
     proj = tmp_path / "projects" / "fresh"
@@ -227,7 +227,7 @@ def test_every_reorderable_type_stages_and_commits(fixture_path):
     disagreement is what made `reorder act` render a full preview and then
     fail on commit with a raw ValueError.
     """
-    from story_architect.core.writes import REORDERABLE_TYPES
+    from white_words.scriptwriting.core.writes import REORDERABLE_TYPES
     for entity_type in REORDERABLE_TYPES:
         op = {"op": "reorder", "entity_type": entity_type,
               "ordered_ids": ["a", "b"], "summary": "x"}
@@ -251,9 +251,10 @@ def test_a_malformed_op_never_reaches_the_drafts_table(fixture_path):
 
 # ─── op vocabulary ───
 
-def test_op_order_is_create_edit_delete_reorder():
+def test_op_order_is_create_edit_delete_reorder_purge():
+    """Purge is last, and (validate_ops) alone in its draft."""
     assert [k for k, _ in sorted(drafts.OP_ORDER.items(), key=lambda kv: kv[1])] == \
-        ["create", "edit", "delete", "reorder"]
+        ["create", "edit", "delete", "reorder", "purge"]
 
 
 def test_a_batch_may_hold_two_ops_on_the_same_entity():
@@ -360,37 +361,12 @@ def test_restaging_a_committed_draft_id_reopens_it(fixture_path):
     assert "already_committed" not in result
 
 
-def test_a_database_with_the_old_drafts_table_still_works(fixture_path):
-    """The live plugin's database predates `status`. Prove the upgrade, do not assume it.
+# ─── Guard 2: a failing batch keeps the draft and lands nothing ───
 
-    Every other test in this file runs against a fixture whose drafts table is
-    copied from disk, so whether the migration path works or is silently unused
-    is not obvious from a green run. This builds the pre-change table by hand and
-    runs the whole cycle over it.
-    """
-    old = "CREATE TABLE drafts (id TEXT PRIMARY KEY, ops JSON NOT NULL, " \
-          "prev_ops JSON, summary TEXT NOT NULL DEFAULT '', " \
-          "created_at TEXT NOT NULL)"
-    conn = sqlite3.connect(str(Path(fixture_path) / ".story" / "story.db"))
-    conn.execute("DROP TABLE IF EXISTS drafts")
-    conn.execute(old)
-    conn.commit()
-    conn.close()
-
-    staged = drafts.stage(fixture_path, _batch(), "Mira tells Kael")
-    first = drafts.commit(fixture_path, staged["draft_id"])
-    second = drafts.commit(fixture_path, staged["draft_id"])
-
-    assert first["success"] is True
-    assert second["success"] is True and second["already_committed"] is True
-    cols = {r[1] for r in get_db(fixture_path).execute("PRAGMA table_info(drafts)")}
-    assert "status" in cols
-
-
-# ─── Guard 2: partial failure keeps the draft and names what landed ───
-
-def test_a_failing_batch_keeps_the_draft_and_names_what_landed(fixture_path):
-    """Guard 2: atomic per op, resumable per batch — not all-or-nothing."""
+def test_a_failing_batch_keeps_the_draft_and_lands_nothing(fixture_path):
+    """Guard 2. T5 rewrote this: it used to pin "atomic per op, resumable per
+    batch" (the create landed, `committed` named it). A draft now lands all its
+    ops or none, so the create is rolled back with the failed reorder."""
     ops = [
         _create_scene("mira-tells-kael"),
         # Fails: no such sequence.
@@ -402,17 +378,20 @@ def test_a_failing_batch_keeps_the_draft_and_names_what_landed(fixture_path):
 
     assert result["success"] is False
     assert result["draft_kept"] is True
-    assert result["committed"] == ["create scene/mira-tells-kael"]
+    assert result["committed"] == []
     assert "act-two" in result["failed"]["error"] or \
         "not found" in result["failed"]["error"]
-    # The resume token survives, and the create that landed is not repeated.
+    # The draft survives, and the create that came first did NOT land.
     assert drafts.list_drafts(fixture_path)["count"] == 1
     assert _rows(fixture_path, "SELECT COUNT(*) FROM entities WHERE id=?",
-                 "mira-tells-kael")[0][0] == 1
+                 "mira-tells-kael")[0][0] == 0
 
 
-def test_a_recommitted_draft_refuses_the_op_that_already_landed(fixture_path):
-    """The re-stage path the partial-failure message tells the agent to take."""
+def test_a_recommitted_failing_draft_fails_the_same_way_again(fixture_path):
+    """T5 rewrote this: it used to pin the old re-stage path, where recommitting
+    refused the create that had already landed ("already exists"). Nothing lands
+    now, so a second commit of an unfixed draft hits the SAME refusal — the
+    failing op, not a create that was never written — and still lands nothing."""
     ops = [
         _create_scene("mira-tells-kael"),
         {"op": "reorder", "entity_type": "sequence", "entity_id": "act-two",
@@ -421,10 +400,14 @@ def test_a_recommitted_draft_refuses_the_op_that_already_landed(fixture_path):
     staged = drafts.stage(fixture_path, ops, "two changes")
     drafts.commit(fixture_path, staged["draft_id"])
 
+    first = drafts.commit(fixture_path, staged["draft_id"])
     again = drafts.commit(fixture_path, staged["draft_id"])
     assert again["success"] is False
     assert again["committed"] == []
-    assert "already exists" in again["failed"]["error"]
+    assert again["failed"] == first["failed"]
+    assert "already exists" not in again["failed"]["error"]
+    assert _rows(fixture_path, "SELECT COUNT(*) FROM entities WHERE id=?",
+                 "mira-tells-kael")[0][0] == 0
 
 
 # ─── Guard 5: ordering ───
@@ -479,7 +462,7 @@ def test_a_committed_create_carrying_cast_produces_relation_rows(fixture_path):
 
     # And the rows are readable by the tool that consumes them — the existence
     # assertion above passed even while every reader saw an empty cast.
-    from story_architect.tools.story_retrieve import handler as retrieve_handler
+    from white_words.scriptwriting.tools.story_retrieve import handler as retrieve_handler
     out = json.loads(retrieve_handler({
         "project": str(fixture_path), "entity_type": "scene",
         "id": ["mira-tells-kael"], "fields": ["characters"],

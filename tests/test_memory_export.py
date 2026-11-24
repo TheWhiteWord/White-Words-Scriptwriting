@@ -3,10 +3,10 @@ import json
 
 import pytest
 
-from story_architect.core.writes import create_project
-from story_architect.tools.story_export import handler as export_handler
-from story_architect.tools.story_import import handler as import_handler
-from story_architect.tools.story_memory import handler as memory_handler
+from white_words.scriptwriting.core.writes import create_project
+from white_words.scriptwriting.tools.story_export import handler as export_handler
+from white_words.scriptwriting.tools.story_import import handler as import_handler
+from white_words.scriptwriting.tools.story_memory import handler as memory_handler
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ def test_memory_file_is_projection_not_source(project):
 
 
 def test_import_uses_valid_memory_file(project):
-    from story_architect.core.db import get_project_memory
+    from white_words.scriptwriting.core.db import get_project_memory
 
     path, vault = project
     (path / ".story" / "memory.md").write_text(
@@ -67,7 +67,7 @@ def test_import_uses_valid_memory_file(project):
 
 
 def test_import_rejects_invalid_memory_file_without_mutating_db(project):
-    from story_architect.core.db import get_project_memory
+    from white_words.scriptwriting.core.db import get_project_memory
 
     path, vault = project
     memory_handler({

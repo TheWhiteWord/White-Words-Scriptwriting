@@ -2,7 +2,7 @@ import asyncio
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from story_architect.adapters.hermes.chat_backend import HermesChatBackend
+from white_words.scriptwriting.adapters.hermes.chat_backend import HermesChatBackend
 
 
 def make_server(handler_cls):

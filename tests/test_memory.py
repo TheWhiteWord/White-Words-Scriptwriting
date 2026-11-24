@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from story_architect.core.db import (
+from white_words.scriptwriting.core.db import (
     MEMORY_CATEGORIES,
     MEMORY_CHAR_LIMIT,
     MEMORY_ENTRY_LIMIT,
