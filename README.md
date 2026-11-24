@@ -7,7 +7,7 @@ Standalone local app for story/screenplay development.
 Python 3.11+ and pipx (`sudo apt install pipx`, or `brew install pipx`).
 
 ```
-pipx install git+https://github.com/TheWhiteWord/hermes-story-architect
+pipx install git+https://github.com/TheWhiteWord/White-Words-Scriptwriting
 white-words --install-desktop     # icon in the desktop app grid
 white-words --uninstall-desktop   # remove it again
 ```
