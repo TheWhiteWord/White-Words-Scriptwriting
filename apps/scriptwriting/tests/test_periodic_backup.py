@@ -148,7 +148,7 @@ def web(tmp_path, fixture_path, monkeypatch):
     root = tmp_path / "vault"
     shutil.copytree(str(fixture_path), str(root / "projects" / "stc"))
     c = TestClient(create_app(Config(root=root)), base_url="http://127.0.0.1:8731")
-    c.headers.update({"X-Story-Architect": "1"})
+    c.headers.update({"X-White-Words": "1"})
     c.root = root
     return c
 

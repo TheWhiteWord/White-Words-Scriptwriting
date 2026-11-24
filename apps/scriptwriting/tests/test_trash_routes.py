@@ -19,7 +19,7 @@ from white_words.scriptwriting.core.backups import list_backups
 from white_words.scriptwriting.core.writes import delete_entity
 
 SLUG = "save-the-children"
-HDR = {"X-Story-Architect": "1", "Origin": "http://127.0.0.1:8731"}
+HDR = {"X-White-Words": "1", "Origin": "http://127.0.0.1:8731"}
 
 
 def _sql(p, sql, *args):

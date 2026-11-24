@@ -74,7 +74,7 @@ def _isolate_budget(monkeypatch, tmp_path):
     config.toml sized for a small model would make every completeness test that
     asks for all entity types start failing on that one machine."""
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-    monkeypatch.delenv("STORY_ARCHITECT_MAX_RESPONSE_CHARS", raising=False)
+    monkeypatch.delenv("WHITE_WORDS_MAX_RESPONSE_CHARS", raising=False)
 
 
 def build_fixture_db(dest: Path, root: str) -> None:

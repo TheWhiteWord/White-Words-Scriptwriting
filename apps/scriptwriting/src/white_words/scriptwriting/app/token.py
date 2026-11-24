@@ -1,14 +1,14 @@
 """Bearer token management for the MCP endpoint."""
 from __future__ import annotations
 
-import os
 import secrets
 from pathlib import Path
 
+from white_words.scriptwriting.core import paths
+
 
 def config_dir() -> Path:
-    base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    d = base / "story-architect"
+    d = paths.config_dir()
     d.mkdir(parents=True, exist_ok=True)
     return d
 

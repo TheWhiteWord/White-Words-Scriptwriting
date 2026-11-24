@@ -23,7 +23,7 @@ from white_words.scriptwriting.chat import store as chat_store
 from white_words.scriptwriting.core import db, drafts
 from white_words.scriptwriting.core.writes import create_entity
 
-H = {"X-Story-Architect": "1"}
+H = {"X-White-Words": "1"}
 
 
 # ─── the rule: one case per row of the table ───

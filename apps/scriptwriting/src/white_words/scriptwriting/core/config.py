@@ -7,8 +7,10 @@ plain root, not a markdown vault.
 """
 from pathlib import Path
 
+from white_words.scriptwriting.core import paths
+
 # Used when the user has not set white_words.root_path.
-DEFAULT_ROOT_PATH = "~/story-architect"
+DEFAULT_ROOT_PATH = str(paths.data_root())
 
 
 def load_plugin_config() -> dict:

@@ -295,7 +295,7 @@ class TestHttp:
         for s, n in (("kael", "Kael"), ("mira", "Mira")):
             create_entity(proj, "character", s, {"name": n, "one_sentence": "x"})
         c = TestClient(create_app(Config(root=root, port=8731)), base_url="http://127.0.0.1:8731")
-        c.headers.update({"X-Story-Architect": "1"})
+        c.headers.update({"X-White-Words": "1"})
         return c
 
     def test_spec_exposes_the_new_types(self, client):

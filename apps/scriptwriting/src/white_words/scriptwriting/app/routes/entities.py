@@ -2,7 +2,7 @@
 
 Thin, like `scripts.py`: parse the request, call `core.manual_entities`, map its
 errors to HTTP. Non-GET requests already pass through the Host / Origin /
-`X-Story-Architect` checks in `server.py`; this adds no second auth model.
+`X-White-Words` checks in `server.py`; this adds no second auth model.
 
 Error bodies are `{"error": {"code", "message", ...}}`. A field-level problem
 (422) carries `errors` — `{field: message}` — so the form can put each message

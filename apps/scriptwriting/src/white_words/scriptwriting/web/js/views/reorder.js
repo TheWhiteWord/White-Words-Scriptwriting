@@ -20,7 +20,7 @@ window.DASH = window.DASH || {};
   const view = () => document.getElementById('scenes-view');
 
   async function api(path, opts) {
-    const o = Object.assign({ headers: { 'Content-Type': 'application/json', 'X-Story-Architect': '1' } }, opts || {});
+    const o = Object.assign({ headers: { 'Content-Type': 'application/json', 'X-White-Words': '1' } }, opts || {});
     const res = await fetch('/api/projects/' + encodeURIComponent(slugFromHash()) + path, o);
     const j = await res.json().catch(() => ({}));
     if (!res.ok) { const e = new Error((j.error && j.error.message) || res.statusText); e.status = res.status; e.body = j.error || {}; throw e; }

@@ -77,7 +77,7 @@ window.DASH = window.DASH || {};
     const slug = slugFromHash();
     if (!slug) throw new Error('No project open');
     const o = Object.assign({
-      headers: { 'Content-Type': 'application/json', 'X-Story-Architect': '1' },
+      headers: { 'Content-Type': 'application/json', 'X-White-Words': '1' },
     }, opts || {});
     const res = await fetch('/api/projects/' + encodeURIComponent(slug) + path, o);
     const body = await res.json().catch(() => ({}));

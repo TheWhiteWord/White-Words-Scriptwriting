@@ -2,7 +2,7 @@
    Everything the UI needs from the server goes through window.SAChat.api. */
 (function () {
   const SA = (window.SAChat = window.SAChat || {});
-  const HDR = { 'X-Story-Architect': '1' };
+  const HDR = { 'X-White-Words': '1' };
   SA.MOCK = /[?&]mock=1\b/.test(location.search);
 
   async function json(method, url, body) {

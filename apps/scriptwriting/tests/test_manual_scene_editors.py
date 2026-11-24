@@ -299,7 +299,7 @@ class TestHttp:
         from white_words.scriptwriting.app.server import create_app
         monkeypatch.setattr("white_words.scriptwriting.app.token.load_api_key", lambda: "k")
         c = TestClient(create_app(Config(root=project.parent.parent, port=8731)), base_url="http://127.0.0.1:8731")
-        c.headers.update({"X-Story-Architect": "1"})
+        c.headers.update({"X-White-Words": "1"})
         d = c.get("/api/projects/demo/entities/scene/sc1/form").json()
         r = c.put("/api/projects/demo/entities/scene/sc1", json={"base_version": d["version"], "values": {
             **d["values"], "value_turns": [TURN], "beat_sheet": SHEET}})

@@ -405,7 +405,7 @@ class TestHttp:
         from white_words.scriptwriting.app.server import create_app
         monkeypatch.setattr("white_words.scriptwriting.app.token.load_api_key", lambda: "k")
         c = TestClient(create_app(Config(root=project.parent.parent, port=8731)), base_url="http://127.0.0.1:8731")
-        c.headers.update({"X-Story-Architect": "1"})
+        c.headers.update({"X-White-Words": "1"})
         return c
 
     def test_plan_apply_and_refusals(self, client):
@@ -425,5 +425,5 @@ class TestHttp:
         assert client.get("/api/projects/nope/structure").status_code == 404
 
     def test_writes_need_the_custom_header(self, client):
-        del client.headers["X-Story-Architect"]
+        del client.headers["X-White-Words"]
         assert client.post("/api/projects/demo/structure/apply", json={}).status_code == 403

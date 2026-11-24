@@ -24,6 +24,12 @@ def main(argv=None):
     import sys
     if argv is None:
         argv = sys.argv[1:]
+
+    # A folder from before the rename becomes the current one, once. Done here
+    # rather than in load_config(), which tests call against a real home.
+    from white_words.scriptwriting.core import paths
+    paths.migrate_legacy(include_data_root=False)
+
     if argv and argv[0] == "hermes":
         from white_words.scriptwriting.adapters.hermes.setup import setup, status
         sub = argv[1:2]
@@ -66,6 +72,11 @@ def main(argv=None):
 
     config = load_config(cli_root=args.root, cli_port=args.port, cli_no_open=args.no_open)
     config.idle_exit = not args.no_idle_exit
+
+    # An explicit --root is not the default folder, so its old name is not ours
+    # to move.
+    if args.root is None:
+        paths.migrate_legacy()
 
     # No prompt: launched from a .desktop entry there is no controlling terminal,
     # so waiting on stdin would hang the app with no way to answer.

@@ -353,7 +353,7 @@ class TestHttp:
         create_entity(proj, "world", "gilead", {"name": "Gilead", "one_sentence": "x"})
         create_entity(proj, "character", "mara", {"name": "Mara", "one_sentence": "x"})
         c = TestClient(create_app(Config(root=root, port=8731)), base_url="http://127.0.0.1:8731")
-        c.headers.update({"X-Story-Architect": "1"})
+        c.headers.update({"X-White-Words": "1"})
         return c
 
     def test_spec_and_load(self, client):
@@ -362,7 +362,7 @@ class TestHttp:
         assert d["values"]["name"] == "Mara" and d["version"]
 
     def test_writes_need_the_custom_header(self, client):
-        del client.headers["X-Story-Architect"]
+        del client.headers["X-White-Words"]
         r = client.post("/api/projects/demo/entities/character", json={"values": {"name": "X"}})
         assert r.status_code == 403
 

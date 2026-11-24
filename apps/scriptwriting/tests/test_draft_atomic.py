@@ -27,7 +27,7 @@ from white_words.scriptwriting.core.writes import create_entity, delete_entity
 
 from test_purge_approval import _age
 
-H = {"X-Story-Architect": "1"}
+H = {"X-White-Words": "1"}
 
 
 # ─── ops ───

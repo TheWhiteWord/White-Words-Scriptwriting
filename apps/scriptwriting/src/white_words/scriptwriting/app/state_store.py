@@ -1,12 +1,12 @@
 """Small UI-writable settings store (state.json next to config.toml)."""
 from __future__ import annotations
 import json
-import os
 from pathlib import Path
 
+from white_words.scriptwriting.core import paths
+
 def state_file() -> Path:
-    base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    return base / "story-architect" / "state.json"
+    return paths.config_dir() / "state.json"
 
 def load_state() -> dict:
     p = state_file()

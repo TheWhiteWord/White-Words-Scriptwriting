@@ -17,9 +17,9 @@ must sit a little UNDER the host's cap, and that cap is not a fixed number: it
 usually scales with the model's context window, which this plugin cannot see.
 So the budget is a setting you state once, resolved in this order:
 
-    1. env var   STORY_ARCHITECT_MAX_RESPONSE_CHARS
+    1. env var   WHITE_WORDS_MAX_RESPONSE_CHARS
     2. config    max_response_chars   in the [white_words] table of
-                 ~/.config/story-architect/config.toml (the file that already
+                 ~/.config/white-words/config.toml (the file that already
                  holds port and root)
     3. default   35000   (safe from ~65k-token windows up)
 
@@ -36,8 +36,10 @@ import tomllib
 from pathlib import Path
 from typing import Callable
 
+from white_words.scriptwriting.core import paths
+
 DEFAULT_MAX_RESPONSE_CHARS = 35_000
-_ENV = "STORY_ARCHITECT_MAX_RESPONSE_CHARS"
+_ENV = "WHITE_WORDS_MAX_RESPONSE_CHARS"
 # Below this the budget cannot hold even a bare map; treat it as a typo.
 _MIN_SANE = 2_000
 
@@ -54,9 +56,8 @@ def _valid(value) -> int | None:
 
 
 def _config_file() -> Path:
-    # Same location as app/config.py (core may not import from app).
-    base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    return base / "story-architect" / "config.toml"
+    """config.toml, the file that also holds port and root."""
+    return paths.config_file()
 
 
 def _from_config_file() -> int | None:

@@ -2,7 +2,7 @@
 
 Thin, like `entities.py`: resolve the project, call `core.trash`, map its
 refusals to HTTP. Non-GET requests already pass through the Host / Origin /
-`X-Story-Architect` checks in `server.py`; this adds no second auth model.
+`X-White-Words` checks in `server.py`; this adds no second auth model.
 
 Error bodies are `{"error": {"code", "message", ...}}`, the same envelope the
 form routes use. Two of them carry structure the dashboard draws:

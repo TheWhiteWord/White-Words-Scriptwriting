@@ -13,7 +13,7 @@ const fs = require('fs'), path = require('path'), assert = require('assert');
 const { JSDOM } = require('jsdom');
 
 const WEB = process.argv[2], BASE = process.argv[3];
-const H = { 'Content-Type': 'application/json', 'X-Story-Architect': '1' };
+const H = { 'Content-Type': 'application/json', 'X-White-Words': '1' };
 const get = (p) => fetch(BASE + p).then(r => r.json());
 const put = (p, b) => fetch(BASE + p, { method: 'PUT', headers: H, body: JSON.stringify(b) });
 const tick = (ms) => new Promise(r => setTimeout(r, ms || 30));

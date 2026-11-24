@@ -1,7 +1,7 @@
 """Scene script editor API — the one place the browser writes (see README).
 
 Thin: parse the request, call `core.manual_edits`, map its errors to HTTP.
-Non-GET requests already pass through the Host / Origin / `X-Story-Architect`
+Non-GET requests already pass through the Host / Origin / `X-White-Words`
 checks in `server.py`; this adds no second auth model.
 """
 from pathlib import Path

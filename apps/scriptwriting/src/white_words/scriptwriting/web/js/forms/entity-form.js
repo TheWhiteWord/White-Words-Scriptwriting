@@ -33,7 +33,7 @@ window.DASH = window.DASH || {};
 
   // ─── API ─────────────────────────────────────────────────────────────────
   async function api(path, opts) {
-    const o = Object.assign({ headers: { 'Content-Type': 'application/json', 'X-Story-Architect': '1' } }, opts || {});
+    const o = Object.assign({ headers: { 'Content-Type': 'application/json', 'X-White-Words': '1' } }, opts || {});
     const res = await fetch('/api/projects/' + encodeURIComponent(S.slug) + path, o);
     const j = await res.json().catch(() => ({}));
     if (!res.ok) {

@@ -14,15 +14,15 @@ import pytest
 from white_words.scriptwriting.core import budget
 from white_words.scriptwriting.adapters.hermes import budget as hb
 
-ENV = "STORY_ARCHITECT_MAX_RESPONSE_CHARS"
+ENV = "WHITE_WORDS_MAX_RESPONSE_CHARS"
 
 
 @pytest.fixture(autouse=True)
 def home(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     monkeypatch.delenv(ENV, raising=False)
-    (tmp_path / "story-architect").mkdir()
-    return tmp_path / "story-architect"
+    (tmp_path / "white-words").mkdir()
+    return tmp_path / "white-words"
 
 
 def write_toml(home, body):

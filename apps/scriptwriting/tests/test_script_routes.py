@@ -6,7 +6,7 @@ from white_words.scriptwriting.app.config import Config
 from white_words.scriptwriting.app.server import create_app
 from white_words.scriptwriting.core.writes import create_entity, edit_entity
 
-H = {"X-Story-Architect": "1"}
+H = {"X-White-Words": "1"}
 
 
 @pytest.fixture

@@ -10,7 +10,7 @@ a path it cannot read) when the result is longer than
 The second term is the one that bites: it shrinks with the model. A 32k-token
 model spills at 19,200 chars, a 65k one at 39,000, a 128k one at the full 50,000.
 The plugin cannot see the model, so this derives the number once, with a margin,
-for you to put in ~/.config/story-architect/config.toml.
+for you to put in ~/.config/white-words/config.toml.
 
 This mirrors Hermes's tools/budget_config.py. If a Hermes upgrade changes those
 constants, update them here (tests pin the current values).
@@ -63,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Hermes spills MCP results longer than {threshold:,} chars "
           f"on a {args.context_tokens:,}-token model.")
     print(f"Suggested budget: {budget:,} chars. In "
-          f"~/.config/story-architect/config.toml:\n")
+          f"~/.config/white-words/config.toml:\n")
     print(f"[white_words]\nmax_response_chars = {budget}")
     if budget < 15_000:
         print("\nNote: below ~15,000 the base map's fixed part (characters, plots, "

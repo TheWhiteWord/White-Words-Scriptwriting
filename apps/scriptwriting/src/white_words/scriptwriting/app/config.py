@@ -6,10 +6,12 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from white_words.scriptwriting.core import paths
 
-DEFAULT_ROOT = Path.home() / "story-architect"
+
+DEFAULT_ROOT = paths.data_root()
 DEFAULT_PORT = 8731
-ENV_PREFIX = "STORY_ARCHITECT_"
+ENV_PREFIX = "WHITE_WORDS_"
 
 
 @dataclass
@@ -25,8 +27,7 @@ class Config:
 
 def _config_file() -> Path:
     # platform standard config dir
-    base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    return base / "story-architect" / "config.toml"
+    return paths.config_file()
 
 
 def load_config(*, cli_root=None, cli_port=None, cli_no_open=False) -> Config:
