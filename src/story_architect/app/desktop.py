@@ -11,11 +11,22 @@ import subprocess
 import sys
 from pathlib import Path
 
-APP_ID = "story-architect"
-NAME = "Story Architect"
-COMMENT = "Story-writing environment: entities, plots, scripts and values."
+# The XDG identity, which is what the .desktop file and the icon are named after.
+# Kept apart from the command that starts the app: renaming the CLI is its own
+# change, and until then the entry has to keep pointing at something that exists.
+APP_ID = "white-words"
+CLI = "story-architect"
 
-_ICON_SIZES = ((192, "icon-192.png"), (512, "icon-512.png"))
+NAME = "White Words"
+GENERIC_NAME = "Story writing"
+COMMENT = "Structure-first writing for novels and screenplays."
+KEYWORDS = "writing;screenplay;novel;story;"
+
+# The launcher carries the ink-on-paper mark, the alternate of the pair, while the
+# browser and PWA keep the white-on-ink primary. It ships as a scalable icon so
+# the desktop can pick whatever size it wants without a resample, plus the 512
+# raster for themes that only read PNG.
+_ICONS = (("scalable", "icon-paper.svg"), ("512x512", "icon-512-paper.png"))
 
 
 def _data_home() -> Path:
@@ -26,12 +37,12 @@ def _apps_dir() -> Path:
     return _data_home() / "applications"
 
 
-def _icon_dir(size: int) -> Path:
-    return _data_home() / "icons" / "hicolor" / f"{size}x{size}" / "apps"
+def _icon_dir(theme_dir: str) -> Path:
+    return _data_home() / "icons" / "hicolor" / theme_dir / "apps"
 
 
 def _exec_line() -> str:
-    exe = shutil.which(APP_ID)
+    exe = shutil.which(CLI)
     return exe or f"{sys.executable} -m story_architect.app.launcher"
 
 
@@ -41,11 +52,14 @@ def _desktop_file() -> str:
         "Type=Application",
         "Version=1.0",
         f"Name={NAME}",
+        f"GenericName={GENERIC_NAME}",
         f"Comment={COMMENT}",
         f"Exec={_exec_line()}",
         f"Icon={APP_ID}",
         "Terminal=false",
-        "Categories=Office;",
+        "Categories=Office;TextEditor;",
+        f"Keywords={KEYWORDS}",
+        "StartupNotify=true",
         "",
     ])
 
@@ -67,14 +81,14 @@ def install() -> int:
     written.append(entry)
 
     icons = Path(__file__).resolve().parents[1] / "web" / "icons"
-    for size, name in _ICON_SIZES:
+    for theme_dir, name in _ICONS:
         src = icons / name
         if not src.exists():
             print(f"Missing icon: {src}")
             return 1
-        dst_dir = _icon_dir(size)
+        dst_dir = _icon_dir(theme_dir)
         dst_dir.mkdir(parents=True, exist_ok=True)
-        dst = dst_dir / f"{APP_ID}.png"
+        dst = dst_dir / f"{APP_ID}{src.suffix}"
         shutil.copyfile(src, dst)
         written.append(dst)
 
@@ -90,8 +104,8 @@ def uninstall() -> int:
     if entry.exists():
         entry.unlink()
         removed.append(entry)
-    for size, _name in _ICON_SIZES:
-        icon = _icon_dir(size) / f"{APP_ID}.png"
+    for theme_dir, name in _ICONS:
+        icon = _icon_dir(theme_dir) / f"{APP_ID}{Path(name).suffix}"
         if icon.exists():
             icon.unlink()
             removed.append(icon)
