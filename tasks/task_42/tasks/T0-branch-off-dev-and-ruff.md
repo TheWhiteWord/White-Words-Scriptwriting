@@ -36,20 +36,49 @@ Out of scope by decision: fixing the lint backlog. `ruff format` is mechanical;
 
 ## Tasks
 
-- [ ] Create branch `draft-versioning` off `dev`.
-- [ ] Commit the spec and task records on the branch before any reformat, so the
+- [x] Create branch `draft-versioning` off `dev`.
+- [x] Commit the spec and task records on the branch before any reformat, so the
       pre-format tree stays reachable by `git checkout <sha> -- <path>`.
-- [ ] `pyproject.toml`: pin `ruff==0.15.8` in the `dev` extra.
-- [ ] `pyproject.toml`: exclude `tasks/` from ruff. It holds historical task
+- [x] `pyproject.toml`: pin `ruff==0.15.8` in the `dev` extra.
+- [x] `pyproject.toml`: exclude `tasks/` from ruff. It holds historical task
       artefacts — the same reason `testpaths` already leaves it uncollected.
       Keeps 7 one-off scripts and 83 plan documents out of the format diff.
-- [ ] `ruff format src tests` — its own commit, nothing else in it.
-- [ ] Verify the suite still reports `1744 passed, 1 failed` with the same
+- [x] `ruff format src tests` — its own commit, nothing else in it.
+- [x] Verify the suite still reports `1744 passed, 1 failed` with the same
       single failure.
-- [ ] Verify `ruff format --check src tests` is clean and stays clean when run
+- [x] Verify `ruff format --check src tests` is clean and stays clean when run
       again with the pinned version.
-- [ ] Verify `ruff format --check .` does not touch `tasks/`.
+- [x] Verify `ruff format --check .` does not touch `tasks/`.
 
 ## Final Brief
 
-_(appended on completion)_
+Branch `draft-versioning`, three commits off `dev` @ `610cf06`:
+
+| Commit | Contents |
+|---|---|
+| `323c49c` | Spec, `Notes.md`, this task file. First on the branch so the pre-format tree is reachable. |
+| `d2d2563` | `pyproject.toml`: `ruff==0.15.8` in the `dev` extra; `exclude = ["tasks"]`. |
+| `cc52032` | `ruff format` over 170 files. Mechanical only. |
+
+**Verification, as run.**
+
+- Suite before: `1744 passed, 1 failed`. After: `1744 passed, 1 failed` — the
+  same `test_no_hermes_imports`, 166s.
+- `ruff format --check .` → `177 files already formatted`, on a second run after
+  reinstalling from `.[dev]`.
+- `ruff format --check .` lists no `.md` and no `tasks/` path; `ruff check .`
+  reports 0 findings under `tasks/`.
+- `build_registry()` dumped to JSON before and after: byte-identical, so no
+  agent-facing tool schema moved.
+- `git show --stat cc52032` touches 0 markdown or `tasks/` files.
+
+**What was deliberately not done.** 263 `ruff check` findings remain (E501 127,
+F401 88, F841 13, E402 12, E741 10, E712 7, F811 2, E731 2, F541 1, F402 1) and
+belong to a later lint-backlog commit. 113 of the E501s are string literals the
+formatter cannot split, so that commit will need either an `E501` ignore or 113
+hand edits — a decision for then, recorded in `Notes.md`.
+
+**One caveat for whoever runs this next.** `ruff check tasks` on the command
+line still lints that folder: `exclude` governs discovery from `.`, not an
+explicitly named path.
+

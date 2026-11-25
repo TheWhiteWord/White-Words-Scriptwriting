@@ -44,11 +44,13 @@ and what it changes. No narration.
   (prompt text, SQL, regexes) that the formatter cannot split. Adding `E501` to
   the ignore list is the standing ruff guidance when the formatter owns line
   length; not done here, since it belongs with the lint-backlog commit.
-- Three `F841` findings in `src/` are worth reading, not deleting:
-  `core/db.py:857 plot_scopes`, `chat/service.py:191 cancelled`,
-  `adapters/hermes/setup.py:332 gateway_ok`. Each is assigned and never read;
-  two of the three read like an unimplemented check. Carry them to the
-  lint-backlog commit with this note.
+- Six `F841` findings in `src/` are worth reading, not deleting:
+  `core/db.py:858 plot_scopes`, `chat/service.py:191 cancelled`,
+  `adapters/hermes/setup.py:333 gateway_ok`, `core/fountain_lexer.py:437
+  emptytitlepage`, `core/fountain_validator.py:200 prev_line_num`,
+  `tools/story_load.py:299 act_extra`. Each is assigned and never read; at least
+  two read like an unimplemented check. Line numbers are post-format. Carry them
+  to the lint-backlog commit with this note.
 
 ---
 
