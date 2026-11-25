@@ -347,17 +347,19 @@ and what it changes. No narration.
   `scene.plot_roles` and `plot.inciting_incident`). They are `computed`, so `edit_entity`
   reports `success` with `skipped_read_only=['climax']` and changes nothing.
   `refmap.DERIVED` is the exclusion list.
-- **`scene.act_id` duplicates the parent chain and used to drift. FIXED before T6** —
-  `edit_entity` now derives it from the scene's sequence on every write and ignores a
-  supplied value. The field is still `DERIVED` for refmap (it is a copy, not a reference
-  the merge resolves), but a merge may now write `sequence_id` alone.
+- **`scene.act_id` is gone as a field. DERIVED at read time from the scene's sequence.**
+  It was a denormalized copy that drifted and could be made to name a different act than
+  its sequence's. Now: not in `ENTITY_SCHEMAS["scene"]`, rejected as an unrecognised field
+  by every writer, absent from `extra`, absent from scene notes on export, and supplied by
+  `db.get_dashboard_data` from the parent chain for every reader. `refmap.DERIVED` still
+  lists it because it appears in the materialized shape — a merge must never rewrite it.
 - **`scene.scene_beats` is a declared `ref` that is `computed` and absent from the shape** —
   the only one of the seven `ref`s that is missing from `materialize` output. `plot.<role>`
   and `plot_roles` are relation-backed, so `materialize` fills them after the computed
   filter (`logical.py:131`).
 - **The write path accepts an entity that no longer says what it is**: `sequence_id=""`,
-  `beats=[]`, `characters=[]`, `act_id=""` are all accepted. So `required` in refmap is
-  §7.4.2's decision, not a fact derived from what the code refuses.
+  `beats=[]`, `characters=[]` are all accepted. So `required` in refmap is §7.4.2's
+  decision, not a fact derived from what the code refuses.
 - **An empirical sweep of `materialize` output cannot catch an unused reference field.** A
   new site on `project` with no fixture value fails nothing; one whose default holds a real
   id is caught. The declared-ref walk is the other half and is not optional.

@@ -376,7 +376,10 @@ def _frontmatter_for(
         fm["sequence_id"] = parent_id
         if location_id:
             fm["location"] = location_id
-        fm.update(extra)
+        # `act_id` is derived from the sequence, so a note carrying one is noise
+        # that the next hand-edit can contradict. Dropped here because a project
+        # imported before the field was derived still has it in `extra`.
+        fm.update({k: v for k, v in extra.items() if k != "act_id"})
         return fm
 
     if entity_type == "sequence":

@@ -200,10 +200,10 @@ class TestStorageLabelsAreTrue:
         assert not unlabelled, unlabelled
 
     def test_a_link_in_extra_is_still_marked_as_a_reference(self):
-        """The nine `extra` links have no special storage, but the agent still
+        """The `extra` links have no special storage, but the agent still
         needs to know the value is another entity's slug, not a display name."""
         out = _handler({})["entity_schemas"]
-        for et, field in [("scene", "act_id"), ("plot", "characters")]:
+        for et, field in [("sequence", "act_id"), ("plot", "characters")]:
             assert out[et][field]["is_reference"] is True, f"{et}.{field}"
 
     def test_a_declared_ref_is_a_reference_even_when_computed(self):

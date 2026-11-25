@@ -46,7 +46,7 @@ def _create(etype, slug, **fm):
 
 
 def _scene(slug, **fm):
-    fm = {"title": slug, "sequence_id": "seq-discovery", "act_id": "act-1", **fm}
+    fm = {"title": slug, "sequence_id": "seq-discovery", **fm}
     return _create("scene", slug, **fm)
 
 

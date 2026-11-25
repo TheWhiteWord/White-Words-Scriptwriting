@@ -358,7 +358,13 @@ class TestPosition:
         from white_words.scriptwriting.core.writes import create_entity
 
         create_entity(
-            p, "scene", new_id, {"title": new_id, "sequence_id": "seq-discovery", "act_id": "act-1"}
+            p,
+            "scene",
+            new_id,
+            {
+                "title": new_id,
+                "sequence_id": "seq-discovery",
+            },
         )
         return new_id
 

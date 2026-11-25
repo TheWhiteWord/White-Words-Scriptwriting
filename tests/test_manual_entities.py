@@ -387,7 +387,7 @@ class TestDelete:
             project,
             "scene",
             "sc1",
-            {"title": "Dinner", "sequence_id": "s1", "act_id": "a1", "location": "kitchen"},
+            {"title": "Dinner", "sequence_id": "s1", "location": "kitchen"},
         )
         prev = me.delete_preview(project, "location", "kitchen")
         assert any("Dinner" in e and "no location" in e for e in prev["effects"])
@@ -411,7 +411,7 @@ class TestDelete:
             project,
             "scene",
             "sc1",
-            {"title": "Dinner", "sequence_id": "s1", "act_id": "a1", "characters": ["oak"]},
+            {"title": "Dinner", "sequence_id": "s1", "characters": ["oak"]},
         )
         prev = me.delete_preview(project, "character", "oak")
         assert any("Dinner" in e and "cast" in e for e in prev["effects"])
@@ -420,7 +420,13 @@ class TestDelete:
         create_entity(project, "act", "a1", {"title": "A"})
         create_entity(project, "sequence", "s1", {"title": "S", "act_id": "a1"})
         create_entity(
-            project, "scene", "sc1", {"title": "Dinner", "sequence_id": "s1", "act_id": "a1"}
+            project,
+            "scene",
+            "sc1",
+            {
+                "title": "Dinner",
+                "sequence_id": "s1",
+            },
         )
         create_entity(project, "scene_beats", "sc1-beats", {"scene": "sc1", "driver": "mara"})
         prev = me.delete_preview(project, "character", "mara")
@@ -447,7 +453,6 @@ class TestDelete:
             {
                 "title": "Dinner",
                 "sequence_id": "s1",
-                "act_id": "a1",
                 "value_turns": [
                     {
                         "plot": "main",

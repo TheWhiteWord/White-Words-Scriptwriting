@@ -64,7 +64,6 @@ class TestCreateEntity:
             {
                 "title": "The Telling",
                 "sequence_id": "seq-discovery",
-                "act_id": "act-1",
                 "characters": ["mira", "kael"],
             },
             {"Objective": "Mira confesses."},

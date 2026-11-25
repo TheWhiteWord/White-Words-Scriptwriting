@@ -1511,7 +1511,11 @@ def get_dashboard_data(project_path: Path) -> dict:
                 )
                 d["title"] = e[2]  # alias for dashboard (reads s.title)
                 d["sequence_id"] = e[6]  # alias for dashboard (reads s.sequence_id)
-                d["act_id"] = extra.get("act_id", "")
+                # Derived, never stored: a scene's act is its sequence's parent.
+                # As a stored copy it could name a different act than the chain,
+                # and no reader would notice until something refused the entity.
+                seq = entity_by_id.get(e[6]) if e[6] else None
+                d["act_id"] = (seq or {}).get("parent_id") or ""
                 # characters, locations, plots — O(1) reverse lookups
                 d["characters"] = scene_chars.get(eid, [])
                 d["locations"] = scene_locs.get(eid, [])

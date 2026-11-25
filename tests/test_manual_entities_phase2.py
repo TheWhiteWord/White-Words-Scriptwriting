@@ -32,7 +32,6 @@ def _scene_with_role(p, plot="main", role="setup", note="The door opens"):
         {
             "title": "Dinner",
             "sequence_id": "s1",
-            "act_id": "a1",
             "plot_roles": [{"plot": plot, "role": role, "description": note}],
         },
     )
@@ -184,7 +183,6 @@ class TestPlot:
             {
                 "title": "Dinner",
                 "sequence_id": "s1",
-                "act_id": "a1",
                 "value_turns": [
                     {
                         "plot": "main",

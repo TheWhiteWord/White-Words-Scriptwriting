@@ -1,5 +1,4 @@
 ---
-act_id: act-1
 characters:
 - kael
 - mira

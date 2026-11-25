@@ -42,9 +42,7 @@ def _value(project, name):
 
 
 def _scene(project, slug, seq, act, **fields):
-    create_entity(
-        project, "scene", slug, {"title": slug.title(), "sequence_id": seq, "act_id": act, **fields}
-    )
+    create_entity(project, "scene", slug, {"title": slug.title(), "sequence_id": seq, **fields})
 
 
 def _turn(plot, value, from_, to, character, effect):

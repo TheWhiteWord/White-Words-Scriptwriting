@@ -791,23 +791,6 @@ def relations_for_insert(entity_type: str, slug: str, fm: dict) -> list[dict]:
     return relations
 
 
-def validate_scene_act_id(project_path, sequence_id: str, act_id: str, *, conn=None) -> None:
-    """Raise ValueError if sequence's act_id doesn't match the provided act_id.
-
-    `conn` joins the caller's transaction, so rows it has written but not
-    committed are visible; when None, opens its own connection.
-    """
-    from white_words.scriptwriting.core.db import use_connection
-
-    with use_connection(project_path, conn) as c:
-        row = c.execute(
-            "SELECT parent_id FROM entities WHERE id=? AND type='sequence'",
-            (sequence_id,),
-        ).fetchone()
-        if row and row[0] and row[0] != act_id:
-            raise ValueError(f"Sequence {sequence_id} belongs to act {row[0]}, not {act_id}")
-
-
 def validate_scene_location(project_path, location: str, *, conn=None) -> None:
     """Raise ValueError if a scene names a location that doesn't exist.
 

@@ -74,7 +74,6 @@ def _make_scene(project_path, scene_id, status, dramatic_role):
             "status": status,
             "dramatic_role": dramatic_role,
             "sequence_id": f"seq-{scene_id}",
-            "act_id": f"act-{scene_id}",
         },
     )
 
@@ -154,7 +153,6 @@ class TestRetrieveSceneBeats:
             {
                 "title": "Scene 1",
                 "sequence_id": "t3-seq",
-                "act_id": "t3-act",
             },
         )
         writes.create_entity(
@@ -267,7 +265,6 @@ class TestSceneComputedFields:
             {
                 "title": "Scene 1",
                 "sequence_id": "t3-seq",
-                "act_id": "t3-act",
             },
         )
         writes.create_entity(
@@ -316,7 +313,6 @@ class TestSceneComputedFields:
             {
                 "title": "Scene 1",
                 "sequence_id": "t3-seq",
-                "act_id": "t3-act",
             },
         )
 
@@ -421,7 +417,13 @@ class TestBeatShape:
         writes.create_entity(p, "act", "shape-act", {"title": "Act I"})
         writes.create_entity(p, "sequence", "shape-seq", {"title": "Seq", "act_id": "shape-act"})
         writes.create_entity(
-            p, "scene", slug, {"title": "Scene", "sequence_id": "shape-seq", "act_id": "shape-act"}
+            p,
+            "scene",
+            slug,
+            {
+                "title": "Scene",
+                "sequence_id": "shape-seq",
+            },
         )
         return slug
 
@@ -539,7 +541,6 @@ class TestSearchSceneBeats:
             {
                 "title": "Scene 1",
                 "sequence_id": "t3-seq",
-                "act_id": "t3-act",
             },
         )
         writes.create_entity(
@@ -586,7 +587,13 @@ class TestBeatObjectShape:
         writes.create_entity(p, "act", "obj-act", {"title": "Act I"})
         writes.create_entity(p, "sequence", "obj-seq", {"title": "Seq", "act_id": "obj-act"})
         writes.create_entity(
-            p, "scene", slug, {"title": "Scene", "sequence_id": "obj-seq", "act_id": "obj-act"}
+            p,
+            "scene",
+            slug,
+            {
+                "title": "Scene",
+                "sequence_id": "obj-seq",
+            },
         )
         return slug
 

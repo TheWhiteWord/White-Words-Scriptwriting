@@ -20,9 +20,9 @@ Three paths are in the shape but deliberately not sites:
     the plot side. One authored role change is one edit on the scene; listing both
     would make a merge item out of a derived view, and no write path accepts it
     either way (it is `computed`).
-  * `scene.act_id` — a copy of the parent chain. `edit_entity` derives it on every
-    write, so it cannot disagree with the sequence; it is not a reference a merge
-    resolves, so it stays out of the rewrite set.
+  * `scene.act_id` — a copy of the parent chain, supplied at read time from the
+    scene's sequence and never written. Somebody else's derivation, so a merge
+    must not rewrite it.
   * `scene.scene_beats` — a declared `ref`, but computed and absent from the shape;
     the record is reached from its own `scene` side.
 
@@ -127,7 +127,7 @@ DERIVED: dict[str, tuple[tuple[str, str], ...]] = {
         )
     ),
     "scene": (
-        ("act_id", "derived from the scene's sequence on every write"),
+        ("act_id", "derived from the scene's sequence at read time; never written"),
         ("scene_beats", "computed pointer; reached from the scene_beats side"),
     ),
 }

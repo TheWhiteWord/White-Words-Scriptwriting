@@ -26,7 +26,6 @@ OPS = [
         "frontmatter": {
             "title": "The Telling",
             "sequence_id": "seq-discovery",
-            "act_id": "act-1",
             "characters": ["mira", "kael"],
         },
         "sections": {"Objective": "Mira confesses the reservoir is failing."},

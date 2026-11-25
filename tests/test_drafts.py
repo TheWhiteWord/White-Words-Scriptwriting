@@ -40,7 +40,6 @@ def _batch():
             "frontmatter": {
                 "title": "The Telling",
                 "sequence_id": "seq-discovery",
-                "act_id": "act-1",
                 "characters": ["mira", "kael"],
             },
             "sections": {"Objective": "Mira confesses."},
@@ -404,7 +403,10 @@ def test_apply_op_returns_a_refusal_as_an_error_dict(fixture_path):
 
 
 def _create_scene(slug, sequence_id="seq-discovery", **frontmatter):
-    fm = {"title": slug, "sequence_id": sequence_id, "act_id": "act-1"}
+    fm = {
+        "title": slug,
+        "sequence_id": sequence_id,
+    }
     fm.update(frontmatter)
     return {
         "op": "create",

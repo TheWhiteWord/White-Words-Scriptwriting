@@ -308,22 +308,17 @@ def apply(project_path: Path, payload: dict, *, conn=None) -> dict:
                         edit_entity(
                             project_path, "sequence", q, {"act_id": act}, SUMMARY, conn=conn
                         )
-                # 2. Scenes into their new sequence — and the act that sequence is now in.
-                cur_act = {
-                    sid: (json.loads(ex) if ex else {}).get("act_id", "")
-                    for sid, ex in conn.execute(
-                        "SELECT id, extra FROM entities WHERE type='scene' AND is_deleted=0"
-                    )
-                }
+                # 2. Scenes into their new sequence. The act follows from the
+                # sequence, so a scene whose sequence moved is already there.
                 for a in target["acts"]:
                     for q in a["sequences"]:
                         for sid in q["scenes"]:
-                            if old[sid][0] != q["id"] or cur_act.get(sid) != a["id"]:
+                            if old[sid][0] != q["id"]:
                                 edit_entity(
                                     project_path,
                                     "scene",
                                     sid,
-                                    {"sequence_id": q["id"], "act_id": a["id"]},
+                                    {"sequence_id": q["id"]},
                                     SUMMARY,
                                     conn=conn,
                                 )

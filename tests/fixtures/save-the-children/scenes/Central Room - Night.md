@@ -1,5 +1,4 @@
 ---
-act_id: act-1
 characters:
 - kael
 dramatic_role: plot_role

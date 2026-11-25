@@ -42,7 +42,6 @@ def build(root: Path) -> None:
         {
             "title": "The Kitchen",
             "sequence_id": "seq-1",
-            "act_id": "act-1",
             "order": 2,
             "location": "kitchen",
             "time_of_day": "NIGHT",
@@ -55,7 +54,13 @@ def build(root: Path) -> None:
         },
     )
     create_entity(
-        p, "scene", "blank", {"title": "Blank", "sequence_id": "seq-1", "act_id": "act-1"}
+        p,
+        "scene",
+        "blank",
+        {
+            "title": "Blank",
+            "sequence_id": "seq-1",
+        },
     )
     edit_entity(p, "scene", "blank", {"order": 0}, "unplace")
     create_entity(
@@ -65,7 +70,6 @@ def build(root: Path) -> None:
         {
             "title": "Locked One",
             "sequence_id": "seq-1",
-            "act_id": "act-1",
             "order": 3,
             "int_ext": "INT.",
             "location": "kitchen",

@@ -34,7 +34,6 @@ def project(tmp_path):
         {
             "title": "The Kitchen",
             "sequence_id": "seq-1",
-            "act_id": "act-1",
             "order": 2,
             "location": "kitchen",
             "int_ext": "INT.",
@@ -98,7 +97,6 @@ class TestLoad:
             {
                 "title": "Attic",
                 "sequence_id": "seq-1",
-                "act_id": "act-1",
                 "int_ext": "INT.",
                 "location": "attic",
             },
@@ -109,7 +107,13 @@ class TestLoad:
 
     def test_empty_scene_opens_with_no_blocks(self, project):
         create_entity(
-            project, "scene", "blank", {"title": "Blank", "sequence_id": "seq-1", "act_id": "act-1"}
+            project,
+            "scene",
+            "blank",
+            {
+                "title": "Blank",
+                "sequence_id": "seq-1",
+            },
         )
         # create appends an undecided order; 0 is what a scene sits at when it was
         # un-placed on purpose, which is the state the warning exists for.

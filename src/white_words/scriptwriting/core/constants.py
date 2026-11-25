@@ -551,12 +551,6 @@ ENTITY_SCHEMAS = {
             "optional": False,
             "description": "One of: planned, drafted, written, locked",
         },
-        "act_id": {
-            "type": "string",
-            "default": "",
-            "optional": False,
-            "description": "Parent act slug (denormalized shortcut)",
-        },
         "sequence_id": {
             "type": "string",
             "default": "",

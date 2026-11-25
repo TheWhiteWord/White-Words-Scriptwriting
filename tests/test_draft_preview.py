@@ -22,7 +22,6 @@ BATCH = [
         "frontmatter": {
             "title": "The Telling",
             "sequence_id": "seq-discovery",
-            "act_id": "act-1",
             "status": "drafted",
             "time_of_day": "DUSK",
             "location": "the-central-room",
@@ -85,9 +84,9 @@ def test_the_block_carries_the_field_count(fixture_path):
     """
     md = stage(fixture_path, BATCH, "The Telling")["preview_md"]
     offered = len([f for f, m in ENTITY_SCHEMAS["scene"].items() if not m.get("computed")])
-    # 7 set. `dramatic_role` no longer names a role, so BATCH drops it; the
+    # 6 set. `dramatic_role` no longer names a role, so BATCH drops it; the
     # count tracks the fields the batch actually sets, not a remembered total.
-    assert f"7 of {offered} fields set" in md, md
+    assert f"6 of {offered} fields set" in md, md
 
 
 def test_the_count_never_enumerates_the_empty_fields(fixture_path):
@@ -357,7 +356,6 @@ def test_a_bad_enum_and_a_missing_required_field_are_both_reported(fixture_path)
             _create(
                 {
                     "sequence_id": "seq-discovery",
-                    "act_id": "act-1",
                     "status": "nonsense",
                     "time_of_day": "MIDNIGHT",
                 }
@@ -372,16 +370,37 @@ def test_a_bad_enum_and_a_missing_required_field_are_both_reported(fixture_path)
 def test_a_missing_required_field_is_measured_on_the_merged_frontmatter(fixture_path):
     """The merge is the point: a field absent from the op but defaulted by the
     schema is NOT missing, and only a field defaulting to empty is."""
-    assert validate_shape([_create({"title": "T", "sequence_id": "s", "act_id": "a"})]) == []
-    assert validate_shape([_create({"sequence_id": "s", "act_id": "a"})]) != []
+    assert (
+        validate_shape(
+            [
+                _create(
+                    {
+                        "title": "T",
+                        "sequence_id": "s",
+                    }
+                )
+            ]
+        )
+        == []
+    )
+    assert (
+        validate_shape(
+            [
+                _create(
+                    {
+                        "sequence_id": "s",
+                    }
+                )
+            ]
+        )
+        != []
+    )
 
 
 def test_an_unknown_field_is_reported_rather_than_written(fixture_path):
     """It would land in `extra` verbatim — a field the caller misspelled
     would be indistinguishable from one the schema does not define."""
-    findings = validate_shape(
-        [_create({"title": "T", "sequence_id": "s", "act_id": "a", "colour": "blue"})]
-    )
+    findings = validate_shape([_create({"title": "T", "sequence_id": "s", "colour": "blue"})])
     assert any("unknown scene field 'colour'" in f for f in findings)
 
 
@@ -395,12 +414,20 @@ def test_a_valid_cross_entity_reference_that_does_not_exist_yet_is_silent(fixtur
     ops = [
         # References act-1, which exists.
         _create(
-            {"title": "One", "sequence_id": "seq-discovery", "act_id": "act-1"}, slug="scene-one"
+            {
+                "title": "One",
+                "sequence_id": "seq-discovery",
+            },
+            slug="scene-one",
         ),
         # References a sequence created by a LATER op in the same batch —
         # legal in the op list, absent from the database right now.
         _create(
-            {"title": "Two", "sequence_id": "not-yet-created", "act_id": "act-1"}, slug="scene-two"
+            {
+                "title": "Two",
+                "sequence_id": "not-yet-created",
+            },
+            slug="scene-two",
         ),
     ]
     assert not any("not-yet-created" in f for f in validate_shape(ops))
@@ -409,7 +436,19 @@ def test_a_valid_cross_entity_reference_that_does_not_exist_yet_is_silent(fixtur
 def test_shape_validation_needs_no_database(fixture_path):
     """It runs on the in-memory merged frontmatter, so a fresh project works."""
     fresh = fixture_path.parent / "brand-new"
-    assert validate_shape([_create({"title": "T", "sequence_id": "s", "act_id": "a"})]) == []
+    assert (
+        validate_shape(
+            [
+                _create(
+                    {
+                        "title": "T",
+                        "sequence_id": "s",
+                    }
+                )
+            ]
+        )
+        == []
+    )
 
 
 def test_edits_and_deletes_and_reorders_produce_no_findings(fixture_path):

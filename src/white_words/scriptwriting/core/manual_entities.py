@@ -1629,18 +1629,12 @@ def create_form_entity(project_path: Path, entity_type: str, payload: dict, *, c
                     errors or {"_form": "Could not make an id from that name."}, warnings
                 )
 
-            if entity_type in ("scene", "act"):
-                if entity_type == "scene":  # a scene's act is its sequence's act
-                    r = conn.execute(
-                        "SELECT parent_id FROM entities WHERE id=?", (values["sequence_id"],)
-                    ).fetchone()
-                    values["act_id"] = r[0] if r else ""
-                else:  # acts are not auto-numbered by the write path
-                    r = conn.execute(
-                        "SELECT COALESCE(MAX(order_key), 0) FROM entities WHERE type='act' "
-                        "AND is_deleted=0"
-                    ).fetchone()
-                    values["order"] = int(r[0]) + 1
+            if entity_type == "act":  # acts are not auto-numbered by the write path
+                r = conn.execute(
+                    "SELECT COALESCE(MAX(order_key), 0) FROM entities WHERE type='act' "
+                    "AND is_deleted=0"
+                ).fetchone()
+                values["order"] = int(r[0]) + 1
             if entity_type == "relationship":  # one card per character, even if never opened
                 values["perspectives"] = {
                     c: (values.get("perspectives") or {}).get(c) or _persp_form({c: {}})[c]

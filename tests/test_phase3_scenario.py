@@ -138,7 +138,10 @@ class Test3EditScenario:
             proj,
             "scene",
             "scene-in-seq",
-            {"title": "Scene", "sequence_id": "seq-with-scenes", "act_id": "act-1"},
+            {
+                "title": "Scene",
+                "sequence_id": "seq-with-scenes",
+            },
         )
 
         result = delete_entity(proj, "sequence", "seq-with-scenes", "Delete seq", True)
@@ -157,7 +160,10 @@ class Test3EditScenario:
                 proj,
                 "scene",
                 slug,
-                {"title": f"Scene {slug[-1]}", "sequence_id": "seq-test", "act_id": "act-test"},
+                {
+                    "title": f"Scene {slug[-1]}",
+                    "sequence_id": "seq-test",
+                },
             )
 
         # Reorder: scene-z first
@@ -189,21 +195,7 @@ class Test3EditScenario:
 
 
 class TestAppValidation:
-    """App-level validation: scene act_id consistency, plot/arc refs."""
-
-    def test_scene_mismatched_act_id_rejected(self, tmp_path):
-        """Create scene with mismatched sequence.act_id vs scene.act_id → error."""
-        create_entity(tmp_path, "act", "act-a", {"title": "Act A"})
-        create_entity(tmp_path, "act", "act-b", {"title": "Act B"})
-        create_entity(tmp_path, "sequence", "seq-1", {"title": "Seq 1", "act_id": "act-a"})
-
-        with pytest.raises(ValueError, match="act"):
-            create_entity(
-                tmp_path,
-                "scene",
-                "bad-scene",
-                {"title": "Bad Scene", "sequence_id": "seq-1", "act_id": "act-b"},
-            )
+    """App-level validation: plot/arc refs."""
 
     def test_plot_unknown_character_rejected(self, tmp_path):
         """Create plot with non-existent character → error."""

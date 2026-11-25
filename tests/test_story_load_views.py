@@ -452,7 +452,6 @@ class TestBaseMapSceneRow:
                 "title": "Scene",
                 "status": "drafted",
                 "sequence_id": f"seq-{slug}",
-                "act_id": parent,
                 "scene_objective": objective,
             },
         )
@@ -575,7 +574,6 @@ class TestBaseMapSceneRow:
                 "title": "Scene",
                 "status": "drafted",
                 "sequence_id": "seq-bare",
-                "act_id": "act-bare",
             },
         )
         scenes = self._all_scenes(project)
@@ -596,7 +594,6 @@ class TestBaseMapSceneRow:
                 "title": "Scene",
                 "status": "drafted",
                 "sequence_id": "seq-bare",
-                "act_id": "act-bare",
             },
         )
         assert "scene_beats" not in self._row(project, "bare")
@@ -648,7 +645,6 @@ class TestDramaticElementsCarriesTheSpine:
                 "title": "Scene",
                 "status": "drafted",
                 "sequence_id": f"seq-{parent}",
-                "act_id": parent,
                 **fields,
             },
         )
@@ -847,7 +843,6 @@ class TestDramaticElementsEscalationSpine:
                 "title": "Corridor",
                 "status": "drafted",
                 "sequence_id": "seq-corridor",
-                "act_id": "act-corridor",
                 "dramatic_role": "transition",
             },
         )

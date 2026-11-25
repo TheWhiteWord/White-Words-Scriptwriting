@@ -119,7 +119,7 @@ class TestEntityExtraction:
         """validate_entity('scene', {status: 'invalid'}) returns warning."""
         warnings = validate_entity(
             "scene",
-            {"title": "Test", "sequence_id": "seq-1", "act_id": "act-1", "status": "invalid"},
+            {"title": "Test", "sequence_id": "seq-1", "status": "invalid"},
         )
         assert any("Invalid status: invalid" in w for w in warnings)
 
@@ -130,7 +130,6 @@ class TestEntityExtraction:
             {
                 "title": "Test",
                 "sequence_id": "seq-1",
-                "act_id": "act-1",
                 "dramatic_role": "invalid",
             },
         )
@@ -143,7 +142,6 @@ class TestEntityExtraction:
             {
                 "title": "Test",
                 "sequence_id": "seq-1",
-                "act_id": "act-1",
                 "dramatic_role": "non-event",
             },
         )
@@ -160,7 +158,6 @@ class TestEntityExtraction:
             {
                 "title": "Test",
                 "sequence_id": "seq-1",
-                "act_id": "act-1",
                 "dramatic_role": "non-event",
             },
         )
@@ -427,7 +424,10 @@ class TestNoteCreation:
             project_path,
             "scene",
             "test-scene",
-            {"title": "Test Scene", "sequence_id": "seq-1", "act_id": "act-1"},
+            {
+                "title": "Test Scene",
+                "sequence_id": "seq-1",
+            },
         )
         assert result["success"] == True
 
@@ -445,7 +445,8 @@ class TestNoteCreation:
             assert row[2] == 1  # auto-order
             assert row[3] == "seq-1"
             extra = json.loads(row[5])
-            assert extra["act_id"] == "act-1"
+            # A scene's act is derived from its sequence, so it is absent here.
+            assert "act_id" not in extra
             # characters are relation fields, not extra JSON
 
             # All standard sections should be present
@@ -657,7 +658,10 @@ class TestPhase3ToolSurface:
             project_path,
             "scene",
             "test-scene",
-            {"title": "Test Scene", "sequence_id": "seq-1", "act_id": "act-1"},
+            {
+                "title": "Test Scene",
+                "sequence_id": "seq-1",
+            },
         )
 
         # Edit with data bag: frontmatter field + body section
@@ -700,7 +704,10 @@ class TestPhase3ToolSurface:
                 project_path,
                 "scene",
                 slug,
-                {"title": f"Scene {slug[-1]}", "sequence_id": "seq-1", "act_id": "act-1"},
+                {
+                    "title": f"Scene {slug[-1]}",
+                    "sequence_id": "seq-1",
+                },
             )
 
         # Reorder: move scene-3 to front
@@ -728,7 +735,10 @@ class TestPhase3ToolSurface:
             project_path,
             "scene",
             "scene-1",
-            {"title": "Scene 1", "sequence_id": "seq-1", "act_id": "act-1"},
+            {
+                "title": "Scene 1",
+                "sequence_id": "seq-1",
+            },
         )
 
         result = delete_entity(project_path, "sequence", "seq-1", "Delete seq-1", True)
@@ -800,14 +810,20 @@ class TestPhase3ToolSurface:
             project_path,
             "scene",
             "scene-a",
-            {"title": "Scene A", "sequence_id": "seq-1", "act_id": "act-1"},
+            {
+                "title": "Scene A",
+                "sequence_id": "seq-1",
+            },
         )
         # Create second scene — auto-order = 2
         result = create_entity(
             project_path,
             "scene",
             "scene-b",
-            {"title": "Scene B", "sequence_id": "seq-1", "act_id": "act-1"},
+            {
+                "title": "Scene B",
+                "sequence_id": "seq-1",
+            },
         )
         assert result["success"] is True
 
@@ -835,7 +851,10 @@ class TestPhase3ToolSurface:
                 project_path,
                 "scene",
                 "orphan",
-                {"title": "Orphan", "sequence_id": "seq-99", "act_id": "act-1"},
+                {
+                    "title": "Orphan",
+                    "sequence_id": "seq-99",
+                },
             )
 
 
@@ -870,7 +889,6 @@ class TestScreenplayStatsFromSceneContent:
             {
                 "title": "The Institute",
                 "sequence_id": "seq-1",
-                "act_id": "act-1",
                 "int_ext": "EXT.",
                 "location": "the-institute",
                 "time_of_day": "DAY",
@@ -939,7 +957,6 @@ class TestScreenplayStatsFromSceneContent:
                 {
                     "title": f"Scene {i}",
                     "sequence_id": "seq-1",
-                    "act_id": "act-1",
                     "order": i,
                     "int_ext": "INT.",
                     "location": "the-institute",
@@ -1074,7 +1091,6 @@ class TestStoryOrder:
                 {
                     "title": f"Scene {sid}",
                     "sequence_id": seq,
-                    "act_id": act,
                     "order": order,
                     "int_ext": "EXT.",
                     "location": "the-garden",
@@ -1128,7 +1144,6 @@ class TestStoryOrder:
             {
                 "title": "Scene a3",
                 "sequence_id": "seq-a",
-                "act_id": "act-1",
                 "order": 4,
                 "int_ext": "EXT.",
                 "location": "the-garden",
@@ -1157,7 +1172,6 @@ class TestStoryOrder:
             {
                 "title": "Scene a3",
                 "sequence_id": "seq-a",
-                "act_id": "act-1",
                 "int_ext": "EXT.",
                 "location": "the-garden",
                 "time_of_day": "DAY",
@@ -1171,7 +1185,6 @@ class TestStoryOrder:
             {
                 "title": "Scene a4",
                 "sequence_id": "seq-a",
-                "act_id": "act-1",
                 "int_ext": "EXT.",
                 "location": "the-garden",
                 "time_of_day": "DAY",

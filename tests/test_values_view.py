@@ -188,7 +188,6 @@ class TestEdges:
             {
                 "title": "S1",
                 "sequence_id": "seq-1",
-                "act_id": "act-1",
                 "value_turns": [
                     {
                         "plot": "main",

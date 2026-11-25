@@ -147,7 +147,6 @@ def full_role_project(tmp_path):
                 "status": "written",
                 "dramatic_role": role,
                 "sequence_id": "seq-1",
-                "act_id": "act-1",
             },
         )
 

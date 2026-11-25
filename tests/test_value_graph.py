@@ -86,7 +86,6 @@ def _story():
                 "order": 1,
                 "sequence_id": "seq-1",
                 "parent_id": "seq-1",
-                "act_id": "act-1",
                 "value_turns": [
                     {
                         "plot": "main",
@@ -104,7 +103,6 @@ def _story():
                 "order": 2,
                 "sequence_id": "seq-2",
                 "parent_id": "seq-2",
-                "act_id": "act-2",
                 "value_turns": [
                     {
                         "plot": "main",
@@ -218,7 +216,6 @@ def test_no_turns_shows_empty_state():
             "order": 1,
             "sequence_id": "seq-1",
             "parent_id": "seq-1",
-            "act_id": "act-1",
             "value_turns": [],
             "milestone": [],
         }

@@ -23,7 +23,7 @@ def _scene(project, **overrides):
         project,
         "scene",
         "s1",
-        {"title": "The room", "sequence_id": "seq-1", "act_id": "act-1", **overrides},
+        {"title": "The room", "sequence_id": "seq-1", **overrides},
     )
 
 

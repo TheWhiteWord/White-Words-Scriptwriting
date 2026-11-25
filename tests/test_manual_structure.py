@@ -27,25 +27,32 @@ def project(tmp_path):
     create_entity(p, "act", "a2", {"title": "Act Two", "order": 2})
     for sid, act, order in (("s1", "a1", 1), ("s2", "a1", 2), ("s3", "a2", 1)):
         create_entity(p, "sequence", sid, {"title": f"Seq {sid}", "act_id": act, "order": order})
-    for sc, seq, act in (
-        ("sc1", "s1", "a1"),
-        ("sc2", "s1", "a1"),
-        ("sc3", "s1", "a1"),
-        ("sc4", "s2", "a1"),
+    for sc, seq in (
+        ("sc1", "s1"),
+        ("sc2", "s1"),
+        ("sc3", "s1"),
+        ("sc4", "s2"),
     ):
-        create_entity(p, "scene", sc, {"title": f"Scene {sc}", "sequence_id": seq, "act_id": act})
+        create_entity(p, "scene", sc, {"title": f"Scene {sc}", "sequence_id": seq})
     return p
 
 
 def _scene(p, sid):
+    """The scene as the app exposes it: `act` is derived from its sequence."""
     conn = get_db(p)
     try:
-        r = conn.execute(
-            "SELECT parent_id, order_key, extra FROM entities WHERE id=?", (sid,)
-        ).fetchone()
-        return {"seq": r[0], "order": r[1], "act": json.loads(r[2]).get("act_id")}
+        r = conn.execute("SELECT parent_id, order_key FROM entities WHERE id=?", (sid,)).fetchone()
     finally:
         conn.close()
+    act = ""
+    if r[0]:
+        c = get_db(p)
+        try:
+            row = c.execute("SELECT parent_id FROM entities WHERE id=?", (r[0],)).fetchone()
+            act = (row[0] or "") if row else ""
+        finally:
+            c.close()
+    return {"seq": r[0], "order": r[1], "act": act}
 
 
 def _ids(tree):
@@ -719,41 +726,27 @@ class TestHttp:
         assert client.post("/api/projects/demo/structure/apply", json={}).status_code == 403
 
 
-# ─── act_id is derived, never written ───
+# ─── a scene's act is derived, never stored ───
 
 
-def test_editing_sequence_id_moves_the_act_too(fixture_path):
-    """A scene's `act_id` is its sequence's parent. Written by the caller it could
-    name the old act, and `create_entity` then refuses the scene, so it stops
-    round-tripping through the logical shape."""
-    p = fixture_path
-    create_entity(p, "act", "act-2", {"title": "Act II", "order": 2})
-    create_entity(p, "sequence", "seq-2", {"title": "Seq 2", "act_id": "act-2"})
-
-    edit_entity(p, "scene", "the-core-day", {"sequence_id": "seq-2"}, "t")
-
-    conn = get_db(p)
-    try:
-        act_id = json.loads(
-            conn.execute("SELECT extra FROM entities WHERE id='the-core-day'").fetchone()[0]
-        )["act_id"]
-        assert act_id == "act-2"
-    finally:
-        conn.close()
+def test_scene_act_is_not_a_writable_field(project):
+    """One copy of the fact. A scene that tried to carry its own act could name a
+    different one than its sequence's, and nothing would notice."""
+    with pytest.raises(ValueError, match="Unrecognised scene field"):
+        create_entity(project, "scene", "sc-x", {"title": "X", "sequence_id": "s1", "act_id": "a2"})
 
 
-def test_a_supplied_act_id_is_ignored(fixture_path):
-    """One copy of the fact, so a conflicting one cannot be stored."""
-    p = fixture_path
-    edit_entity(p, "scene", "central-room-day", {"act_id": "act-2"}, "t")
+def test_a_moved_scene_reads_its_new_act(project):
+    """The proof the derivation is right: move the scene, not the act."""
+    edit_entity(project, "scene", "sc1", {"sequence_id": "s3"}, "t")
+    assert _scene(project, "sc1") == {"seq": "s3", "order": 1, "act": "a2"}
 
-    conn = get_db(p)
-    try:
-        assert (
-            json.loads(
-                conn.execute("SELECT extra FROM entities WHERE id='central-room-day'").fetchone()[0]
-            )["act_id"]
-            == "act-1"
-        )
-    finally:
-        conn.close()
+
+def test_the_dashboard_reads_a_derived_act(project):
+    """`db.py` supplies `act_id` for every reader; it comes from the chain."""
+    from white_words.scriptwriting.core.db import get_dashboard_data
+
+    edit_entity(project, "scene", "sc1", {"sequence_id": "s3"}, "t")
+    shape = get_dashboard_data(project)["story_data"]
+    sc = next(s for s in shape["scenes"] if s["id"] == "sc1")
+    assert sc["act_id"] == "a2" and sc["sequence_id"] == "s3"

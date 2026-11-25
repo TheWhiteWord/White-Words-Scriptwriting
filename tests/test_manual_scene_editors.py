@@ -61,7 +61,15 @@ def project(tmp_path):
     create_entity(p, "plot", "main", {"name": "The Escape", "characters": ["kael"]})
     create_entity(p, "act", "a1", {"title": "Act One", "order": 1})
     create_entity(p, "sequence", "s1", {"title": "Seq", "act_id": "a1", "order": 1})
-    create_entity(p, "scene", "sc1", {"title": "Dinner", "sequence_id": "s1", "act_id": "a1"})
+    create_entity(
+        p,
+        "scene",
+        "sc1",
+        {
+            "title": "Dinner",
+            "sequence_id": "s1",
+        },
+    )
     return p
 
 

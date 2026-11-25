@@ -29,7 +29,6 @@ def client(tmp_path, monkeypatch):
         {
             "title": "S1",
             "sequence_id": "seq-1",
-            "act_id": "act-1",
             "order": 1,
             "location": "kitchen",
             "int_ext": "INT.",

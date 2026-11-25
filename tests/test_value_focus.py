@@ -59,7 +59,7 @@ def _scenes_with_turns(project, seq_id, act_id, plan):
             project,
             "scene",
             f"{seq_id}-s{i}",
-            {"title": f"S{i}", "sequence_id": seq_id, "act_id": act_id, "value_turns": turns},
+            {"title": f"S{i}", "sequence_id": seq_id, "value_turns": turns},
         )
 
 
@@ -274,7 +274,13 @@ class TestEmpty:
     def test_no_turns_anywhere_is_empty(self, project):
         _structure(project)
         create_entity(
-            project, "scene", "s1", {"title": "S1", "sequence_id": "seq-1", "act_id": "act-1"}
+            project,
+            "scene",
+            "s1",
+            {
+                "title": "S1",
+                "sequence_id": "seq-1",
+            },
         )
         assert for_plot(project, "nope") == {"major": [], "minor": []}
         assert for_sequence(project, "seq-1") == {"major": [], "minor": []}
