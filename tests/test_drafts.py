@@ -351,6 +351,58 @@ def _rows(project_path, sql, *params):
         conn.close()
 
 
+def test_apply_op_applies_one_op_on_the_callers_connection(fixture_path):
+    """The merge executor calls `apply_op` directly, outside `sorted_ops`.
+
+    `conn` is the caller's transaction: the op must land visibly inside it and
+    the caller rolls it back, so nothing survives a refused plan.
+    """
+    from white_words.scriptwriting.core.db import transaction
+
+    conn = get_db(fixture_path)
+    try:
+        with pytest.raises(RuntimeError):
+            with transaction(conn):
+                result = drafts.apply_op(
+                    fixture_path,
+                    {
+                        "op": "edit",
+                        "entity_type": "location",
+                        "entity_id": "the-central-room",
+                        "data": {"mood": "warm"},
+                        "summary": "one op",
+                    },
+                    conn=conn,
+                )
+                assert result.get("error") is None
+                inside = conn.execute(
+                    "SELECT extra FROM entities WHERE id='the-central-room'"
+                ).fetchone()[0]
+                assert "warm" in (inside or "")
+                raise RuntimeError("roll the plan back")
+    finally:
+        conn.close()
+    assert "warm" not in (
+        _rows(fixture_path, "SELECT extra FROM entities WHERE id=?", "the-central-room")[0][0] or ""
+    )
+
+
+def test_apply_op_returns_a_refusal_as_an_error_dict(fixture_path):
+    """A refused write is a return value, not a raise: the executor maps it back
+    to the item that produced it."""
+    result = drafts.apply_op(
+        fixture_path,
+        {
+            "op": "edit",
+            "entity_type": "location",
+            "entity_id": "no-such-place",
+            "data": {"mood": "warm"},
+            "summary": "unknown id",
+        },
+    )
+    assert "Entity not found" in result["error"]
+
+
 def _create_scene(slug, sequence_id="seq-discovery", **frontmatter):
     fm = {"title": slug, "sequence_id": sequence_id, "act_id": "act-1"}
     fm.update(frontmatter)

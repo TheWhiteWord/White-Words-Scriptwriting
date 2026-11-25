@@ -156,23 +156,79 @@ def prune_automatic_backups(project_path: Path, keep: int | None = None) -> list
     return removed
 
 
+def load_database_in_place(
+    project_path: Path, source: Path, *, safety_label: str = "before-restore"
+) -> str:
+    """Copy a validated database file into the live project database, in place.
+
+    ``source`` must already be a checked project database (integrity, schema
+    version, entities table): this function owns only what the copy itself can
+    go wrong at — a target that does not exist, a page size the target cannot
+    take, and the state after the copy. Returns the safety backup's path.
+
+    The copy goes through SQLite's backup API instead of swapping the file. A
+    file swap leaves other open connections (the web app, the agent's tools)
+    pointing at the old file, where a write would be lost, and a stale ``-wal``
+    left beside the new file corrupts it. Copying in place is one transaction on
+    the real file: other connections see the new data as soon as it commits, and
+    nothing is left behind.
+
+    The current state is saved as an automatic backup before the copy — the
+    page-size refusal comes first, so a refused copy leaves no backup behind —
+    and the copy is migrated forward inside the live database.
+    """
+    from .db import BASELINE_VERSION, SCHEMA_MIGRATIONS, apply_migrations, get_db
+
+    name = Path(source).name
+    if not (project_path / ".story" / "story.db").exists():
+        raise ValueError("This project has no story.db to restore into.")
+
+    # immutable: read it without creating -wal/-shm files beside the source
+    try:
+        snap = sqlite3.connect(f"file:{source}?mode=ro&immutable=1", uri=True)
+    except sqlite3.Error as e:
+        raise ValueError(f"{name} cannot be opened: {e}")
+    try:
+        try:
+            page_size = snap.execute("PRAGMA page_size").fetchone()[0]
+        except sqlite3.Error as e:
+            raise ValueError(f"{name} is not a readable project database: {e}")
+        live = get_db(project_path)
+        try:
+            if live.execute("PRAGMA page_size").fetchone()[0] != page_size:
+                raise ValueError(
+                    f"{name} uses a different database page size and cannot be restored in place."
+                )
+            safety = create_backup(project_path, label=safety_label, automatic=True)
+            snap.backup(live)
+            apply_migrations(
+                live,
+                SCHEMA_MIGRATIONS,
+                baseline=BASELINE_VERSION,
+                name=f"{project_path.name}/.story/story.db",
+            )
+            if live.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                raise RuntimeError(
+                    f"The database failed its integrity check after the restore. The state "
+                    f"before it is saved as {Path(safety).name}."
+                )
+        finally:
+            live.close()
+    finally:
+        snap.close()
+    return safety
+
+
 def restore_backup(project_path: Path, name: str) -> dict:
     """Replace the project database with a backup's contents.
 
-    The snapshot is copied *into* the live database through SQLite's backup API
-    instead of swapping the file. A file swap leaves other open connections (the
-    web app, the agent's tools) pointing at the old file, where a write would be
-    lost, and a stale ``-wal`` left beside the new file corrupts it. Copying in
-    place is one transaction on the real file: other connections see the
-    restored data as soon as it commits, and nothing is left behind.
-
-    Before anything changes, the backup is checked (a readable SQLite file, no
+    The backup is checked before anything changes (a readable SQLite file, no
     damage, a project database, not from a newer build nor older than the
-    baseline, same page size) and the current state is saved as an automatic
-    backup — so a restore can itself be undone by restoring that one. Raises
-    ValueError, changing nothing, if a check fails.
+    baseline) and then handed to `load_database_in_place`, which takes the
+    safety backup and copies it in. Raises ValueError, changing nothing, if a
+    check fails.
     """
-    from .db import BASELINE_VERSION, LATEST_VERSION, SCHEMA_MIGRATIONS, apply_migrations, get_db
+    from .db import BASELINE_VERSION, LATEST_VERSION
 
     # Only names from the listing: that is what keeps a path like ../story.db out.
     if name not in {b["name"] for b in list_backups(project_path)}:
@@ -193,7 +249,6 @@ def restore_backup(project_path: Path, name: str) -> dict:
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='entities'"
             ).fetchone()
             version = snap.execute("PRAGMA user_version").fetchone()[0]
-            page_size = snap.execute("PRAGMA page_size").fetchone()[0]
         except sqlite3.Error as e:
             raise ValueError(f"{name} is not a readable project database: {e}")
         if not ok:
@@ -210,30 +265,10 @@ def restore_backup(project_path: Path, name: str) -> dict:
                 f"{name} is older than this build supports (schema {version}; the "
                 f"baseline is {BASELINE_VERSION})."
             )
-
-        live = get_db(project_path)
-        try:
-            if live.execute("PRAGMA page_size").fetchone()[0] != page_size:
-                raise ValueError(
-                    f"{name} uses a different database page size and cannot be restored in place."
-                )
-            safety = create_backup(project_path, label="before-restore", automatic=True)
-            snap.backup(live)
-            apply_migrations(
-                live,
-                SCHEMA_MIGRATIONS,
-                baseline=BASELINE_VERSION,
-                name=f"{project_path.name}/.story/story.db",
-            )
-            if live.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
-                raise RuntimeError(
-                    f"The database failed its integrity check after the restore. The state "
-                    f"before it is saved as {Path(safety).name}."
-                )
-        finally:
-            live.close()
     finally:
         snap.close()
+
+    safety = load_database_in_place(project_path, source, safety_label="before-restore")
 
     meta = next(b for b in list_backups(project_path) if b["name"] == name)
     return {

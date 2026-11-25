@@ -482,7 +482,7 @@ def commit(project_path: Path, draft_id: str) -> dict:
     try:
         with transaction(conn):
             for n, op in enumerate(ops, 1):
-                result = _dispatch(project_path, op, conn=conn)
+                result = apply_op(project_path, op, conn=conn)
                 # A write function reports a refusal either by raising (which
                 # `_call` turns into an error dict) or by returning one.
                 if result.get("error") or result.get("success") is False:
@@ -539,7 +539,7 @@ def _commit_purges(project_path: Path, draft_id: str, ops: list) -> dict:
 
     landed = []
     for n, op in enumerate(ops, 1):
-        result = _dispatch(project_path, op)
+        result = apply_op(project_path, op)
         if result.get("error") or result.get("success") is False:
             error = str(result.get("error") or result.get("message") or "the write was refused")
             label = _describe(op)
@@ -689,8 +689,11 @@ def _commit_report(landed: list, failed: dict | None, draft_id: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _dispatch(project_path: Path, op: dict, conn=None) -> dict:
+def apply_op(project_path: Path, op: dict, conn=None) -> dict:
     """Apply one op by calling the core write function for its kind.
+
+    Public because the merge executor orders ops by its own rules and cannot go
+    through `sorted_ops`; the drafts flow still does.
 
     The op fields are already what the write functions take, so there is
     nothing to translate: `project_path` is resolved, and each op names its

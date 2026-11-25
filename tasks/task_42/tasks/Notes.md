@@ -124,8 +124,25 @@ and what it changes. No narration.
   partial list, so the completeness assertion belongs to the caller (T7's
   planner). Extracting `apply_op` must not move that responsibility into the
   already-public function.
+- `core.backups.load_database_in_place(project_path, source, *, safety_label)`
+  copies a **checked** file into the live database and returns the safety
+  backup's path. Source validation (integrity, entities table, schema version)
+  stays in `restore_backup`; the loader owns the target-missing refusal, the
+  page-size refusal (before the safety backup, as before), the copy, the
+  migration and the post-copy integrity check. T3's branch switch calls it with
+  a snapshot or parked head and `safety_label="before-switch"`; it must still
+  run `restore_backup`'s source checks itself, since the loader does not.
+- `core.drafts.apply_op(project_path, op, conn=None)` is the former `_dispatch`,
+  renamed only. It returns a refusal as `{"error": …}` via `_call` and never
+  raises for a refused write; `commit`'s loop and the merge executor both key on
+  that. `sorted_ops` and `OP_ORDER` are untouched.
 
 ### Deviations
+- The loader takes the safety backup (decision in the T2 task file). The spec
+  describes the extraction as "extracted into a function that takes any
+  validated source file"; the safety backup had to land on one side of the split
+  and the loader is the side T3 needs it on.
+
 ### Issues
 
 ---
@@ -133,6 +150,24 @@ and what it changes. No narration.
 ## T3 — `history.db` and `store.py`
 
 ### Findings
+- Branch switch calls `core.backups.load_database_in_place(project_path, source,
+  safety_label="before-switch")` to copy a snapshot or a parked head into the
+  live database. It returns the safety backup's path. It does **not** validate
+  the source: integrity, `entities` table and schema-version checks stay in
+  `restore_backup` and the switch must run the equivalent itself. It also does
+  not check page size against anything but the live database — a snapshot has
+  the same page size by construction, so that is the only case it refuses.
+- Two strings inside the loader still say `"cannot be restored in place"` (page
+  size) and `"failed its integrity check after the restore"`. They reach the
+  caller for a switch too. Reword both to the neutral copy in T3's commit and
+  update the two `tests/test_backups.py` assertions that pin them; T2 left them
+  byte-identical on purpose, because rewording is observable behaviour. A third,
+  `"This project has no story.db to restore into."`, cannot fire during a switch
+  (the live database is the current branch's head) and needs no change.
+- `restore_backup` now takes its safety backup *inside* the loader, so a caller
+  that wants a labelled "before" state of the live database around a switch gets
+  it from the same call — do not take a second one.
+
 ### Deviations
 ### Issues
 

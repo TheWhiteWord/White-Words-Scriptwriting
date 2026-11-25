@@ -280,6 +280,43 @@ def test_listing_and_restoring_leave_nothing_behind(fixture_path):
     assert _stray_files(fixture_path) == []  # no -wal/-shm beside the backups
 
 
+# ─── load_database_in_place ───
+
+
+def test_the_loader_copies_a_checked_file_into_the_live_database(fixture_path):
+    from white_words.scriptwriting.core.backups import load_database_in_place
+
+    original = _name(fixture_path)
+    snap = Path(create_backup(fixture_path, label="milestone"))
+    _rename(fixture_path, "Changed")
+
+    other = sqlite3.connect(str(fixture_path / ".story" / "story.db"), isolation_level=None)
+    other.execute("SELECT count(*) FROM entities").fetchone()  # open and warm
+    safety = load_database_in_place(fixture_path, snap, safety_label="before-switch")
+
+    assert _name(fixture_path) == original
+    assert other.execute("SELECT name FROM entities WHERE id='kael'").fetchone()[0] == original
+    other.close()
+    entry = next(b for b in list_backups(fixture_path) if b["name"] == Path(safety).name)
+    assert entry["kind"] == "automatic" and entry["label"] == "before-switch"
+
+
+def test_the_loader_refuses_a_page_size_mismatch_before_taking_a_backup(fixture_path):
+    from white_words.scriptwriting.core.backups import load_database_in_place
+
+    snap = fixture_path / ".story" / Path(create_backup(fixture_path)).name
+    c = sqlite3.connect(str(snap))
+    c.execute("PRAGMA journal_mode=DELETE")
+    c.execute("PRAGMA page_size = 8192")
+    c.execute("VACUUM")
+    c.close()
+    before = _name(fixture_path)
+    with pytest.raises(ValueError, match="page size"):
+        load_database_in_place(fixture_path, snap, safety_label="before-switch")
+    assert _name(fixture_path) == before
+    assert [b for b in list_backups(fixture_path) if b["label"] == "before-switch"] == []
+
+
 # ─── restore refusals: nothing may change ───
 
 
