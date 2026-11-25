@@ -492,6 +492,13 @@ ENTITY_SCHEMAS = {
             "group": "Title page",
             "description": "Title page: draft label (e.g. 'First Draft')",
         },
+        "memory": {
+            "type": "object",
+            "default": {},
+            "optional": True,
+            "description": "Durable project facts recorded with story_memory, as {decisions, "
+            "directions, open_questions, continuity_warnings} — each a list of strings.",
+        },
         "value_focus": {
             "type": "object",
             "keyed": False,

@@ -28,7 +28,7 @@ from ..versions import token
 _CONTENT_COLUMNS = ("id", "type", "name", "one_sentence", "status", "parent_id", "location_id")
 
 # The types whose order is authored, and so fingerprinted as a list per parent.
-_ORDERED_TYPES = ("scene", "sequence")
+ORDERED_TYPES = ("scene", "sequence", "act")
 
 
 def _computed(entity_type: str) -> set:
@@ -77,9 +77,9 @@ def of_conn(conn: sqlite3.Connection) -> str:
     order: dict[str, list] = {}
     for entity_type, parent_id, entity_id in conn.execute(
         "SELECT type, parent_id, id FROM entities "
-        f"WHERE is_deleted=0 AND type IN ({', '.join('?' * len(_ORDERED_TYPES))}) "
+        f"WHERE is_deleted=0 AND type IN ({', '.join('?' * len(ORDERED_TYPES))}) "
         "ORDER BY parent_id, order_key, id",
-        _ORDERED_TYPES,
+        ORDERED_TYPES,
     ):
         order.setdefault(f"{entity_type}:{parent_id or ''}", []).append(entity_id)
 

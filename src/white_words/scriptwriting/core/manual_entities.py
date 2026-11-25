@@ -249,9 +249,12 @@ HIDDEN = {
     ("sequence", "order"),
     ("scene", "order"),
     ("scene", "act_id"),
+    # The last two live in the Beats tab.
     ("scene", "turning_point"),
     ("scene", "scene_beats"),
-}  # the last two live in the Beats tab
+    # Written by the story_memory tool, one entry at a time, not by a form field.
+    ("project", "memory"),
+}
 # The writing-time part of the heading, owned by the script editor: it writes
 # these together with the script, so the composed line cannot disagree with
 # them. The entity form does not show or write them — `_clean` discards them if

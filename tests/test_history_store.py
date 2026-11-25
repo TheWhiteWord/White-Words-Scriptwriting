@@ -220,6 +220,61 @@ def test_a_save_with_nothing_changed_is_refused(project):
     assert len(store.list_branches(project)["snapshots"]) == 1
 
 
+def _add_second_act(project):
+    """Two acts, so one can genuinely move ahead of the other."""
+    conn = sqlite3.connect(str(project / ".story" / "story.db"))
+    try:
+        conn.execute(
+            "INSERT INTO entities (id, type, name, one_sentence, order_key, status, extra) "
+            "VALUES ('act-2', 'act', 'Act Two', '', 2, 'draft', '{}')"
+        )
+        conn.execute("UPDATE entities SET order_key=1 WHERE id='act-1'")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_reordering_acts_is_a_change(project):
+    """Act order is authored (§5.2) and read in four places, so it is content."""
+    _add_second_act(project)
+    before = fingerprint.of_project(project)
+    conn = sqlite3.connect(str(project / ".story" / "story.db"))
+    try:
+        conn.execute("UPDATE entities SET order_key = 1 WHERE id='act-2'")
+        conn.execute("UPDATE entities SET order_key = 2 WHERE id='act-1'")
+        conn.commit()
+    finally:
+        conn.close()
+    assert fingerprint.of_project(project) != before
+
+
+def test_renumbering_acts_without_reordering_is_not_a_change(project):
+    _add_second_act(project)
+    before = fingerprint.of_project(project)
+    conn = sqlite3.connect(str(project / ".story" / "story.db"))
+    try:
+        conn.execute("UPDATE entities SET order_key = order_key * 3 + 7 WHERE type='act'")
+        conn.commit()
+    finally:
+        conn.close()
+    assert fingerprint.of_project(project) == before
+
+
+def test_a_save_captures_an_act_reorder(project):
+    """The guard that used to refuse this was the fingerprint ignoring act order."""
+    _rename(project, "second")
+    store.save_snapshot(project, "second")
+    _add_second_act(project)
+    conn = sqlite3.connect(str(project / ".story" / "story.db"))
+    try:
+        conn.execute("UPDATE entities SET order_key = 1 WHERE id='act-2'")
+        conn.execute("UPDATE entities SET order_key = 2 WHERE id='act-1'")
+        conn.commit()
+    finally:
+        conn.close()
+    assert store.save_snapshot(project, "act reorder")["label"] == "act reorder"
+
+
 def test_a_save_freezes_the_current_state(project):
     snapshot = _saved(project, "After the rename")
     assert snapshot["label"] == "After the rename" and snapshot["seq"] == 2

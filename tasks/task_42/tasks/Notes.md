@@ -257,25 +257,73 @@ and what it changes. No narration.
   `get_db` would do) leaves two empty files beside a frozen draft, and a `-wal`
   beside a snapshot is what makes a later reader see a stale view of it.
   `store._drop_sidecars` sweeps them after every history write, and
-  `tests/test_history_store.py` pins it. `ProjectView` must copy the draft out
-  (backup API, as §4.3 says) and never open it in place.
+  `tests/test_history_store.py` pins it. `core.history.view.project_view` copies
+  the draft out with the backup API and never opens it in place; its test asserts
+  the snapshot directory is byte-for-byte unchanged across a read.
 - `fingerprint.of_project` and `store.head_state` go through `get_db`, which
   **migrates**. That is right for the live database and wrong for a draft: the
-  migration would rewrite a frozen file. Anything that reads a draft must go
-  through `ProjectView`'s copy.
+  migration would rewrite a frozen file. Anything that reads a draft goes through
+  `project_view`'s copy; the view validates the draft with `check_source` and lets
+  `get_db` migrate the copy.
 - `core/history/store.py` is registered in `LOCAL_TIME_ALLOWED`
   (`tests/test_utc_stamps.py`) for a snapshot id's timestamp. A new
   `core/history/*.py` that needs `datetime.now`/`.isoformat` must add itself with
-  a reason or the stamp guard fails.
+  a reason or the stamp guard fails. **T4 added no such file**: neither `view.py`
+  nor `logical.py` reads the clock.
 - Snapshot ids are `s-<stamp>[-n]`, so a draft's file is
-  `history/snapshots/s-<stamp>.db`. `ProjectView` receives a snapshot id, not a
-  path, and should resolve it through `store.snapshot_file`.
+  `history/snapshots/s-<stamp>.db`. `project_view` takes a snapshot id, not a
+  path, and resolves it through `store.snapshot_file`.
 - `FROM live_relations` is free of the raw-relations registry
-  (`tests/test_live_relations.py:328`), so a materializer can read the view
-  without a registry edit. A raw `FROM relations` would need one.
+  (`tests/test_live_relations.py:328`), so `logical.materialize` reads the view
+  with no registry edit. A raw `FROM relations` would need one.
+- **The fixture has one `extra` key no schema declares: `project.memory`.** It is
+  live content (`story_memory` is an agent-facing tool, `story_export` writes it
+  to `.story/memory.md`, a write moves the fingerprint) but `create_entity`
+  refused the key, so a logical-entity round trip could be exact and still drop
+  it. **Settled in T4, option A** (owner): `memory` is declared on `project` as
+  an `object` field, hidden from the entity form and skipped by
+  `unfilled_fields`, since `story_memory` writes it one entry at a time.
+- **Act order was content the fingerprint ignored.** `reorder(act)` is refused,
+  but `edit_entity` accepts `order` on an act and four readers sort by
+  `order_key`, so an act-only reorder was refused by `save_snapshot` as "Nothing
+  has changed". **Settled in T4, option A** (owner): `act` is in
+  `fingerprint.ORDERED_TYPES`. Renumbering acts without reordering still hashes
+  stable, which is why the per-parent id list was already the right
+  serialization.
+- **`create_entity` auto-numbers scenes and sequences, and does not number acts.**
+  It numbers a child from the live sibling set, so a rebuild in id order gives a
+  different story order than the source. `logical.rebuild_copy` therefore sorts
+  children by the parent's declared order; `materialize` drops a scene's or
+  sequence's `order` field (order is the id list) and keeps an act's.
+- **`create_entity` creates every standard section heading**, so a materializer
+  that emits only the headings it found cannot round-trip a state whose empty
+  rows were pruned. `logical.materialize` normalizes to `standard_sections(type)`
+  with `""` for a missing body.
+- `edit_entity` and `delete_entity` both need more than the obvious arguments:
+  `delete_entity(project_path, type, id, summary, confirm=True)` refuses without
+  `confirm`, returning `would_delete` as a preview rather than deleting. A probe
+  that omits it silently tests nothing.
 
 ### Deviations
+- **`memory` is declared, form-hidden and unfilled-suppressed, not given a form
+  field** (owner decision, F-1 option A). The spec's §5.1 defines the logical
+  entity through the schema, so declaring it is the smallest change that makes it
+  part of the shape; a form field would imply an author edits it there, which is
+  not how it is written.
+- **`act` joins `ORDERED_TYPES` while `reorder()` still refuses acts** (owner
+  decision, F-2 option A). `order` remains an act field for writes, and the
+  per-parent id list carries the same fact for the hash — two views of one
+  ordering, both read from `order_key`.
+
 ### Issues
+- **The T3 fingerprint changed for any project with more than one act**, because
+  `act` order is now hashed. A project with a single act is unaffected (a
+  one-element list). This is a hash value change only: `history.db` stores
+  fingerprints, so a draft saved before this commit will not match a recomputed
+  fingerprint of the same state. Pre-publication, and no migration is needed —
+  but a stale `changed` flag on an old draft is expected, not a bug.
+- §4.3's "views are cached per session" is not implemented: `project_view` copies
+  per block with no cache. T10 owns sessions and is where a cache belongs.
 
 ---
 
@@ -294,6 +342,21 @@ and what it changes. No narration.
   "trash ignored" (§6.1) comes for free on that path. A raw `FROM relations`
   read does not: a trashed scene still holds its `plot_<role>` rows and its
   cast rows. Read the view, or filter `is_deleted` explicitly.
+- **Order is NOT part of `logical.materialize`'s output.** It returns
+  `{id: {id, type, fields, sections}}`; child order lives in
+  `logical.order_of(conn)` as a per-parent id list. A diff that compares only the
+  materialized shapes reports a pure reorder as **no change** — pair both sides
+  with `order_of`. (`order_of` reads the same rows and tie-break as
+  `fingerprint`, so the two cannot disagree.)
+- **`fields` values arrive in their authored shape, not as flat strings:**
+  `scene.plot_roles` is `[{plot, role, description}]`, a plot's beat lists are
+  `[{scene_id, description}]`, `relationship.perspectives` is a keyed object, and
+  only `character_scene` cast is a plain id list. §6.1's element-wise
+  `REFERENCE_LISTS` diff therefore applies to the plain id lists only; the rest
+  are whole-value until the diff is taught their shape.
+- `project.memory` is part of `fields` now (an object of four string lists). It
+  diffs as a whole value; there is no per-entry granularity unless §6.1 asks for
+  it.
 - Two **live** siblings can already share an `order_key`: a delete frees a key,
   `_get_next_order_db` reissues it, and a restore leaves the pair in place. So
   the child order must be serialized as the `(order_key, id)` id list (§4.4's
@@ -312,6 +375,10 @@ and what it changes. No narration.
 ## T7 — Planner
 
 ### Findings
+- `logical.rebuild_copy(entities, order, dest)` creates a whole materialized shape
+  through `create_entity`, but it sorts by an `order` mapping. A plan bringing ONE
+  entity has no such mapping and must not invent one: `create` the entity and let
+  the reorder step settle its position.
 - D6 ("trashed in target") reuses the restore guard. `restore_check(conn, id)`
   already reports `collisions` (a singular role held by a live scene, with the
   holder and the two choices) and `placement` (another live sibling on the same

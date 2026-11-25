@@ -481,6 +481,10 @@ def unfilled_fields(entity_type: str, extra: dict, row: dict | None = None) -> l
         # forever and filling it means inventing a parent that does not exist.
         if field == "variant_of":
             continue
+        # memory is the agent's record of decisions, not prose the author owes
+        # the project. An empty one is a project with nothing recorded yet.
+        if field == "memory":
+            continue
         # status: workflow state, always emitted, never "unfilled"
         # boolean/number: binary or scalar values, not "unfilled"
         if (
