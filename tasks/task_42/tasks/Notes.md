@@ -330,8 +330,51 @@ and what it changes. No narration.
 ## T5 — `refmap`
 
 ### Findings
+- **22 reference sites over 10 entity types.** Five are declared by none of the four
+  mechanisms (`ref`, `REFERENCE_*`, relation kind, bespoke validator); probed with a
+  dangling slug, four are **accepted** by `create_entity`: `sequence.primary_plot`,
+  `location.variant_of`, `relationship.characters[]`, `relationship.scenes[]`. The fifth,
+  `value_turns[].value`, is refused by `validate_scene_value_turns`. `sequence.primary_plot`
+  is declared by nothing at all — that is the module's justification.
+- **`value_turns[].value` stores the value's display NAME, not its id.** Verified: a turn
+  for value `free-will` (name `Free Will`) stores `"Free Will"`; writing `"free-will"` is
+  refused ("is not a defined value"). So `refmap.rewrite` takes `by_id` and `by_name` as
+  SEPARATE lookup spaces — a merged dict lets a name equal to another entity's id rewrite
+  the wrong site. Both directions are pinned.
+- **`plot.<role>` (six lists) are the same relation rows as `scene.plot_roles`**, read from
+  the plot side, and `logical.materialize` emits both. One authored role edit therefore
+  shows as **two** changed fields (probe: `plot_roles[].description` → differences at
+  `scene.plot_roles` and `plot.inciting_incident`). They are `computed`, so `edit_entity`
+  reports `success` with `skipped_read_only=['climax']` and changes nothing.
+  `refmap.DERIVED` is the exclusion list.
+- **`scene.act_id` duplicates the parent chain and drifts.** Verified: `edit(scene,
+  sequence_id=seq-2)` where `seq-2` sits in `act-2` → scene parent `seq-2`, `extra.act_id`
+  still `act-1`; `create_entity` then refuses the entity ("Sequence seq-2 belongs to act
+  act-2, not act-1") and the logical round trip fails. Declared DERIVED, not a site.
+- **`scene.scene_beats` is a declared `ref` that is `computed` and absent from the shape** —
+  the only one of the seven `ref`s that is missing from `materialize` output. `plot.<role>`
+  and `plot_roles` are relation-backed, so `materialize` fills them after the computed
+  filter (`logical.py:131`).
+- **The write path accepts an entity that no longer says what it is**: `sequence_id=""`,
+  `beats=[]`, `characters=[]`, `act_id=""` are all accepted. So `required` in refmap is
+  §7.4.2's decision, not a fact derived from what the code refuses.
+- **An empirical sweep of `materialize` output cannot catch an unused reference field.** A
+  new site on `project` with no fixture value fails nothing; one whose default holds a real
+  id is caught. The declared-ref walk is the other half and is not optional.
+- `location.variant_of` is the one site the fixture never exercises (zero
+  `location_variant` rows; the world counterpart has one).
+
 ### Deviations
+- **`Site.checked_by` records the validator, or `None`** rather than a boolean "declared".
+  Nine sites have no validator; the test names the exact set, so a new unchecked site cannot
+  join it quietly.
+- **No storage field on a `Site`.** T7 emits drafts ops by field name, so `extra` vs column
+  vs relation is invisible to it; the pinning test resolves each site against the maps.
+
 ### Issues
+- **`scene.act_id` must be written together with `sequence_id` by the merge executor.** Any
+  plan that moves a scene across acts and writes only `sequence_id` produces an entity
+  `create_entity`/`edit` will refuse, so the plan's own dry run fails. Recorded under T7/T8.
 
 ---
 
@@ -366,6 +409,11 @@ and what it changes. No narration.
 - `tests/test_live_relations.py` pins every raw `relations` read with a count
   per file. A diff that needs one must add itself to that registry and its
   docstring reason, or the suite fails with an unexplained count mismatch.
+- **One authored role edit appears as TWO changed fields.** `logical.materialize`
+  emits a role on both sides of the same relation rows: `scene.plot_roles` (the
+  authored side) and the plot's six `setups`/`inciting_incident`/… lists (the read
+  side). A diff that reports both makes a merge item out of a derived view.
+  `refmap.DERIVED["plot"]` is the exclusion list, verified in T5.
 
 ### Deviations
 ### Issues
@@ -401,6 +449,21 @@ and what it changes. No narration.
   plan that also emits a `reorder` for the same parent renumbers it twice, and
   the second is built from a list the planner computed before the restore ran.
   Take the restore's `placed` as the outcome and emit no reorder for that parent.
+- **`refmap` is the reference source: `iter_references(type, fields)` and
+  `rewrite(type, fields, by_id=…, by_name=…)`.** Paths are concrete
+  (`value_turns[0].effects[1].character`), so the decision key can name the entry.
+  `by_name` is a SEPARATE lookup space: `value_turns[].value` holds the value's
+  display name, not its id, so a D1 keep-both on a value maps by name and an id
+  mapping must never be used for it.
+- **The plot's six `<role>` lists are `refmap.DERIVED`.** A role change is an edit
+  of `scene.plot_roles`; nothing may emit an op against `plot.setups` and friends,
+  because they are `computed` and `edit_entity` returns `success` with
+  `skipped_read_only` while changing nothing — a silent no-op in a merge.
+- **`scene.act_id` drifts and must be written with `sequence_id`.** Moving a scene
+  to a sequence in another act with only `sequence_id` leaves `act_id` stale, and
+  the resulting entity is refused ("Sequence X belongs to act Y, not Z"), so the
+  dry run fails on the plan's own output. §7.6's scene move is exactly this shape:
+  write both fields in the one edit.
 
 ### Deviations
 ### Issues
@@ -445,6 +508,14 @@ and what it changes. No narration.
 - `store.switch` refuses on any `status='open'` draft. Applying a plan inside one
   transaction on the live database needs no switch; if the executor ever
   sequences one after a merge, it must land after the commit, not inside it.
+- **A scene op that changes `sequence_id` must carry `act_id` too.** Probed: the
+  two drift apart, and the entity is then refused by the write path ("Sequence X
+  belongs to act Y, not Z") — so the executor's own dry run fails on the plan's
+  output rather than at apply time. Applies to any op that moves a scene between
+  acts, including §7.6's post-reorder step.
+- `refmap.rewrite` returns a NEW `fields` dict and never mutates the incoming
+  items, so an executor can rewrite an item and still compare against what the
+  plan was computed from.
 
 ### Deviations
 ### Issues
