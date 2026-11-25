@@ -28,6 +28,7 @@ from ..entity import (
     _RELATION_FIELDS,
     standard_sections,
 )
+from ..references import REFERENCE_COLUMNS, dead_ids, live_column, live_extra
 from ..writes import create_entity
 from .fingerprint import ORDERED_TYPES
 
@@ -108,15 +109,21 @@ def _sections(conn: sqlite3.Connection, entity_id: str, entity_type: str) -> dic
 
 
 def materialize(conn: sqlite3.Connection) -> dict[str, dict]:
-    """``{id: {id, type, fields, sections}}`` for every live entity."""
+    """``{id: {id, type, fields, sections}}`` for every live entity.
+
+    References to a trashed entity are hidden, as every other reader hides them
+    (`live_extra` / `live_column`): the trashed entity is absent from the shape,
+    so an id naming it here would be a reference to nothing.
+    """
     columns = _columns(conn)
+    dead = dead_ids(conn)
     out = {}
     for row in conn.execute(f"SELECT {', '.join(columns)} FROM entities WHERE is_deleted=0"):
         data = dict(zip(columns, row))
         entity_type = data["type"]
         schema = ENTITY_SCHEMAS[entity_type]
         colmap = ENTITY_COLUMN_MAP.get(entity_type, {})
-        extra = json.loads(data["extra"] or "{}")
+        extra = live_extra(json.loads(data["extra"] or "{}"), dead)
 
         fields = {}
         for field, meta in schema.items():
@@ -125,7 +132,9 @@ def materialize(conn: sqlite3.Connection) -> dict[str, dict]:
             if entity_type in AUTO_NUMBERED and field == "order":
                 continue
             if field in colmap:
-                fields[field] = data[colmap[field]]
+                column = colmap[field]
+                value = data[column]
+                fields[field] = live_column(value, dead) if column in REFERENCE_COLUMNS else value
             else:
                 fields[field] = extra.get(field, meta["default"])
         fields.update(_relation_values(conn, data["id"], entity_type))

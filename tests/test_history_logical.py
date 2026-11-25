@@ -253,3 +253,33 @@ def test_a_trashed_entity_is_not_in_the_shape(project):
 
     delete_entity(project, "character", "the-outsider", "removed", confirm=True)
     assert "the-outsider" not in _materialize(project)
+
+
+def test_a_reference_to_a_trashed_entity_is_hidden(project):
+    """A reader hides a dead id (`live_extra` / `live_column`); so does the shape.
+    `relationship.characters` is `extra`-backed, where the relation view cannot
+    help — before this, the id survived in a shape the entity was absent from."""
+    from white_words.scriptwriting.core.writes import delete_entity
+
+    delete_entity(project, "character", "kael", "removed", confirm=True)
+    shapes = _materialize(project)
+    assert shapes["kael-mira"]["fields"]["characters"] == ["mira"]
+    assert shapes["central-room-day"]["fields"]["characters"] == ["mira"]
+
+
+def test_a_reference_column_to_a_trashed_entity_reads_empty(project):
+    from white_words.scriptwriting.core.writes import delete_entity
+
+    delete_entity(project, "location", "the-central-room", "removed", confirm=True)
+    assert _materialize(project)["central-room-day"]["fields"]["location"] == ""
+
+
+def test_a_rename_inside_the_trash_does_not_change_the_shape(project):
+    from white_words.scriptwriting.core.writes import delete_entity
+
+    delete_entity(project, "character", "the-outsider", "removed", confirm=True)
+    before = _materialize(project)
+    with _conn(project) as conn:
+        conn.execute("UPDATE entities SET name='Renamed In The Bin' WHERE id='the-outsider'")
+        conn.commit()
+    assert _materialize(project) == before
