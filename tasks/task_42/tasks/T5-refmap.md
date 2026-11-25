@@ -84,15 +84,17 @@ touches the scene.
 They are also `computed` (row 4), so no write path accepts them — a site that cannot be
 written cannot be a merge target.
 
-### F-4 — `scene.act_id` is a denormalized duplicate that drifts (settled: derived, drift recorded for T7/T8)
+### F-4 — `scene.act_id` is a denormalized duplicate that drifts (settled: derived; fixed in a follow-up commit)
 
 Row 3. It is a copy of the parent chain, it goes stale on a parent edit, and a full merge
 design would hit exactly this when it moves a scene (§7.6: "an `edit` of its parent field
 followed by a `reorder` of both sequences").
 
-**Decision:** T5 declares it **derived** and out of the rewrite set, and records the drift
-in `Notes.md` under T7/T8 as a hazard the merge executor must not inherit. It is a live
-defect independent of this feature; fixing it is its own commit, not this one.
+**Decision:** T5 declares it **derived** and out of the rewrite set — it is a copy, not a
+reference the merge resolves, so it stays derived either way. The drift itself was fixed in
+its own commit before T6: `edit_entity` now derives `act_id` from the scene's sequence on
+every write and ignores a supplied value, so a single `sequence_id` op is enough and the
+round trip survives.
 
 ## Decisions taken
 
@@ -172,7 +174,7 @@ Derived — declared, deliberately not sites, each for a stated reason:
 | Type | Path | Why |
 |---|---|---|
 | plot | `setups`, `inciting_incident`, `complications`, `crisis`, `climax`, `resolutions` | read side of `scene.plot_roles[].plot` (F-3) |
-| scene | `act_id` | copy of the parent chain, already drifting (F-4) |
+| scene | `act_id` | copy of the parent chain, derived on every write (was drifting; fixed before T6) |
 | scene | `scene_beats` | a declared `ref`, but `computed` and absent from the shape (row 13); the record is reached by its `scene` column from the other end |
 
 ## Tasks
@@ -234,8 +236,9 @@ value"), so it is `keyed_by="name"` and `rewrite` takes the id and name mappings
 substituted by the wrong one, and both directions are pinned. The plot's six `<role>` lists
 are the same rows as `scene.plot_roles` read from the plot side, so they are `DERIVED`, not
 sites: a role change is one edit on the scene, and they are `computed`, so no write path
-accepts them anyway. `scene.act_id` is `DERIVED` too, and its drift is recorded for T7/T8
-below. And the branch: this is `draft-versioning`, which already is the branch T0 created.
+accepts them anyway. `scene.act_id` is `DERIVED` too — a copy, not a reference the merge
+resolves — and the drift it had was fixed in its own commit before T6. And the branch: this
+is `draft-versioning`, which already is the branch T0 created.
 
 **`required` is the spec's, not the code's.** Probing showed the write path accepts
 `sequence_id=""`, `beats=[]`, `characters=[]` — so an entity that no longer says what it is
@@ -280,11 +283,9 @@ directions; neither alone would.
 
 **Findings for later tasks** (also in `Notes.md`).
 
-- **T7/T8 (planner, executor).** `scene.act_id` drifts: `edit(scene, sequence_id=X)` where
-  `X` sits in another act leaves `act_id` stale, and `create_entity` then refuses the
-  entity, so the logical round trip fails. §7.6's scene move is exactly this sequence. The
-  merge must write `act_id` and `sequence_id` together, or the plan will dry-run refuse its
-  own output.
+- **T7/T8 (planner, executor).** `scene.act_id` no longer needs a second op: `edit_entity`
+  derives it from `sequence_id`, so §7.6's scene move is one edit plus the reorders. (Before
+  the follow-up fix it drifted and the plan's own dry run refused its output.)
 - **T7 (planner).** `rewrite` takes `by_id` and `by_name`; for a D1 keep-both on a *value*,
   the name mapping is the one built from the two value entities' `name` fields, and the id
   mapping must not contain it.

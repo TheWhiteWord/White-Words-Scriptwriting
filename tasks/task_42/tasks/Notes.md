@@ -347,10 +347,10 @@ and what it changes. No narration.
   `scene.plot_roles` and `plot.inciting_incident`). They are `computed`, so `edit_entity`
   reports `success` with `skipped_read_only=['climax']` and changes nothing.
   `refmap.DERIVED` is the exclusion list.
-- **`scene.act_id` duplicates the parent chain and drifts.** Verified: `edit(scene,
-  sequence_id=seq-2)` where `seq-2` sits in `act-2` → scene parent `seq-2`, `extra.act_id`
-  still `act-1`; `create_entity` then refuses the entity ("Sequence seq-2 belongs to act
-  act-2, not act-1") and the logical round trip fails. Declared DERIVED, not a site.
+- **`scene.act_id` duplicates the parent chain and used to drift. FIXED before T6** —
+  `edit_entity` now derives it from the scene's sequence on every write and ignores a
+  supplied value. The field is still `DERIVED` for refmap (it is a copy, not a reference
+  the merge resolves), but a merge may now write `sequence_id` alone.
 - **`scene.scene_beats` is a declared `ref` that is `computed` and absent from the shape** —
   the only one of the seven `ref`s that is missing from `materialize` output. `plot.<role>`
   and `plot_roles` are relation-backed, so `materialize` fills them after the computed
@@ -372,9 +372,6 @@ and what it changes. No narration.
   vs relation is invisible to it; the pinning test resolves each site against the maps.
 
 ### Issues
-- **`scene.act_id` must be written together with `sequence_id` by the merge executor.** Any
-  plan that moves a scene across acts and writes only `sequence_id` produces an entity
-  `create_entity`/`edit` will refuse, so the plan's own dry run fails. Recorded under T7/T8.
 
 ---
 
@@ -459,11 +456,6 @@ and what it changes. No narration.
   of `scene.plot_roles`; nothing may emit an op against `plot.setups` and friends,
   because they are `computed` and `edit_entity` returns `success` with
   `skipped_read_only` while changing nothing — a silent no-op in a merge.
-- **`scene.act_id` drifts and must be written with `sequence_id`.** Moving a scene
-  to a sequence in another act with only `sequence_id` leaves `act_id` stale, and
-  the resulting entity is refused ("Sequence X belongs to act Y, not Z"), so the
-  dry run fails on the plan's own output. §7.6's scene move is exactly this shape:
-  write both fields in the one edit.
 
 ### Deviations
 ### Issues
@@ -508,11 +500,6 @@ and what it changes. No narration.
 - `store.switch` refuses on any `status='open'` draft. Applying a plan inside one
   transaction on the live database needs no switch; if the executor ever
   sequences one after a merge, it must land after the commit, not inside it.
-- **A scene op that changes `sequence_id` must carry `act_id` too.** Probed: the
-  two drift apart, and the entity is then refused by the write path ("Sequence X
-  belongs to act Y, not Z") — so the executor's own dry run fails on the plan's
-  output rather than at apply time. Applies to any op that moves a scene between
-  acts, including §7.6's post-reorder step.
 - `refmap.rewrite` returns a NEW `fields` dict and never mutates the incoming
   items, so an executor can rewrite an item and still compare against what the
   plan was computed from.

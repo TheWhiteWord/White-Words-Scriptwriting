@@ -410,6 +410,21 @@ def edit_entity(
         column_map = ENTITY_COLUMN_MAP.get(entity_type, {})
         schema = ENTITY_SCHEMAS.get(entity_type, {})
 
+        # A scene's `act_id` is a copy of its sequence's parent, so it is derived
+        # and never written. Left to the caller, an edit that moves a scene to a
+        # sequence in another act stores a scene naming the old act — a state
+        # `create_entity` then refuses, so the scene stops round-tripping.
+        if entity_type == "scene":
+            data = dict(data)
+            data.pop("act_id", None)
+            sequence_id = data.get("sequence_id")
+            if sequence_id is None:
+                stored = conn.execute(
+                    "SELECT parent_id FROM entities WHERE id=?", (entity_id,)
+                ).fetchone()
+                sequence_id = stored[0] if stored else ""
+            data["act_id"] = _act_of_sequence(conn, sequence_id)
+
         column_updates = {}
         extra_updates = {}
         section_updates = {}
@@ -1149,6 +1164,20 @@ def _validate_sequence_exists(conn, sequence_id: str) -> None:
     ).fetchone()
     if not row:
         raise ValueError(f"Sequence not found: {sequence_id}")
+
+
+def _act_of_sequence(conn, sequence_id: str) -> str:
+    """The act a sequence sits in — '' when there is no sequence.
+
+    A scene's `act_id` is this value and nothing else, which is why it is derived
+    on every write rather than trusted from the caller.
+    """
+    if not sequence_id:
+        return ""
+    row = conn.execute(
+        "SELECT parent_id FROM entities WHERE id=? AND type='sequence'", (sequence_id,)
+    ).fetchone()
+    return (row[0] or "") if row else ""
 
 
 def _get_next_order_db(conn, entity_type: str, parent_id: str) -> int:

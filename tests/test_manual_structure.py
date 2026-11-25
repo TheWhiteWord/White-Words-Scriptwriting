@@ -717,3 +717,43 @@ class TestHttp:
     def test_writes_need_the_custom_header(self, client):
         del client.headers["X-White-Words"]
         assert client.post("/api/projects/demo/structure/apply", json={}).status_code == 403
+
+
+# ─── act_id is derived, never written ───
+
+
+def test_editing_sequence_id_moves_the_act_too(fixture_path):
+    """A scene's `act_id` is its sequence's parent. Written by the caller it could
+    name the old act, and `create_entity` then refuses the scene, so it stops
+    round-tripping through the logical shape."""
+    p = fixture_path
+    create_entity(p, "act", "act-2", {"title": "Act II", "order": 2})
+    create_entity(p, "sequence", "seq-2", {"title": "Seq 2", "act_id": "act-2"})
+
+    edit_entity(p, "scene", "the-core-day", {"sequence_id": "seq-2"}, "t")
+
+    conn = get_db(p)
+    try:
+        act_id = json.loads(
+            conn.execute("SELECT extra FROM entities WHERE id='the-core-day'").fetchone()[0]
+        )["act_id"]
+        assert act_id == "act-2"
+    finally:
+        conn.close()
+
+
+def test_a_supplied_act_id_is_ignored(fixture_path):
+    """One copy of the fact, so a conflicting one cannot be stored."""
+    p = fixture_path
+    edit_entity(p, "scene", "central-room-day", {"act_id": "act-2"}, "t")
+
+    conn = get_db(p)
+    try:
+        assert (
+            json.loads(
+                conn.execute("SELECT extra FROM entities WHERE id='central-room-day'").fetchone()[0]
+            )["act_id"]
+            == "act-1"
+        )
+    finally:
+        conn.close()
