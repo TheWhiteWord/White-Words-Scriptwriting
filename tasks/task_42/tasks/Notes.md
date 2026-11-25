@@ -152,46 +152,128 @@ and what it changes. No narration.
 ### Findings
 - Branch switch calls `core.backups.load_database_in_place(project_path, source,
   safety_label="before-switch")` to copy a snapshot or a parked head into the
-  live database. It returns the safety backup's path. It does **not** validate
-  the source: integrity, `entities` table and schema-version checks stay in
-  `restore_backup` and the switch must run the equivalent itself. It also does
-  not check page size against anything but the live database — a snapshot has
-  the same page size by construction, so that is the only case it refuses.
-- Two strings inside the loader still say `"cannot be restored in place"` (page
-  size) and `"failed its integrity check after the restore"`. They reach the
-  caller for a switch too. Reword both to the neutral copy in T3's commit and
-  update the two `tests/test_backups.py` assertions that pin them; T2 left them
-  byte-identical on purpose, because rewording is observable behaviour. A third,
-  `"This project has no story.db to restore into."`, cannot fire during a switch
-  (the live database is the current branch's head) and needs no change.
-- `restore_backup` now takes its safety backup *inside* the loader, so a caller
-  that wants a labelled "before" state of the live database around a switch gets
-  it from the same call — do not take a second one.
+  live database. **Corrected in T3:** it is called with `safety_label=None`, and
+  the parked head is the safety net (see Deviations). Source validation is no
+  longer a gap: T3 extracted `core.backups.check_source(source, label)` and the
+  switch runs it on the parked head first.
+- Two strings inside the loader said `"cannot be restored in place"` (page size)
+  and `"failed its integrity check after the restore"`. **T3 reworded both**
+  ("copied into this project", "after the copy"). The earlier note here claimed
+  two `tests/test_backups.py` assertions pinned the old wording — **that was
+  wrong**: both pin only `match="page size"` (lines 314, 413), so the reword
+  needed no test change. Verified by grepping the assertions, not assumed.
+- `restore_backup` takes its safety backup inside the loader, so a caller that
+  wants a labelled "before" state gets it from the same call. Unchanged by T3;
+  `restore_backup` still passes `"before-restore"`.
+- `versions.token(payload)` (`core/versions.py:15`) is the repo's one
+  canonical-JSON → short-sha256 function, and its docstring already says the
+  caller decides what to hash. `core/history/fingerprint.py` is a second caller,
+  not a second implementation.
+- `FROM live_relations` does **not** count as a raw `relations` read:
+  `tests/test_live_relations.py:328`'s pattern is
+  `(?<!DELETE )\b(?:FROM|JOIN)\s+relations\b` and `_` is a word character, so the
+  view never matches. A fingerprint or diff can read the view freely; a
+  `FROM relations` would need a registry edit.
+- A new `src/` file that calls `datetime.now(` / `.isoformat(` fails
+  `tests/test_utc_stamps.py:283` until it is added to `LOCAL_TIME_ALLOWED` with a
+  reason. `core/history/store.py` is registered for a snapshot id's timestamp
+  (an identifier, like a draft id's).
+- **Trashing an entity DOES move the fingerprint**, though §4.4 says the trash is
+  excluded. Reason: a delete drops the trashed entity's references out of the
+  live `extra`s that named it and hides its relations, so `live_extra`/the
+  `live_relations` view return different content. "Trash excluded" means the
+  trashed row's own columns, `extra` and sections are not hashed — verified: a
+  rename inside the bin moves nothing, and delete+restore returns to the same
+  hash. Anything that reads §4.4 as "a delete is not a change" is wrong.
+- A staged draft takes an **automatic backup** (`core/trash.py:209`,
+  `:1365` via `create_backup(automatic=True)`) — unrelated to this feature, but
+  it is why a test asserting "no backup was taken" must start from an empty
+  backup list.
+- SQLite creates `-wal`/`-shm` beside a file **before** it discovers the file is
+  read-only, so one read-write open of a frozen draft leaves two empty files.
+  They are harmless to the draft's bytes but are exactly the debris that makes a
+  later reader open a stale view. `store._drop_sidecars` sweeps them on every
+  write and a test pins it.
+- `store.delete_branch` prunes by **reachability** (walk `snapshot_parents` from
+  every branch's `base_snapshot_id`), not by `snapshots.branch_id`. §4.3 says
+  "reachable from no remaining branch head and not an ancestor of any remaining
+  snapshot"; ownership would delete a draft a merge brought into a surviving
+  branch.
 
 ### Deviations
+- **Switch takes no safety backup** (owner decision). §4.3 asks for one *and* a
+  park. The park is byte-for-byte the pre-switch state and is addressable by
+  branch name, while `prune_automatic_backups` keeps the newest
+  `AUTO_BACKUPS_KEPT` of `kind="automatic"` regardless of label — a
+  `before-switch` copy would evict a daily one. `load_database_in_place` grew
+  `safety_label=None`. Undo is switching back.
+- **Switch refuses while the head has an open staged draft** (owner decision).
+  §4.3 is silent. A staged draft lives only in `story.db` and is deliberately not
+  part of a draft, so the copy would destroy it. The parked head keeps its
+  drafts, so switching back restores them; only the destructive direction is
+  refused. Carrying them to the target is not an option — the ops were validated
+  against the old head's ids.
+- **Snapshot files are `chmod 0444`** (owner decision), as §4.3 asks. Deletion is
+  by directory, so delete-branch/delete-snapshot still work.
+- A branch's id is slugged from its name **once** and survives a rename (§4.3
+  calls the name a label). `heads/<branch_id>.db` therefore reads
+  `heads/main.db`. Renaming does not move files or snapshot rows.
+- `snapshot_parents` is written by `save_snapshot`, which turns
+  `branches.pending_merge_parents` into a second parent row and clears it (§7.9).
+  Nothing sets that column until T8; the column and the writer exist now because
+  §4.2 puts them in this schema.
+- `merge_sessions` is created here and left empty — §4.2 lists it in the T3
+  schema, so T9 extends a table rather than migrating one in.
+- The `heads/<branch>.db` of the branch being switched **to** is deleted after
+  the copy: its head is the live database now, and a stale duplicate left behind
+  would be what a later switch loaded.
+
 ### Issues
-- **Safety copies share the 20-slot automatic cap with the daily backup.**
-  `prune_automatic_backups` (`core/backups.py:144`) keeps the newest
-  `AUTO_BACKUPS_KEPT` of `kind="automatic"` regardless of label, so every
-  `before-restore` copy already evicts a daily one. §4.3's switch takes both a
-  safety backup *and* parks the live DB as `heads/<current>.db` — the parked
-  head is already the copy the safety backup would be. Take the park as the
-  safety net and skip the extra backup, or a project that switches branches
-  regularly fills all 20 slots with pre-switch copies and loses the daily
-  history the cap exists for. `create_backup(label=None)` skips the label but
-  still writes the file, so "no backup" needs an explicit path (a
-  `safety_label=False` / `backup=False` argument on the loader) rather than
-  passing `None`.
-- Backups stay the escape hatch worth keeping when `history.db` is what broke:
-  a snapshot is a file plus a manifest row, so losing the manifest orphans it,
-  while `restore_backup` on a plain `story_*.db` needs only the app. Do not
-  delete the backup path on the grounds that snapshots cover it.
+- **Safety copies share the 20-slot automatic cap with the daily backup.** Still
+  true of `restore_backup` (`before-restore` copies evict daily ones); T3's
+  switch avoids adding to it by not taking a backup at all. If the daily history
+  matters on a heavily-restored project, the cap needs to count kinds
+  separately — not this feature's change.
+- Backups stay the escape hatch worth keeping when `history.db` is what broke: a
+  draft is a file plus a manifest row, so losing the manifest orphans it, while
+  `restore_backup` on a plain `story_*.db` needs only the app. Do not delete the
+  backup path on the grounds that drafts cover it.
+- `switch` refuses on any `status='open'` draft row, including one staged by the
+  agent and never shown to the user. That is deliberate (the alternative is
+  silent loss), but T10's route must relay the id list, or the refusal reads as
+  an unexplained dead end in the UI.
+- `head_state()` opens `story.db` through `get_db`, which **migrates** it. That is
+  correct for the live database (it is what every reader does) and must never be
+  pointed at a draft file — the migration would rewrite a frozen draft. T4's
+  `ProjectView` is the copy-in, copy-out path for drafts.
 
 ---
 
 ## T4 — `ProjectView` and the logical entity
 
 ### Findings
+- **A draft file is `chmod 0444` and SQLite writes `-wal`/`-shm` beside it BEFORE
+  it discovers the file is read-only.** So one read-write open of a draft (what
+  `get_db` would do) leaves two empty files beside a frozen draft, and a `-wal`
+  beside a snapshot is what makes a later reader see a stale view of it.
+  `store._drop_sidecars` sweeps them after every history write, and
+  `tests/test_history_store.py` pins it. `ProjectView` must copy the draft out
+  (backup API, as §4.3 says) and never open it in place.
+- `fingerprint.of_project` and `store.head_state` go through `get_db`, which
+  **migrates**. That is right for the live database and wrong for a draft: the
+  migration would rewrite a frozen file. Anything that reads a draft must go
+  through `ProjectView`'s copy.
+- `core/history/store.py` is registered in `LOCAL_TIME_ALLOWED`
+  (`tests/test_utc_stamps.py`) for a snapshot id's timestamp. A new
+  `core/history/*.py` that needs `datetime.now`/`.isoformat` must add itself with
+  a reason or the stamp guard fails.
+- Snapshot ids are `s-<stamp>[-n]`, so a draft's file is
+  `history/snapshots/s-<stamp>.db`. `ProjectView` receives a snapshot id, not a
+  path, and should resolve it through `store.snapshot_file`.
+- `FROM live_relations` is free of the raw-relations registry
+  (`tests/test_live_relations.py:328`), so a materializer can read the view
+  without a registry edit. A raw `FROM relations` would need one.
+
 ### Deviations
 ### Issues
 
@@ -283,6 +365,19 @@ and what it changes. No narration.
   the executor's own ordering work is the §7.7 order (restores → edits that
   release roles → deletes → creates → other edits → reorders) and the
   complete-sibling-list rule from F13, nothing more.
+- §7.9's "complete merge" has its storage ready: `branches.pending_merge_parents`
+  exists and `store.save_snapshot` already turns it into a second
+  `snapshot_parents` row and clears it. The executor's only job is to append the
+  source's snapshot id to that column; it must not insert into
+  `snapshot_parents` directly, or a save would double-write the parent.
+- `store.save_snapshot` takes the history lock (`BEGIN IMMEDIATE` on
+  `history.db`) for its whole body. A complete merge that sets
+  `pending_merge_parents` and then saves **must not hold its own connection to
+  `history.db`** across that call — it would deadlock against itself. Set the
+  column in one history transaction, commit, then call `save_snapshot`.
+- `store.switch` refuses on any `status='open'` draft. Applying a plan inside one
+  transaction on the live database needs no switch; if the executor ever
+  sequences one after a merge, it must land after the commit, not inside it.
 
 ### Deviations
 ### Issues
@@ -292,6 +387,11 @@ and what it changes. No narration.
 ## T9 — Persistent merge sessions
 
 ### Findings
+- **The `merge_sessions` table already exists**, created by T3 verbatim from
+  §4.2 (`id, target_branch_id, source_ref, base_snapshot_id, target_fingerprint,
+  selection, decisions, status, created_at, updated_at`) and left empty. T9
+  writes rows; it does not migrate the table in. `history.db`'s `MIGRATIONS` list
+  is empty, at `BASELINE = 1`.
 - A session's stored decisions are keyed by item path; T1's `resolutions` shape
   (`{plot, role, choice: drop|take}`) is the value a D4 decision writes. Persist
   the shape as-is — the executor hands it straight to `core.trash.restore`, so a
@@ -299,6 +399,12 @@ and what it changes. No narration.
 - `restore_needs_decision` is a refusal *result*, not an exception, and it
   carries `collisions`. If a session records "unresolved" it must record which
   collision, not only that apply failed.
+- `store._locked` is the pattern for any new history transaction: `BEGIN
+  IMMEDIATE` up front and hold it over the file moves. Writing a session row is a
+  plain manifest write and needs only `store.connect` + `core.db.transaction`.
+- Timestamps in `history.db` come from `core.clock.now_iso()`, like every other
+  stored stamp. A new `core/history/*.py` that calls `datetime.now` directly
+  fails `tests/test_utc_stamps.py` until registered in `LOCAL_TIME_ALLOWED`.
 
 ### Deviations
 ### Issues
@@ -321,6 +427,24 @@ and what it changes. No narration.
 - `restore_many` raises `RestoreRefused` for a batch while `restore` returns a
   dict; the route catches the exception and folds `refused[*].collisions` into one
   list. A merge route that applies a planned batch will hit the same split.
+- **The history API is all `ValueError` for a refusal, and there is no refusal
+  payload yet.** `store.save_snapshot` (nothing changed), `switch` (open drafts,
+  already current, no parked head), `branch_from` (missing draft, duplicate
+  name), `delete_branch` (current branch) and `delete_snapshot` (a branch's
+  latest draft) all raise `ValueError` with an actionable message, following the
+  core convention (§9). The routes map them to `409`/`400` with the envelope
+  above; a `switch` refusal must carry the open draft ids *as data*, because the
+  message alone is not something the UI can act on.
+- `store.list_branches(project_path)` is the whole `GET /history/` payload already
+  — branches (`is_current` included) and snapshots with `parents`. `head_state`
+  adds `changed`. T10 computes `changes_since_save` from that flag; nothing new
+  needs storing.
+- `list_projects` (`app/services.py:16`) opens each project's `story.db` with a
+  bare `sqlite3.connect` to read the name. Enriching it with
+  `current_draft`/`branch_count`/`last_saved` means opening `history.db` too, per
+  project, on every landing-page call. `history.db` may not exist yet (a project
+  never touched by this feature) — treat a missing manifest as "no history", and
+  do **not** call `store.adopt` from a listing, which would write during a read.
 
 ### Deviations
 ### Issues
@@ -339,6 +463,17 @@ and what it changes. No narration.
   parent in the trash). The dashboard route checks `restore_check` first. A new
   tool that restores must check it too, or the refusal text it relays will not
   match what the app would do.
+- `story_history` has its whole surface ready as plain functions:
+  `store.list_branches` (branches + drafts + parents), `store.head_state`
+  (`changed`, the base draft), `store.save_snapshot`, `store.branch_from`,
+  `store.switch`. They take a *project path* and raise `ValueError`.
+- **`switch` is not safe to expose as an agent action before T12.** It replaces
+  the live database, refuses on open staged drafts, and has no approval card
+  until T12. §11's "until the card exists, those actions are UI-only" applies:
+  `story_history` gets `list`, `save`, `branch`; `switch` and the deletes wait.
+- A `switch` refusal for open drafts carries the draft ids only inside the
+  message. An agent tool must surface them verbatim — the fix is
+  commit-or-discard, which the agent cannot do on the user's behalf.
 
 ### Deviations
 ### Issues

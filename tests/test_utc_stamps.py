@@ -278,6 +278,7 @@ LOCAL_TIME_ALLOWED = {
     "core/backups.py": "backup FILE NAMES carry local time; renaming would mix old and new names",
     "core/db.py": "the name of a backup file",
     "core/drafts.py": "the label inside a draft's id (an identifier, not a stamp)",
+    "core/history/store.py": "the label inside a snapshot's id (an identifier, not a stamp)",
     "tools/story_admin.py": "the name of a trash folder",
 }
 

@@ -157,14 +157,14 @@ def prune_automatic_backups(project_path: Path, keep: int | None = None) -> list
 
 
 def load_database_in_place(
-    project_path: Path, source: Path, *, safety_label: str = "before-restore"
-) -> str:
+    project_path: Path, source: Path, *, safety_label: str | None = "before-restore"
+) -> str | None:
     """Copy a validated database file into the live project database, in place.
 
-    ``source`` must already be a checked project database (integrity, schema
-    version, entities table): this function owns only what the copy itself can
-    go wrong at — a target that does not exist, a page size the target cannot
-    take, and the state after the copy. Returns the safety backup's path.
+    ``source`` must already be a checked project database (see `check_source`):
+    this function owns only what the copy itself can go wrong at — a target that
+    does not exist, a page size the target cannot take, and the state after the
+    copy. Returns the safety backup's path, or None when none was taken.
 
     The copy goes through SQLite's backup API instead of swapping the file. A
     file swap leaves other open connections (the web app, the agent's tools)
@@ -173,9 +173,12 @@ def load_database_in_place(
     the real file: other connections see the new data as soon as it commits, and
     nothing is left behind.
 
-    The current state is saved as an automatic backup before the copy — the
-    page-size refusal comes first, so a refused copy leaves no backup behind —
-    and the copy is migrated forward inside the live database.
+    With a `safety_label` the current state is saved as an automatic backup
+    before the copy — the page-size refusal comes first, so a refused copy
+    leaves no backup behind. A caller that already holds a copy of the current
+    state (a branch switch parks it as the branch's head) passes None.
+
+    The copy is migrated forward inside the live database.
     """
     from .db import BASELINE_VERSION, SCHEMA_MIGRATIONS, apply_migrations, get_db
 
@@ -197,9 +200,14 @@ def load_database_in_place(
         try:
             if live.execute("PRAGMA page_size").fetchone()[0] != page_size:
                 raise ValueError(
-                    f"{name} uses a different database page size and cannot be restored in place."
+                    f"{name} uses a different database page size and cannot be copied into "
+                    "this project."
                 )
-            safety = create_backup(project_path, label=safety_label, automatic=True)
+            safety = (
+                create_backup(project_path, label=safety_label, automatic=True)
+                if safety_label
+                else None
+            )
             snap.backup(live)
             apply_migrations(
                 live,
@@ -208,15 +216,54 @@ def load_database_in_place(
                 name=f"{project_path.name}/.story/story.db",
             )
             if live.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
-                raise RuntimeError(
-                    f"The database failed its integrity check after the restore. The state "
-                    f"before it is saved as {Path(safety).name}."
-                )
+                kept = f" The state before it is saved as {Path(safety).name}." if safety else ""
+                raise RuntimeError(f"The database failed its integrity check after the copy.{kept}")
         finally:
             live.close()
     finally:
         snap.close()
     return safety
+
+
+def check_source(source: Path, label: str) -> None:
+    """Raise ValueError unless `source` is a project database this build opens.
+
+    A readable SQLite file, no damage, an `entities` table, and a schema version
+    between the baseline and the latest. Raises, changing nothing. `label` names
+    the file in the message — a backup's file name, or a branch's.
+    """
+    from .db import BASELINE_VERSION, LATEST_VERSION
+
+    # immutable: read it without creating -wal/-shm files beside the source
+    try:
+        snap = sqlite3.connect(f"file:{source}?mode=ro&immutable=1", uri=True)
+    except sqlite3.Error as e:
+        raise ValueError(f"{label} cannot be opened: {e}")
+    try:
+        try:
+            ok = snap.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            has_entities = snap.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='entities'"
+            ).fetchone()
+            version = snap.execute("PRAGMA user_version").fetchone()[0]
+        except sqlite3.Error as e:
+            raise ValueError(f"{label} is not a readable project database: {e}")
+    finally:
+        snap.close()
+    if not ok:
+        raise ValueError(f"{label} is damaged and cannot be used.")
+    if not has_entities:
+        raise ValueError(f"{label} is not a project database (no entities table).")
+    if version > LATEST_VERSION:
+        raise ValueError(
+            f"{label} was made by a newer version of White Words (schema "
+            f"{version}, this build knows {LATEST_VERSION}). Update the app first."
+        )
+    if version < BASELINE_VERSION:
+        raise ValueError(
+            f"{label} is older than this build supports (schema {version}; the "
+            f"baseline is {BASELINE_VERSION})."
+        )
 
 
 def restore_backup(project_path: Path, name: str) -> dict:
@@ -228,8 +275,6 @@ def restore_backup(project_path: Path, name: str) -> dict:
     safety backup and copies it in. Raises ValueError, changing nothing, if a
     check fails.
     """
-    from .db import BASELINE_VERSION, LATEST_VERSION
-
     # Only names from the listing: that is what keeps a path like ../story.db out.
     if name not in {b["name"] for b in list_backups(project_path)}:
         raise ValueError(f'No such backup: {name}. Use action="list" for the names.')
@@ -237,38 +282,10 @@ def restore_backup(project_path: Path, name: str) -> dict:
     if not (project_path / ".story" / "story.db").exists():
         raise ValueError("This project has no story.db to restore into.")
 
-    # immutable: read it without creating -wal/-shm files beside the backup
-    try:
-        snap = sqlite3.connect(f"file:{source}?mode=ro&immutable=1", uri=True)
-    except sqlite3.Error as e:
-        raise ValueError(f"{name} cannot be opened: {e}")
-    try:
-        try:
-            ok = snap.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
-            has_entities = snap.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='entities'"
-            ).fetchone()
-            version = snap.execute("PRAGMA user_version").fetchone()[0]
-        except sqlite3.Error as e:
-            raise ValueError(f"{name} is not a readable project database: {e}")
-        if not ok:
-            raise ValueError(f"{name} is damaged and was not restored.")
-        if not has_entities:
-            raise ValueError(f"{name} is not a project database (no entities table).")
-        if version > LATEST_VERSION:
-            raise ValueError(
-                f"{name} was made by a newer version of White Words (schema "
-                f"{version}, this build knows {LATEST_VERSION}). Update the app first."
-            )
-        if version < BASELINE_VERSION:
-            raise ValueError(
-                f"{name} is older than this build supports (schema {version}; the "
-                f"baseline is {BASELINE_VERSION})."
-            )
-    finally:
-        snap.close()
+    check_source(source, name)
 
     safety = load_database_in_place(project_path, source, safety_label="before-restore")
+    assert safety is not None  # a restore always keeps the state it replaces
 
     meta = next(b for b in list_backups(project_path) if b["name"] == name)
     return {
