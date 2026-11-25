@@ -307,9 +307,16 @@ and what it changes. No narration.
 ### Deviations
 - **`memory` is declared, form-hidden and unfilled-suppressed, not given a form
   field** (owner decision, F-1 option A). The spec's §5.1 defines the logical
-  entity through the schema, so declaring it is the smallest change that makes it
-  part of the shape; a form field would imply an author edits it there, which is
-  not how it is written.
+  entity through the schema, so declaring it is the smallest change that makes
+  it part of the shape; a form field would imply an author edits it there, which
+  is not how it is written.
+- **`materialize` now hides references to trashed entities** (T6, decision A).
+  T4 shipped it reading raw `extra` and raw `location_id`/`parent_id`, which made
+  it the only reader that showed a dead id — `core/references.py`'s docstring
+  states the rule it was breaking. `extra` goes through `live_extra`, the
+  `REFERENCE_COLUMNS` values through `live_column`. The round-trip gate is
+  unaffected (the fixture holds no trash); `tests/test_history_diff.py` pins the
+  trash behaviour.
 - **`act` joins `ORDERED_TYPES` while `reorder()` still refuses acts** (owner
   decision, F-2 option A). `order` remains an act field for writes, and the
   per-parent id list carries the same fact for the hash — two views of one
@@ -381,7 +388,7 @@ and what it changes. No narration.
 
 ### Findings
 - `live_relations` hides every relation row either end of which is deleted, so
-  "trash ignored" (§6.1) comes for free on that path. A raw `FROM relations`
+  "trash ignored" (§6.1) comes for free on the relation path. A raw `FROM relations`
   read does not: a trashed scene still holds its `plot_<role>` rows and its
   cast rows. Read the view, or filter `is_deleted` explicitly.
 - **Order is NOT part of `logical.materialize`'s output.** It returns
@@ -390,32 +397,90 @@ and what it changes. No narration.
   materialized shapes reports a pure reorder as **no change** — pair both sides
   with `order_of`. (`order_of` reads the same rows and tie-break as
   `fingerprint`, so the two cannot disagree.)
-- **`fields` values arrive in their authored shape, not as flat strings:**
-  `scene.plot_roles` is `[{plot, role, description}]`, a plot's beat lists are
-  `[{scene_id, description}]`, `relationship.perspectives` is a keyed object, and
-  only `character_scene` cast is a plain id list. §6.1's element-wise
-  `REFERENCE_LISTS` diff therefore applies to the plain id lists only; the rest
-  are whole-value until the diff is taught their shape.
-- `project.memory` is part of `fields` now (an object of four string lists). It
-  diffs as a whole value; there is no per-entry granularity unless §6.1 asks for
-  it.
+- **Act order is in BOTH shapes**: an `order` field on the act *and* the `act:`
+  entry of `order_of`. §5.2 puts it in the act's fields, so `diff._order` skips
+  every `act:` key — reporting both makes two items of one authored edit.
+  **Corrected here:** the pre-task note said a diff of shapes alone cannot see an
+  act reorder and implied the order list was the only place it lives. `diff`
+  reports it as `field:act:<id>:order`, verified by test.
+- **§6.1's element-wise list diff covers FOUR fields, not one.** This section
+  previously claimed "only `character_scene` cast is a plain id list". **That was
+  wrong.** `REFERENCE_LISTS = ("characters", "scenes")` and all four of
+  `plot.characters`, `scene.characters`, `relationship.characters`,
+  `relationship.scenes` are plain id lists in the shape. `diff._list_sites`
+  derives the set from `refmap` (a site declared `field[]`) rather than
+  restating it, so a new list site joins the element diff automatically.
+  Probed: swapping `["kael","mira"]` for `["mira","kael"]` yields
+  `added: []`, `removed: []` and no item.
+- **The other list/bespoke shapes are whole-value** and are not taught their
+  structure: `scene.plot_roles` (`[{plot, role, description}]`), a plot's role
+  lists (`[{scene_id, description}]`), `scene_beats.beats` (`[{action, reaction,
+  gap}]`), `relationship.perspectives` (keyed object), `project.memory` (object of
+  four lists). Only `perspectives{}` is a *reference* site among these; the rest
+  hold no id at the top level except inside entries the diff reports whole. A
+  merge item that must act on one entry resolves it through `refmap`'s concrete
+  path, not through a finer diff.
 - Two **live** siblings can already share an `order_key`: a delete frees a key,
-  `_get_next_order_db` reissues it, and a restore leaves the pair in place. So
-  the child order must be serialized as the `(order_key, id)` id list (§4.4's
+  `_get_next_order_db` reissues it, and a restore leaves the pair in place. So the
+  child order must be serialized as the `(order_key, id)` id list (§4.4's
   fingerprint does this too), never as the raw key values — two states that
   differ only in which of two tied siblings sorts first would otherwise diff as
   equal.
 - `tests/test_live_relations.py` pins every raw `relations` read with a count
-  per file. A diff that needs one must add itself to that registry and its
-  docstring reason, or the suite fails with an unexplained count mismatch.
-- **One authored role edit appears as TWO changed fields.** `logical.materialize`
-  emits a role on both sides of the same relation rows: `scene.plot_roles` (the
-  authored side) and the plot's six `setups`/`inciting_incident`/… lists (the read
-  side). A diff that reports both makes a merge item out of a derived view.
-  `refmap.DERIVED["plot"]` is the exclusion list, verified in T5.
+  per file. `diff` reads no raw `relations` (it goes through `materialize`), so it
+  needed no registry entry.
+- **`logical.materialize` was the one reader that showed trashed ids.** Probed:
+  after trashing `mira`, `scene.characters` = `["kael"]` (relation-backed, the
+  view filters) but `relationship.characters` = `["kael","mira"]` and a
+  `location.world` kept its dead `parent_id`. `core/references.py` states the
+  reader rule; `logical` did not apply it. **Fixed in T6** (decision A):
+  `extra` goes through `live_extra`, `REFERENCE_COLUMNS` values through
+  `live_column`. A trashed *reference column* now reads `""`, matching what a
+  reader shows.
+- **Trashing an entity therefore DOES move a diff**, exactly as T3 found it moves
+  the fingerprint, and for the same reason. A delete reads as: the entity
+  `removed`, plus a field change on every live entity whose `extra` list or
+  reference column named it. That is correct — a reader's state changed — but a
+  merge planner that expands "removed entity" must not also emit ops for those
+  cascade rows, or one delete becomes many.
+- **One authored role edit appears as TWO changed fields** in the raw shapes:
+  `scene.plot_roles` (the authored side) and the plot's six
+  `setups`/`inciting_incident`/… lists (the read side). `refmap.DERIVED["plot"]`
+  is the exclusion list, verified in T5, and `diff._derived` reads it rather than
+  restating it. Pinned: a role description edit yields exactly
+  `field:scene:central-room-day:plot_roles` and leaves the plot `unchanged`.
+- **`get_screenplay_text` drops every scene whose `Content` is empty**:
+  `_screenplay_rows` filters `s.body != ''`. A heading-only scene is a scene in
+  the entity view and would vanish from a script view built on the composer.
+  `diff` composes per scene from the materialized fields with the existing
+  `scene_heading`, and a test pins the joined output equal to
+  `get_screenplay_text` on the fixture, so the two cannot drift.
+- **`scene.act_id` and `scene.order` are not in the shape** (T4/T5). A scene's
+  act reaches `diff` through its sequence's `act_id`; its position through
+  `order_of`. `diff._placement` returns `{act, sequence, position}` (1-based).
 
 ### Deviations
+- §6.1 asks for section diffs with `difflib`; `diff.text_diff` returns the
+  unified-diff **line list**, not a formatted string, so a reader (JSON, a view)
+  decides how to render it.
+- §7.2's items are emitted by the diff as they are discovered (keys plus the
+  type/id/name that identify them). The change payload is **not** repeated on the
+  item: it is already in `entities` / `order` under the same key, and duplicating
+  a section body onto its item sends it twice to every consumer.
+- The item key is `kind:type:id[:name]` (`entity:scene:x`, `field:character:kael:name`,
+  `section:…`, `order:scene:<sequence_id>`). Not in the spec; chosen so a stored
+  decision (§7.5, T9) can be keyed on it and survive a re-plan.
+
 ### Issues
+- `compare` loads both states in full (two `materialize` + `order_of` passes) and
+  deep-copies nothing, so comparing a large project twice in one request costs two
+  full materializations. Acceptable at this data size; `ProjectView` caching (T10)
+  is where a session-level cache belongs.
+- A scene whose parent sequence is missing from the order lists gets
+  `position: None` and is absent from `_story_order`, so it appears only through
+  the `removed`/`added` path. The write path refuses a scene without a live
+  sequence, so this is unreachable today.
+
 
 ---
 
@@ -458,6 +523,31 @@ and what it changes. No narration.
   of `scene.plot_roles`; nothing may emit an op against `plot.setups` and friends,
   because they are `computed` and `edit_entity` returns `success` with
   `skipped_read_only` while changing nothing — a silent no-op in a merge.
+- **The diff already excludes the derived role lists**, and so must the planner's
+  dependency expansion: `diff.compare`'s `entities` carries no derived field, so a
+  role edit arrives as exactly one item, `field:scene:<id>:plot_roles`. Reading
+  the plot's role list as a second item reintroduces the no-op op.
+- **Selecting a removed entity must not also emit ops for its cascade edits.**
+  Trashing an entity reads as the entity `removed` **plus** a field change on
+  every live entity whose `extra` list or reference column named it (T6 Findings;
+  the same mechanism moves the fingerprint). One authored delete therefore arrives
+  as several items; the planner's removal expansion (§7.4) covers the beats and
+  optional cleanup, and must not turn those cascade rows into per-field ops — the
+  delete already produced them.
+- **`diff.compare(a, b)` returns `{entities, order, items, script}` and the item
+  key is stable**: `entity:<type>:<id>`, `field:<type>:<id>:<name>`,
+  `section:<type>:<id>:<name>`, `order:scene:<sequence_id>`. Decisions are keyed
+  on it (§7.5), so a re-plan must not renumber them. The change payload lives in
+  `entities` / `order` under the same key, not on the item.
+- **A scene's script row is a lens with `items` already resolved**
+  (`_scene_items`): the scene's own item, its changed fields and sections, and its
+  sequence's order item. Selecting at script level (§7.2) unions those; it must
+  not recompute the grouping.
+- **`diff._list_sites` derives the element-diffed fields from `refmap`** (a site
+  declared `field[]`): the four plain id lists are `plot.characters`,
+  `scene.characters`, `relationship.characters`, `relationship.scenes`. A
+  `{"a","b","added","removed"}` change is a set change — a reordered cast list is
+  not a change and yields no item, so a plan cannot offer to reorder a cast list.
 
 ### Deviations
 ### Issues
@@ -467,6 +557,15 @@ and what it changes. No narration.
 ## T8 — Executor
 
 ### Findings
+- The plan's ops come from `diff.items` (T6): `entity:<type>:<id>` for a create or
+  a remove, `field:…`, `section:…`, `order:scene:<parent>`. An `entity:` item
+  carries no fields — the content is in `diff.compare`'s `entities` row — so the
+  executor must pair the item key with that row rather than expecting a payload.
+- **A removal expansion is one delete, not a field change per cascade row.**
+  Trashing an entity makes the diff report the entity `removed` *and* a field
+  change on every live entity that named it (T6 Findings). Emitting ops for those
+  cascade items as well deletes once and then edits the referrers with the value
+  the delete already produced.
 - A restore executed by the merge is `core.trash.restore(..., resolutions=[…])`
   with the `take`/`drop` the D4 decision chose. It resolves the role and settles
   the position in the same transaction as the flag clear, so the executor does
