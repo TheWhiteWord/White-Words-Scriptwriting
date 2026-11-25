@@ -1,4 +1,5 @@
 """Task 5 asset tests."""
+
 import re
 from pathlib import Path
 
@@ -32,6 +33,10 @@ def test_skill_tool_names_exist_in_registry():
     # collect the comma-separated tool list line
     m = re.search(r"^admin, backup,.*search\.$", text, re.M)
     assert m
-    names = [x.strip().rstrip(".") for x in re.split(r"[,\s]+", m.group(0)) if x.strip() and not x.startswith("#")]
+    names = [
+        x.strip().rstrip(".")
+        for x in re.split(r"[,\s]+", m.group(0))
+        if x.strip() and not x.startswith("#")
+    ]
     for n in names:
         assert n in reg_names, f"{n} not in registry"

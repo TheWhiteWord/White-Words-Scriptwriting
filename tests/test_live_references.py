@@ -10,6 +10,7 @@ Now nothing is touched. The references stay as written; every reader hides the
 ones that name a deleted entity (core/references.py). The tests hold that to the
 old behaviour with twin projects, and to the new promise with an exact round trip.
 """
+
 import json
 import shutil
 import sqlite3
@@ -19,19 +20,31 @@ import pytest
 import twin_helpers as twin
 from white_words.scriptwriting.core import db as core_db
 from white_words.scriptwriting.core.manual_entities import load_entity
-from white_words.scriptwriting.core.references import (REFERENCE_COLUMNS, REFERENCE_LISTS,
-                                             REFERENCE_MAPS, dead_ids, live_column,
-                                             live_extra, live_extra_json, references_to)
+from white_words.scriptwriting.core.references import (
+    REFERENCE_COLUMNS,
+    REFERENCE_LISTS,
+    REFERENCE_MAPS,
+    dead_ids,
+    live_column,
+    live_extra,
+    live_extra_json,
+    references_to,
+)
 from white_words.scriptwriting.core.writes import create_entity, delete_entity, edit_entity
 from white_words.scriptwriting.tools.story_admin import handler as admin
 
 SLUG = twin.SLUG
 
 SCENARIOS = [
-    [("character", "kael")], [("character", "mira")],
-    [("scene", "central-room-day")], [("scene", "the-core-day")],
-    [("plot", "the-resistance")], [("relationship", "kael-mira")],
-    [("location", "the-central-room")], [("location", "the-garden")], [("world", "the-i")],
+    [("character", "kael")],
+    [("character", "mira")],
+    [("scene", "central-room-day")],
+    [("scene", "the-core-day")],
+    [("plot", "the-resistance")],
+    [("relationship", "kael-mira")],
+    [("location", "the-central-room")],
+    [("location", "the-garden")],
+    [("world", "the-i")],
     # More than one, so the references of two deleted entities are hidden together
     [("character", "kael"), ("character", "mira")],
     [("character", "kael"), ("scene", "central-room-day"), ("location", "the-garden")],
@@ -43,17 +56,30 @@ def _ids(scenario):
 
 
 def _restore(vault, etype, eid):
-    return json.loads(admin({"action": "restore", "project": SLUG,
-                             "target": {"entity_type": etype, "id": eid},
-                             "summary": "t"}, root_path=str(vault)))
+    return json.loads(
+        admin(
+            {
+                "action": "restore",
+                "project": SLUG,
+                "target": {"entity_type": etype, "id": eid},
+                "summary": "t",
+            },
+            root_path=str(vault),
+        )
+    )
 
 
 # ─── the helper itself ───
 
+
 class TestTheHelper:
     DEAD = frozenset({"kael"})
-    EXTRA = {"characters": ["kael", "mira"], "scenes": ["s1"],
-             "perspectives": {"kael": {"x": 1}, "mira": {"y": 2}}, "other": ["kael"]}
+    EXTRA = {
+        "characters": ["kael", "mira"],
+        "scenes": ["s1"],
+        "perspectives": {"kael": {"x": 1}, "mira": {"y": 2}},
+        "other": ["kael"],
+    }
 
     def test_dead_ids_come_out_of_lists_and_perspective_keys(self):
         out = live_extra(self.EXTRA, self.DEAD)
@@ -94,6 +120,7 @@ class TestTheHelper:
 
 # ─── the old behaviour, as a reference ───
 
+
 @pytest.mark.parametrize("scenario", SCENARIOS, ids=_ids)
 def test_hiding_references_reads_the_same_as_scrubbing_them(fixture_path, tmp_path, scenario):
     """No reader may be able to tell a hidden reference from a scrubbed one.
@@ -116,6 +143,7 @@ def test_hiding_references_reads_the_same_as_scrubbing_them(fixture_path, tmp_pa
 
 
 # ─── a grandchild: the one place a live row can outlive its parent ───
+
 
 def _nested(fixture_path, tmp_path, name):
     """A location put under a location, which sits under the world. The tools
@@ -153,9 +181,9 @@ def test_restoring_the_world_gives_the_grandchild_its_parent_back(fixture_path, 
 
 # ─── restore gives back everything ───
 
+
 @pytest.mark.parametrize("scenario", SCENARIOS, ids=_ids)
-def test_delete_then_restore_leaves_every_stored_byte_as_it_was(
-        fixture_path, tmp_path, scenario):
+def test_delete_then_restore_leaves_every_stored_byte_as_it_was(fixture_path, tmp_path, scenario):
     """The promise: restore is an exact inverse. Every row of every table."""
     p, vault = twin.build(fixture_path, tmp_path, "rt")
     before = twin.snapshot(p)
@@ -191,24 +219,49 @@ def test_a_scenes_location_comes_back(fixture_path, tmp_path):
 # ─── writers ───
 
 EDITS = [
-    ("a scene whose location is in the trash: its title",
-     ("location", "the-garden"), ("scene", "the-core-day"), {"title": "Renamed"}),
-    ("a scene whose location is in the trash: its place",
-     ("location", "the-garden"), ("scene", "the-core-day"), {"place": "THE GARDEN"}),
-    ("a scene whose location is in the trash: its dramatic role",
-     ("location", "the-garden"), ("scene", "the-core-day"), {"dramatic_role": "plot_role"}),
-    ("a relationship whose character is in the trash: its history",
-     ("character", "kael"), ("relationship", "kael-mira"), {"history": "Rewritten."}),
-    ("a plot whose character is in the trash: its summary",
-     ("character", "kael"), ("plot", "the-resistance"), {"one_sentence": "Rewritten."}),
-    ("a relationship whose scene is in the trash: its status",
-     ("scene", "central-room-day"), ("relationship", "kael-mira"), {"history": "Again."}),
+    (
+        "a scene whose location is in the trash: its title",
+        ("location", "the-garden"),
+        ("scene", "the-core-day"),
+        {"title": "Renamed"},
+    ),
+    (
+        "a scene whose location is in the trash: its place",
+        ("location", "the-garden"),
+        ("scene", "the-core-day"),
+        {"place": "THE GARDEN"},
+    ),
+    (
+        "a scene whose location is in the trash: its dramatic role",
+        ("location", "the-garden"),
+        ("scene", "the-core-day"),
+        {"dramatic_role": "plot_role"},
+    ),
+    (
+        "a relationship whose character is in the trash: its history",
+        ("character", "kael"),
+        ("relationship", "kael-mira"),
+        {"history": "Rewritten."},
+    ),
+    (
+        "a plot whose character is in the trash: its summary",
+        ("character", "kael"),
+        ("plot", "the-resistance"),
+        {"one_sentence": "Rewritten."},
+    ),
+    (
+        "a relationship whose scene is in the trash: its status",
+        ("scene", "central-room-day"),
+        ("relationship", "kael-mira"),
+        {"history": "Again."},
+    ),
 ]
 
 
 @pytest.mark.parametrize("what,gone,target,data", EDITS, ids=[e[0] for e in EDITS])
 def test_an_edit_gives_the_same_answer_as_when_the_references_were_scrubbed(
-        fixture_path, tmp_path, what, gone, target, data):
+    fixture_path, tmp_path, what, gone, target, data
+):
     """The agent must not meet a new refusal because a name it cannot see is
     still stored: an edit is validated against what a reader sees."""
     hidden, vh = twin.build(fixture_path, tmp_path, "hidden")
@@ -256,11 +309,18 @@ def test_an_edit_that_sets_the_field_replaces_it(fixture_path, tmp_path):
 
 # ─── the delete's report ───
 
+
 def test_the_report_names_what_now_reads_as_gone(fixture_path, tmp_path):
     p, _ = twin.build(fixture_path, tmp_path, "report")
     res = delete_entity(p, "location", "the-garden", "t", True)
-    assert res["detached"] == [{"entity_id": "the-core-day", "entity_type": "scene",
-                                "field": "location", "was_pointing_at": "the-garden"}]
+    assert res["detached"] == [
+        {
+            "entity_id": "the-core-day",
+            "entity_type": "scene",
+            "field": "location",
+            "was_pointing_at": "the-garden",
+        }
+    ]
     # The report reads what is STORED, which a delete no longer changes.
     conn = sqlite3.connect(str(p / ".story" / "story.db"))
     try:
@@ -283,6 +343,7 @@ def test_a_delete_changes_no_row_but_the_flags(fixture_path, tmp_path):
 
 # ─── a database one step behind ───
 
+
 @pytest.fixture
 def one_step(monkeypatch):
     """A test-only migration after the baseline. LATEST_VERSION is derived at
@@ -303,8 +364,15 @@ def test_every_reader_opens_a_database_one_step_behind(fixture_path, tmp_path, o
     """The readers use the live_relations view. None of them may be the first
     thing to open a behind file without bringing it forward."""
     from white_words.scriptwriting.app import services
-    from white_words.scriptwriting.core import db, manual_edits, manual_entities, manual_structure, track
+    from white_words.scriptwriting.core import (
+        db,
+        manual_edits,
+        manual_entities,
+        manual_structure,
+        track,
+    )
     from white_words.scriptwriting.tools import story_export, story_load, story_retrieve
+
     calls = {
         "summary": lambda p, v: db.get_project_summary(p),
         "unfilled_map": lambda p, v: db.get_unfilled_map(p),
@@ -316,8 +384,9 @@ def test_every_reader_opens_a_database_one_step_behind(fixture_path, tmp_path, o
         "track": lambda p, v: track.for_entity(p, "mira"),
         "preview": lambda p, v: manual_entities.delete_preview(p, "character", "kael"),
         "retrieve": lambda p, v: story_retrieve.handler(
-            {"project": SLUG, "entity_type": "scene", "id": "central-room-day",
-             "fields": ["all"]}, root_path=str(v)),
+            {"project": SLUG, "entity_type": "scene", "id": "central-room-day", "fields": ["all"]},
+            root_path=str(v),
+        ),
         "load": lambda p, v: story_load.handler({"project": SLUG}, root_path=str(v)),
         "export": lambda p, v: story_export.handler({"project": SLUG}, root_path=str(v)),
     }

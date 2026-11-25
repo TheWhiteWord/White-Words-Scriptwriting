@@ -1,4 +1,5 @@
 """Test fixture round-trip: import → export → compare."""
+
 import pytest
 import json
 import tempfile
@@ -17,6 +18,7 @@ def note_for(export_path: Path, folder: str, entity_id: str) -> Path:
     is what the frontmatter is for, and it is how a reader would find it too.
     """
     import frontmatter
+
     for f in sorted((export_path / folder).rglob("*.md")):
         if str(frontmatter.load(f).metadata.get("id") or "") == entity_id:
             return f
@@ -39,6 +41,7 @@ def test_import_creates_schema_and_entities(fixture_path):
         assert data["success"] is True
 
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
 
         entities = conn.execute("SELECT count(*) FROM entities").fetchone()[0]
@@ -117,6 +120,7 @@ def test_round_trip_preserves_data(fixture_path):
 
         # Compare DB state (project id will differ since it's the folder name)
         from white_words.scriptwriting.core.db import get_db
+
         conn1 = get_db(project_path)
         conn2 = get_db(reimport_proj)
 
@@ -172,6 +176,7 @@ def test_round_trip_kael_note(fixture_path):
         # Compare body sections — all original sections must survive round trip
         # (export may add canonical sections that were missing from the fixture)
         from white_words.scriptwriting.core.section_parser import list_sections
+
         orig_headings = set(list_sections(orig.content))
         exp_headings = set(list_sections(exported.content))
         assert orig_headings.issubset(exp_headings), (
@@ -188,6 +193,7 @@ def test_fts5_populated_after_import(fixture_path):
         import_handler({"project": str(project_path), "root_path": Path(tmp)})
 
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
 
         # Search via FTS — join back to sections to get entity_id
@@ -195,7 +201,7 @@ def test_fts5_populated_after_import(fixture_path):
             """SELECT s.entity_id FROM sections_fts f
                JOIN sections s ON f.rowid = s.rowid
                WHERE f.body MATCH ?""",
-            ("Marcus",)
+            ("Marcus",),
         )
         results = cursor.fetchall()
         assert len(results) > 0
@@ -212,6 +218,7 @@ def test_recycle_bin_not_imported(fixture_path):
         import_handler({"project": str(project_path), "root_path": Path(tmp)})
 
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
 
         soren = conn.execute("SELECT id FROM entities WHERE id=?", ("soren",)).fetchone()
@@ -321,6 +328,7 @@ def test_relationship_round_trip(fixture_path):
 
         # Verify relationship entities in DB
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(reimport_proj)
         rel_count = conn.execute(
             "SELECT count(*) FROM entities WHERE type='relationship'"
@@ -341,6 +349,7 @@ def test_world_variant_of_round_trip(fixture_path):
 
         # Verify relation row was created
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
         rel = conn.execute(
             "SELECT to_id FROM relations WHERE from_id='the-real-world' AND kind='world_variant'"

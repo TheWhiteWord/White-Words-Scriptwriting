@@ -1,4 +1,5 @@
 """story_load tool — load a project's nested index into context."""
+
 import json
 from pathlib import Path
 
@@ -8,95 +9,91 @@ from white_words.scriptwriting.core.references import dead_ids, live_extra
 
 SCHEMA = {
     "description": "Structural map of a project: what exists and where — acts, sequences, scenes, "
-                   "characters, plots, worlds. Call once per session before other story tools. "
-                   "Not for reading an entity's content; use story_retrieve for that. Pass `view` "
-                   "when you need one domain in depth — the default view stays small on purpose.",
+    "characters, plots, worlds. Call once per session before other story tools. "
+    "Not for reading an entity's content; use story_retrieve for that. Pass `view` "
+    "when you need one domain in depth — the default view stays small on purpose.",
     "type": "object",
     "properties": {
-        "project": {
-            "type": "string",
-            "description": "Project slug or name"
-        },
+        "project": {"type": "string", "description": "Project slug or name"},
         "view": {
             "type": "string",
             "enum": ["dramatic_elements", "relationship", "unfilled", "values", "track"],
             "description": "Optional focused view. Omit for the base structural map. "
-                           "'dramatic_elements' = per-scene dramatic roles, milestones, and "
-                           "the scene's objective, turning point and scene_beats pointer — "
-                           "filterable to one plot's escalation spine with plot + milestones_only. "
-                           "'relationship' = the full relationship graph with perspectives. "
-                           "'unfilled' = what is still incomplete, to answer 'what next?'. "
-                           "'values' = the value schemas and their turns, for a scene, "
-                           "unit, or the whole project. "
-                           "'track' = one entity across the story, in story order."
+            "'dramatic_elements' = per-scene dramatic roles, milestones, and "
+            "the scene's objective, turning point and scene_beats pointer — "
+            "filterable to one plot's escalation spine with plot + milestones_only. "
+            "'relationship' = the full relationship graph with perspectives. "
+            "'unfilled' = what is still incomplete, to answer 'what next?'. "
+            "'values' = the value schemas and their turns, for a scene, "
+            "unit, or the whole project. "
+            "'track' = one entity across the story, in story order.",
         },
-
         "character": {
             "type": "string",
             "description": "For view='relationship': only the relationships that involve "
-                           "this character id, in full. Unscoped, a large cast's graph is "
-                           "kept within a size budget: when `detail` lists compacted "
-                           "relationships, call again with character=<id>."
+            "this character id, in full. Unscoped, a large cast's graph is "
+            "kept within a size budget: when `detail` lists compacted "
+            "relationships, call again with character=<id>.",
         },
         "act": {
             "type": "string",
             "description": "Limit to one act id. Base map: full scene rows for that act, "
-                           "compact rows (id, title, status) for the rest. Also for "
-                           "view='dramatic_elements', 'values' or 'track'. Defaults to all."
+            "compact rows (id, title, status) for the rest. Also for "
+            "view='dramatic_elements', 'values' or 'track'. Defaults to all.",
         },
         "plot": {
             "type": "string",
             "description": "For view='dramatic_elements': limit the view to one plot id. "
-                           "The project header narrows to that plot. For view='values': "
-                           "limit to one plot id. Defaults to all."
+            "The project header narrows to that plot. For view='values': "
+            "limit to one plot id. Defaults to all.",
         },
         "milestones_only": {
             "type": "boolean",
             "description": "For view='dramatic_elements': keep only the scenes carrying a "
-                           "role of the filtered plot (any plot when `plot` is omitted), "
-                           "as trimmed rows — id, milestone, role, scene_objective, "
-                           "turning_point — each key only when filled. `role` is the "
-                           "filtered plot's own role; `milestone` stays the main plot's, "
-                           "so a subplot's rows carry their role under `role`. Defaults false."
+            "role of the filtered plot (any plot when `plot` is omitted), "
+            "as trimmed rows — id, milestone, role, scene_objective, "
+            "turning_point — each key only when filled. `role` is the "
+            "filtered plot's own role; `milestone` stays the main plot's, "
+            "so a subplot's rows carry their role under `role`. Defaults false.",
         },
         "sequence": {
             "type": "string",
             "description": "Limit to one sequence id — the cheapest way to work on a stretch of "
-                           "the story. Base map: full scene rows for that sequence, compact rows "
-                           "for the rest. Also for view='dramatic_elements', 'values' or 'track'. "
-                           "Defaults to all. A large story's responses are kept within a size "
-                           "budget: when a `detail` block lists compacted sequences, call again "
-                           "with sequence=<id> for their full rows."
+            "the story. Base map: full scene rows for that sequence, compact rows "
+            "for the rest. Also for view='dramatic_elements', 'values' or 'track'. "
+            "Defaults to all. A large story's responses are kept within a size "
+            "budget: when a `detail` block lists compacted sequences, call again "
+            "with sequence=<id> for their full rows.",
         },
         "scene": {
             "type": "string",
             "description": "For view='values': one scene id. Returns the values it "
-                           "serves, where each was last left and its next turn — "
-                           "used before evaluating a scene."
+            "serves, where each was last left and its next turn — "
+            "used before evaluating a scene.",
         },
         "value": {
             "type": "string",
             "description": "For view='values' with plot/sequence/act: narrow to one "
-                           "value name. Defaults to all the unit's values. "
-                           "For view='track': narrow the header `values` and every "
-                           "row's `effects` to one value name."
+            "value name. Defaults to all the unit's values. "
+            "For view='track': narrow the header `values` and every "
+            "row's `effects` to one value name.",
         },
         "field": {
             "type": "string",
             "description": "For view='unfilled': one field name (e.g. 'scene_objective'). "
-                           "Answers 'who else is missing this?' — the unfiltered list is grouped by "
-                           "field, so asking for one is a lookup, not a filter over the output."
+            "Answers 'who else is missing this?' — the unfiltered list is grouped by "
+            "field, so asking for one is a lookup, not a filter over the output.",
         },
         "entity": {
             "type": "string",
             "description": "For view='unfilled': one entity id. Answers 'what did I skip on this?'. "
-                           "Pair with `field` to ask both ways at once. "
-                           "For view='track' (required): one entity id — a character, "
-                           "relationship, location or world. Returns its journey across "
-                           "the scenes that record it, in story order."
-        }
+            "Pair with `field` to ask both ways at once. "
+            "For view='track' (required): one entity id — a character, "
+            "relationship, location or world. Returns its journey across "
+            "the scenes that record it, in story order.",
+        },
     },
-    "required": ["project"]
+    "required": ["project"],
 }
 
 
@@ -139,9 +136,13 @@ def handler(args: dict, **kwargs) -> str:
         # `sequence` put the full rows where the work is.
         if view is None:
             from white_words.scriptwriting.core.budget import max_response_chars
+
             summary = get_project_summary(
-                project_path, act=args.get("act"), sequence=args.get("sequence"),
-                max_chars=max_response_chars())
+                project_path,
+                act=args.get("act"),
+                sequence=args.get("sequence"),
+                max_chars=max_response_chars(),
+            )
             if summary:
                 return json.dumps(summary)
         else:
@@ -172,8 +173,10 @@ def _extended_view(conn, project_path, view: str, args: dict):
         return _view_values(conn, project_path, args)
     if view == "track":
         return _view_track(project_path, args)
-    return {"error": f"Unknown view: {view}. Valid: "
-                     f"dramatic_elements, relationship, unfilled, values, track."}
+    return {
+        "error": f"Unknown view: {view}. Valid: "
+        f"dramatic_elements, relationship, unfilled, values, track."
+    }
 
 
 def _view_track(project_path, args: dict) -> dict:
@@ -188,13 +191,19 @@ def _view_track(project_path, args: dict) -> dict:
 
     entity = args.get("entity")
     if not entity:
-        return {"view": "track",
-                "error": "view='track' needs `entity` — an entity id. "
-                         "Pass one, or use view='unfilled' with `entity` "
-                         "to ask what is still missing on it."}
-    return for_entity(project_path, entity,
-                      act=args.get("act"), sequence=args.get("sequence"),
-                      value=args.get("value"))
+        return {
+            "view": "track",
+            "error": "view='track' needs `entity` — an entity id. "
+            "Pass one, or use view='unfilled' with `entity` "
+            "to ask what is still missing on it.",
+        }
+    return for_entity(
+        project_path,
+        entity,
+        act=args.get("act"),
+        sequence=args.get("sequence"),
+        value=args.get("value"),
+    )
 
 
 def _view_dramatic_elements(conn, args: dict) -> dict:
@@ -232,21 +241,28 @@ def _view_dramatic_elements(conn, args: dict) -> dict:
     milestones_only = bool(args.get("milestones_only"))
 
     if seq_filter:
-        ids = [r[0] for r in conn.execute(
-            "SELECT id FROM entities WHERE type='sequence' AND is_deleted=0 "
-            "ORDER BY order_key, id")]
+        ids = [
+            r[0]
+            for r in conn.execute(
+                "SELECT id FROM entities WHERE type='sequence' AND is_deleted=0 "
+                "ORDER BY order_key, id"
+            )
+        ]
         if seq_filter not in ids:
-            return {"view": "dramatic_elements", "sequence": seq_filter,
-                    "error": f"No sequence with id '{seq_filter}'.",
-                    "valid_sequences": ids}
+            return {
+                "view": "dramatic_elements",
+                "sequence": seq_filter,
+                "error": f"No sequence with id '{seq_filter}'.",
+                "valid_sequences": ids,
+            }
 
     # Each scene's `scene_beats` record, keyed by the scene. Only the id and the
     # two facts this view surfaces are read — not the beats, which would defeat
     # the point of keeping them out of the base map.
     scene_beats = {}
     for sb_id, parent_id, extra_json in conn.execute(
-            "SELECT id, parent_id, extra FROM entities "
-            "WHERE type='scene_beats' AND is_deleted=0"):
+        "SELECT id, parent_id, extra FROM entities WHERE type='scene_beats' AND is_deleted=0"
+    ):
         scene_beats[parent_id] = {"id": sb_id, **json.loads(extra_json or "{}")}
 
     # Which plots point at which scene, in which role. Built unconditionally:
@@ -255,35 +271,39 @@ def _view_dramatic_elements(conn, args: dict) -> dict:
     # relation kind ("plot_setup" -> "setup") so this needs no hardcoded list
     # to drift out of sync with the schemas.
     plot_refs = {}
-    for plot_id, in conn.execute(
-            "SELECT id FROM entities WHERE type='plot' AND is_deleted=0 ORDER BY id"):
+    for (plot_id,) in conn.execute(
+        "SELECT id FROM entities WHERE type='plot' AND is_deleted=0 ORDER BY id"
+    ):
         for to_id, kind in conn.execute(
-                "SELECT to_id, kind FROM live_relations "
-                "WHERE from_id=:f AND kind LIKE 'plot\\_%' ESCAPE '\\'",
-                {"f": plot_id}):
-            plot_refs.setdefault(to_id, []).append(
-                {"plot": plot_id, "role": kind[len("plot_"):]})
+            "SELECT to_id, kind FROM live_relations "
+            "WHERE from_id=:f AND kind LIKE 'plot\\_%' ESCAPE '\\'",
+            {"f": plot_id},
+        ):
+            plot_refs.setdefault(to_id, []).append({"plot": plot_id, "role": kind[len("plot_") :]})
 
     # Plot scopes, so milestone_label knows which plot is the main one.
     plot_scopes = {}
     for plot_id, extra_json in conn.execute(
-            "SELECT id, extra FROM entities WHERE type='plot' AND is_deleted=0"):
+        "SELECT id, extra FROM entities WHERE type='plot' AND is_deleted=0"
+    ):
         pe = json.loads(extra_json or "{}")
         plot_scopes[plot_id] = pe.get("plot_scope", "")
 
     acts_out = []
     for act_id, act_title, act_order, act_extra_json in conn.execute(
-            "SELECT id, name, order_key, extra FROM entities "
-            "WHERE type='act' AND is_deleted=0 ORDER BY order_key, id").fetchall():
+        "SELECT id, name, order_key, extra FROM entities "
+        "WHERE type='act' AND is_deleted=0 ORDER BY order_key, id"
+    ).fetchall():
         if act_filter and act_id != act_filter:
             continue
         act_extra = json.loads(act_extra_json or "{}")
         act = {"id": act_id, "title": act_title}
         seqs_out = []
         for seq_id, seq_title, seq_order, seq_extra_json in conn.execute(
-                "SELECT id, name, order_key, extra FROM entities "
-                "WHERE type='sequence' AND parent_id=:p ORDER BY order_key, id",
-                {"p": act_id}).fetchall():
+            "SELECT id, name, order_key, extra FROM entities "
+            "WHERE type='sequence' AND parent_id=:p ORDER BY order_key, id",
+            {"p": act_id},
+        ).fetchall():
             if seq_filter and seq_id != seq_filter:
                 continue
             seq_extra = json.loads(seq_extra_json or "{}")
@@ -292,10 +312,11 @@ def _view_dramatic_elements(conn, args: dict) -> dict:
                 seq["primary_plot"] = seq_extra["primary_plot"]
             scenes_out = []
             for scene_id, scene_title, one_sentence, order_key, status, extra_json in conn.execute(
-                    "SELECT id, name, one_sentence, order_key, status, extra FROM entities "
-                    "WHERE type='scene' AND parent_id=:p AND is_deleted=0 "
-                    "ORDER BY order_key, id",
-                    {"p": seq_id}).fetchall():
+                "SELECT id, name, one_sentence, order_key, status, extra FROM entities "
+                "WHERE type='scene' AND parent_id=:p AND is_deleted=0 "
+                "ORDER BY order_key, id",
+                {"p": seq_id},
+            ).fetchall():
                 extra = json.loads(extra_json or "{}")
                 scene = {
                     "id": scene_id,
@@ -330,15 +351,19 @@ def _view_dramatic_elements(conn, args: dict) -> dict:
                 # one more key.
                 record = scene_beats.get(scene_id)
                 objective = extra.get("scene_objective", "") or (
-                    (record or {}).get("scene_objective", ""))
+                    (record or {}).get("scene_objective", "")
+                )
                 turning = (record or {}).get("turning_point", "")
                 if milestones_only:
                     # The escalation spine: only the scenes this plot promotes.
                     # Filtered on the plot ROLE, not on `milestone` — `milestone`
                     # is the main plot's, so filtering a subplot on it would
                     # keep nothing at all.
-                    roles = [e["role"] for e in plot_refs.get(scene_id, [])
-                             if not plot_filter or e["plot"] == plot_filter]
+                    roles = [
+                        e["role"]
+                        for e in plot_refs.get(scene_id, [])
+                        if not plot_filter or e["plot"] == plot_filter
+                    ]
                     if not roles:
                         continue
                     # Trimmed: the spine is what the scene is FOR, not its
@@ -393,13 +418,18 @@ def _view_dramatic_elements(conn, args: dict) -> dict:
     #
     # Each entry carries its own milestones — the scenes holding each role in
     # THAT plot. The main plot's are the story's; every sub-plot's are its own.
-    scene_order = {sid: ok for sid, ok in conn.execute(
-        "SELECT id, order_key FROM entities WHERE type='scene' AND is_deleted=0")}
+    scene_order = {
+        sid: ok
+        for sid, ok in conn.execute(
+            "SELECT id, order_key FROM entities WHERE type='scene' AND is_deleted=0"
+        )
+    }
     plot_milestones = {}
     for scene_id, roles in plot_refs.items():
         for entry in roles:
-            plot_milestones.setdefault(entry["plot"], {}).setdefault(
-                entry["role"], []).append(scene_id)
+            plot_milestones.setdefault(entry["plot"], {}).setdefault(entry["role"], []).append(
+                scene_id
+            )
     for roles in plot_milestones.values():
         for scene_ids in roles.values():
             # Story order, so a plot with several scenes in one role lists
@@ -408,16 +438,18 @@ def _view_dramatic_elements(conn, args: dict) -> dict:
 
     plot_index = []
     for plot_id, plot_name, plot_extra_json in conn.execute(
-            "SELECT id, name, extra FROM entities "
-            "WHERE type='plot' AND is_deleted=0 ORDER BY id").fetchall():
+        "SELECT id, name, extra FROM entities WHERE type='plot' AND is_deleted=0 ORDER BY id"
+    ).fetchall():
         pe = json.loads(plot_extra_json or "{}")
-        plot_index.append({
-            "id": plot_id,
-            "name": plot_name,
-            "plot_scope": pe.get("plot_scope", ""),
-            "plot_type": pe.get("plot_type", ""),
-            "milestones": plot_milestones.get(plot_id, {}),
-        })
+        plot_index.append(
+            {
+                "id": plot_id,
+                "name": plot_name,
+                "plot_scope": pe.get("plot_scope", ""),
+                "plot_type": pe.get("plot_type", ""),
+                "milestones": plot_milestones.get(plot_id, {}),
+            }
+        )
     # Story-level milestones are the main plot's roles. Find the main plot's
     # inciting_incident and climax scenes from the plot role relations.
     main_milestones = {"inciting_incident": [], "climax": []}
@@ -431,8 +463,11 @@ def _view_dramatic_elements(conn, args: dict) -> dict:
     if plot_filter:
         plot_index = [p for p in plot_index if p["id"] == plot_filter]
         if not plot_index:
-            return {"view": "dramatic_elements", "plot": plot_filter,
-                    "error": f"No plot with id '{plot_filter}'."}
+            return {
+                "view": "dramatic_elements",
+                "plot": plot_filter,
+                "error": f"No plot with id '{plot_filter}'.",
+            }
 
     out = {
         "view": "dramatic_elements",
@@ -452,7 +487,11 @@ def _view_dramatic_elements(conn, args: dict) -> dict:
     if seq_filter:
         return out
     from white_words.scriptwriting.core.budget import (
-        compacted_note, largest_fitting, max_response_chars)
+        compacted_note,
+        largest_fitting,
+        max_response_chars,
+    )
+
     seqs = [sq for a in acts_out for sq in a["sequences"]]
     full_scenes = [sq["scenes"] for sq in seqs]
 
@@ -469,9 +508,11 @@ def _view_dramatic_elements(conn, args: dict) -> dict:
     k, _ = largest_fitting(build, len(seqs), max_response_chars())
     if k < len(seqs):
         out["detail"] = compacted_note(
-            "sequence", [sq["id"] for sq in seqs[k:]],
+            "sequence",
+            [sq["id"] for sq in seqs[k:]],
             "story_load view='dramatic_elements' with sequence=<id> returns "
-            "that sequence's scenes.")
+            "that sequence's scenes.",
+        )
     return out
 
 
@@ -489,53 +530,66 @@ def _view_relationship(conn, args: dict) -> dict:
     dead = dead_ids(conn)
     out = []
     for rel_id, name, status, extra_json in conn.execute(
-            "SELECT id, name, status, extra FROM entities "
-            "WHERE type='relationship' AND is_deleted=0 "
-            "ORDER BY id").fetchall():
+        "SELECT id, name, status, extra FROM entities "
+        "WHERE type='relationship' AND is_deleted=0 "
+        "ORDER BY id"
+    ).fetchall():
         extra = live_extra(json.loads(extra_json or "{}"), dead)
         if character and character not in extra.get("characters", []):
             continue
         perspectives = extra.get("perspectives", {})
-        out.append({
-            "id": rel_id,
-            "name": name,
-            "status": status,
-            "characters": extra.get("characters", []),
-            "scenes": extra.get("scenes", []),
-            "perspectives": [
-                {"character": char_id,
-                 "type": p.get("type", ""),
-                 "label": p.get("label", ""),
-                 "feeling": p.get("feeling", ""),
-                 "strength": p.get("strength"),
-                 "secret": p.get("secret", False)}
-                for char_id, p in sorted(perspectives.items())
-            ],
-        })
+        out.append(
+            {
+                "id": rel_id,
+                "name": name,
+                "status": status,
+                "characters": extra.get("characters", []),
+                "scenes": extra.get("scenes", []),
+                "perspectives": [
+                    {
+                        "character": char_id,
+                        "type": p.get("type", ""),
+                        "label": p.get("label", ""),
+                        "feeling": p.get("feeling", ""),
+                        "strength": p.get("strength"),
+                        "secret": p.get("secret", False),
+                    }
+                    for char_id, p in sorted(perspectives.items())
+                ],
+            }
+        )
     if character:
-        result = {"view": "relationship", "character": character,
-                  "relationships": out}
+        result = {"view": "relationship", "character": character, "relationships": out}
         if not out:
-            result["note"] = (f"No relationship involves '{character}'. Ids are "
-                              f"exactly as returned by story_load.")
+            result["note"] = (
+                f"No relationship involves '{character}'. Ids are "
+                f"exactly as returned by story_load."
+            )
         return result
 
     from white_words.scriptwriting.core.budget import (
-        compacted_note, largest_fitting, max_response_chars)
+        compacted_note,
+        largest_fitting,
+        max_response_chars,
+    )
+
     full_rows = list(out)
 
     def build(k):
-        rows = [r if i < k else {"id": r["id"], "name": r["name"],
-                                 "characters": r["characters"]}
-                for i, r in enumerate(full_rows)]
+        rows = [
+            r if i < k else {"id": r["id"], "name": r["name"], "characters": r["characters"]}
+            for i, r in enumerate(full_rows)
+        ]
         return {"view": "relationship", "relationships": rows}
 
     k, result = largest_fitting(build, len(full_rows), max_response_chars())
     if k < len(full_rows):
         result["detail"] = compacted_note(
-            "relationship", [r["id"] for r in full_rows[k:]],
+            "relationship",
+            [r["id"] for r in full_rows[k:]],
             "story_load view='relationship' with character=<id> returns that "
-            "character's relationships in full.")
+            "character's relationships in full.",
+        )
     return result
 
 
@@ -568,8 +622,7 @@ def _view_unfilled(project_path, args: dict) -> dict:
     if field or entity:
         return _unfilled_focused(unfilled, field, entity)
 
-    items = [{"field": f, "entities": ids, "count": len(ids)}
-             for f, ids in unfilled.items()]
+    items = [{"field": f, "entities": ids, "count": len(ids)} for f, ids in unfilled.items()]
     items.sort(key=lambda i: (-i["count"], i["field"]))
 
     total = sum(i["count"] for i in items)
@@ -588,10 +641,12 @@ def _view_unfilled(project_path, args: dict) -> dict:
         # at count 2, and dropping one entity pushed it further off, so fixing
         # a scene made the remaining gap look like it had been handled.
         out["other_fields"] = [i["field"] for i in items[UNFILLED_LIMIT:]]
-        out["hint"] = (f"{len(items)} field types are incomplete; the "
-                       f"{UNFILLED_LIMIT} most common are shown. "
-                       f"other_fields lists the rest — still gaps. "
-                       f"Pass field=<name> for one, or entity=<id> for one entity.")
+        out["hint"] = (
+            f"{len(items)} field types are incomplete; the "
+            f"{UNFILLED_LIMIT} most common are shown. "
+            f"other_fields lists the rest — still gaps. "
+            f"Pass field=<name> for one, or entity=<id> for one entity."
+        )
     if not items:
         out["message"] = "Nothing is at default — every optional field is filled."
     return out
@@ -616,7 +671,8 @@ def _unfilled_focused(unfilled: dict, field: str | None, entity: str | None) -> 
             out["message"] = (
                 f"'{field}' is missing on no entity — either it is filled "
                 f"everywhere, or it is not a field. story_describe lists the "
-                f"fields that exist.")
+                f"fields that exist."
+            )
     if entity:
         out["entity"] = entity
         out["fields"] = sorted(f for f, ids in unfilled.items() if entity in ids)
@@ -634,8 +690,8 @@ def _value_schemas(conn) -> dict:
     """
     schemas = {}
     for vid, name, extra_json in conn.execute(
-            "SELECT id, name, extra FROM entities WHERE type='value' "
-            "AND is_deleted=0"):
+        "SELECT id, name, extra FROM entities WHERE type='value' AND is_deleted=0"
+    ):
         extra = json.loads(extra_json) if extra_json else {}
         key = str(name or "").strip().lower()
         if key:
@@ -664,7 +720,12 @@ def _view_values(conn, project_path, args: dict) -> dict:
                        turns in story order (scene, plot, from, to).
     """
     from white_words.scriptwriting.core.db import get_scene_value_turns
-    from white_words.scriptwriting.core.value_focus import for_act, for_plot, for_project, for_sequence
+    from white_words.scriptwriting.core.value_focus import (
+        for_act,
+        for_plot,
+        for_project,
+        for_sequence,
+    )
 
     turns = get_scene_value_turns(project_path)
     schemas = _value_schemas(conn)
@@ -678,12 +739,23 @@ def _view_values(conn, project_path, args: dict) -> dict:
     act = args.get("act")
     if plot or sequence or act:
         return _values_for_unit(
-            project_path, plot, sequence, act, args.get("value"),
-            turns, schemas, for_plot, for_sequence, for_act, for_project)
+            project_path,
+            plot,
+            sequence,
+            act,
+            args.get("value"),
+            turns,
+            schemas,
+            for_plot,
+            for_sequence,
+            for_act,
+            for_project,
+        )
 
-    out = {"view": "values",
-           "values": [{"value": name, **schema}
-                      for name, schema in sorted(schemas.items())]}
+    out = {
+        "view": "values",
+        "values": [{"value": name, **schema} for name, schema in sorted(schemas.items())],
+    }
     if not schemas:
         out["message"] = "No values defined yet."
     return out
@@ -697,17 +769,16 @@ def _values_for_scene(conn, project_path, scene_id, turns, schemas) -> dict:
     from white_words.scriptwriting.core.value_focus import for_act, for_sequence
 
     row = conn.execute(
-        "SELECT id, parent_id FROM entities "
-        "WHERE id=? AND type='scene' AND is_deleted=0", (scene_id,)).fetchone()
+        "SELECT id, parent_id FROM entities WHERE id=? AND type='scene' AND is_deleted=0",
+        (scene_id,),
+    ).fetchone()
     if not row:
-        return {"view": "values", "scene": scene_id,
-                "error": f"Scene not found: {scene_id}"}
+        return {"view": "values", "scene": scene_id, "error": f"Scene not found: {scene_id}"}
     _, seq_id = row
     act_id = None
     seq_extra = {}
     if seq_id:
-        seq = conn.execute(
-            "SELECT parent_id, extra FROM entities WHERE id=?", (seq_id,)).fetchone()
+        seq = conn.execute("SELECT parent_id, extra FROM entities WHERE id=?", (seq_id,)).fetchone()
         if seq:
             act_id = seq[0]
             seq_extra = json.loads(seq[1]) if seq[1] else {}
@@ -720,9 +791,14 @@ def _values_for_scene(conn, project_path, scene_id, turns, schemas) -> dict:
 
     # The plots the scene serves: its plot_roles relations, else its sequence's
     # primary_plot. A scene can serve more than one; both sources can be empty.
-    plot_ids = [p for p, in conn.execute(
-        'SELECT DISTINCT from_id FROM live_relations '
-        "WHERE to_id=? AND kind LIKE 'plot\\_%' ESCAPE '\\'", (scene_id,))]
+    plot_ids = [
+        p
+        for (p,) in conn.execute(
+            "SELECT DISTINCT from_id FROM live_relations "
+            "WHERE to_id=? AND kind LIKE 'plot\\_%' ESCAPE '\\'",
+            (scene_id,),
+        )
+    ]
     if not plot_ids and seq_id and seq_extra.get("primary_plot"):
         plot_ids = [seq_extra["primary_plot"]]
 
@@ -739,12 +815,9 @@ def _values_for_scene(conn, project_path, scene_id, turns, schemas) -> dict:
         values = []
         for value in sorted(by_value):
             line = sorted(by_value[value], key=lambda t: t["order"])
-            scene_order = next((t["order"] for t in line
-                                if t["scene_id"] == scene_id), None)
-            before = [t for t in line if scene_order is None
-                      or t["order"] < scene_order]
-            after = [t for t in line
-                     if scene_order is not None and t["order"] > scene_order]
+            scene_order = next((t["order"] for t in line if t["scene_id"] == scene_id), None)
+            before = [t for t in line if scene_order is None or t["order"] < scene_order]
+            after = [t for t in line if scene_order is not None and t["order"] > scene_order]
             entry = {"value": value, "schema": schemas.get(value.strip().lower())}
             last = before[-1] if before else None
             nxt = after[0] if after else None
@@ -758,8 +831,19 @@ def _values_for_scene(conn, project_path, scene_id, turns, schemas) -> dict:
     return out
 
 
-def _values_for_unit(project_path, plot, sequence, act, value, turns, schemas,
-                     for_plot, for_sequence, for_act, for_project) -> dict:
+def _values_for_unit(
+    project_path,
+    plot,
+    sequence,
+    act,
+    value,
+    turns,
+    schemas,
+    for_plot,
+    for_sequence,
+    for_act,
+    for_project,
+) -> dict:
     """A plot, sequence or act: its major/minor values, and each value's turns
     in story order. `value` narrows to one. Acts aggregate every plot; a plot
     is its own scope.
@@ -793,8 +877,7 @@ def _values_for_unit(project_path, plot, sequence, act, value, turns, schemas,
     if value:
         wanted = {value.strip().lower()}
     else:
-        wanted = {item["value"].strip().lower()
-                  for item in focus["major"] + focus["minor"]}
+        wanted = {item["value"].strip().lower() for item in focus["major"] + focus["minor"]}
 
     by_value = {}
     for t in turns:
@@ -803,12 +886,16 @@ def _values_for_unit(project_path, plot, sequence, act, value, turns, schemas,
     values = []
     for name in sorted(by_value):
         rows = sorted(by_value[name], key=lambda t: t["order"])
-        values.append({
-            "value": name,
-            "schema": schemas.get(name.strip().lower()),
-            "turns": [{"scene": t["scene_id"], "plot": t["plot"],
-                       "from": t["from"], "to": t["to"]} for t in rows],
-        })
+        values.append(
+            {
+                "value": name,
+                "schema": schemas.get(name.strip().lower()),
+                "turns": [
+                    {"scene": t["scene_id"], "plot": t["plot"], "from": t["from"], "to": t["to"]}
+                    for t in rows
+                ],
+            }
+        )
     out["values"] = values
     return out
 

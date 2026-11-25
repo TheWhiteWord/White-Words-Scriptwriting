@@ -14,6 +14,7 @@ the folder where their writing is, not as a product they installed.
 The config dir follows XDG_CONFIG_HOME; the data root hangs off the home
 directory.
 """
+
 from __future__ import annotations
 
 import os

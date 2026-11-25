@@ -1,4 +1,5 @@
 """Export and import tests for the DB-backed memory projection."""
+
 import json
 
 import pytest
@@ -17,12 +18,24 @@ def project(tmp_path):
 
 def test_export_writes_frontmatter_only_and_preserves_order(project):
     path, vault = project
-    memory_handler({
-        "project": str(path), "action": "add", "category": "decisions", "entry": "First",
-    }, root_path=vault)
-    memory_handler({
-        "project": str(path), "action": "add", "category": "decisions", "entry": "Second",
-    }, root_path=vault)
+    memory_handler(
+        {
+            "project": str(path),
+            "action": "add",
+            "category": "decisions",
+            "entry": "First",
+        },
+        root_path=vault,
+    )
+    memory_handler(
+        {
+            "project": str(path),
+            "action": "add",
+            "category": "decisions",
+            "entry": "Second",
+        },
+        root_path=vault,
+    )
     assert json.loads(export_handler({"project": str(path)}, root_path=vault))["success"] is True
     text = (path / ".story" / "memory.md").read_text()
     assert text.startswith("---")
@@ -34,13 +47,25 @@ def test_export_writes_frontmatter_only_and_preserves_order(project):
 
 def test_memory_file_is_projection_not_source(project):
     path, vault = project
-    memory_handler({
-        "project": str(path), "action": "add", "category": "directions", "entry": "DB value",
-    }, root_path=vault)
+    memory_handler(
+        {
+            "project": str(path),
+            "action": "add",
+            "category": "directions",
+            "entry": "DB value",
+        },
+        root_path=vault,
+    )
     (path / ".story" / "memory.md").write_text("---\ndirections:\n  - File value\n---\n")
-    memory_handler({
-        "project": str(path), "action": "add", "category": "open_questions", "entry": "Question?",
-    }, root_path=vault)
+    memory_handler(
+        {
+            "project": str(path),
+            "action": "add",
+            "category": "open_questions",
+            "entry": "Question?",
+        },
+        root_path=vault,
+    )
     export_handler({"project": str(path)}, root_path=vault)
     text = (path / ".story" / "memory.md").read_text()
     assert "DB value" in text
@@ -70,9 +95,15 @@ def test_import_rejects_invalid_memory_file_without_mutating_db(project):
     from white_words.scriptwriting.core.db import get_project_memory
 
     path, vault = project
-    memory_handler({
-        "project": str(path), "action": "add", "category": "decisions", "entry": "DB value",
-    }, root_path=vault)
+    memory_handler(
+        {
+            "project": str(path),
+            "action": "add",
+            "category": "decisions",
+            "entry": "DB value",
+        },
+        root_path=vault,
+    )
     (path / ".story" / "memory.md").write_text("---\ndecisions:\n  - one\n  - one\n---\n")
     result = json.loads(import_handler({"project": str(path)}, root_path=vault))
     assert result["error"]

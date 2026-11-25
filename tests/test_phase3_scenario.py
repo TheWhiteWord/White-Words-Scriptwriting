@@ -1,4 +1,5 @@
 """3-edit scenario test: sequential edits → each visible in next load."""
+
 import json
 import shutil
 import tempfile
@@ -6,8 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from white_words.scriptwriting.core.writes import (create_entity, delete_entity, edit_entity,
-                          reorder)
+from white_words.scriptwriting.core.writes import create_entity, delete_entity, edit_entity, reorder
 from white_words.scriptwriting.tools.story_import import handler as import_handler
 from white_words.scriptwriting.tools.story_load import handler as load_handler
 from white_words.scriptwriting.tools.story_retrieve import handler as retrieve_handler
@@ -90,9 +90,13 @@ class Test3EditScenario:
         proj, vault = db_project
 
         # Edit
-        result = edit_entity(proj, "character", "kael",
-                              {"one_sentence": "Updated description for kael."},
-                              "Update kael one_sentence")
+        result = edit_entity(
+            proj,
+            "character",
+            "kael",
+            {"one_sentence": "Updated description for kael."},
+            "Update kael one_sentence",
+        )
         assert result["success"] is True
 
         # Load shows change
@@ -106,12 +110,15 @@ class Test3EditScenario:
         proj, vault = db_project
 
         # Create a character
-        create_entity(proj, "character", "temp-char",
-            {"name": "Temp", "story_role": "Minor", "one_sentence": "Temp"})
+        create_entity(
+            proj,
+            "character",
+            "temp-char",
+            {"name": "Temp", "story_role": "Minor", "one_sentence": "Temp"},
+        )
 
         # Delete character
-        result = delete_entity(proj, "character", "temp-char",
-                               "Delete temp-char", True)
+        result = delete_entity(proj, "character", "temp-char", "Delete temp-char", True)
         assert result["success"] is True
 
         # Load excludes deleted entity AND its arcs
@@ -119,19 +126,22 @@ class Test3EditScenario:
         ids = _all_entity_ids(result)
         assert "temp-char" not in ids
 
-
     def test_delete_sequence_with_scenes_blocked(self, db_project):
         """Deleting a sequence that has scenes is blocked."""
         proj, vault = db_project
 
-        create_entity(proj, "sequence", "seq-with-scenes",
-            {"title": "Seq", "act_id": "act-1"})  # act-1 from fixture import
+        create_entity(
+            proj, "sequence", "seq-with-scenes", {"title": "Seq", "act_id": "act-1"}
+        )  # act-1 from fixture import
         # Create a scene in this sequence
-        create_entity(proj, "scene", "scene-in-seq",
-            {"title": "Scene", "sequence_id": "seq-with-scenes", "act_id": "act-1"})
+        create_entity(
+            proj,
+            "scene",
+            "scene-in-seq",
+            {"title": "Scene", "sequence_id": "seq-with-scenes", "act_id": "act-1"},
+        )
 
-        result = delete_entity(proj, "sequence", "seq-with-scenes",
-                               "Delete seq", True)
+        result = delete_entity(proj, "sequence", "seq-with-scenes", "Delete seq", True)
         assert "Cannot delete" in result["error"]
         assert [c["id"] for c in result["blocking_children"]] == ["scene-in-seq"]
 
@@ -141,15 +151,17 @@ class Test3EditScenario:
 
         # Create a sequence with scenes
         create_entity(proj, "act", "act-test", {"title": "Test Act"})
-        create_entity(proj, "sequence", "seq-test",
-            {"title": "Test Seq", "act_id": "act-test"})
+        create_entity(proj, "sequence", "seq-test", {"title": "Test Seq", "act_id": "act-test"})
         for slug in ["scene-x", "scene-y", "scene-z"]:
-            create_entity(proj, "scene", slug,
-                {"title": f"Scene {slug[-1]}", "sequence_id": "seq-test", "act_id": "act-test"})
+            create_entity(
+                proj,
+                "scene",
+                slug,
+                {"title": f"Scene {slug[-1]}", "sequence_id": "seq-test", "act_id": "act-test"},
+            )
 
         # Reorder: scene-z first
-        result = reorder(proj, "scene", ["scene-z", "scene-x", "scene-y"],
-                         "Reorder scenes")
+        result = reorder(proj, "scene", ["scene-z", "scene-x", "scene-y"], "Reorder scenes")
         assert result["success"] is True
 
         # Load shows new order
@@ -159,7 +171,11 @@ class Test3EditScenario:
         for act in result["acts"]:
             for seq in act.get("sequences", []):
                 for scene in seq.get("scenes", []):
-                    if isinstance(scene, dict) and scene.get("id") in ("scene-x", "scene-y", "scene-z"):
+                    if isinstance(scene, dict) and scene.get("id") in (
+                        "scene-x",
+                        "scene-y",
+                        "scene-z",
+                    ):
                         scenes_found[scene["id"]] = scene
         assert len(scenes_found) == 3
         # Order is implied by array position — find the sequence containing them
@@ -177,19 +193,24 @@ class TestAppValidation:
 
     def test_scene_mismatched_act_id_rejected(self, tmp_path):
         """Create scene with mismatched sequence.act_id vs scene.act_id → error."""
-        create_entity(tmp_path, "act", "act-a",
-            {"title": "Act A"})
-        create_entity(tmp_path, "act", "act-b",
-            {"title": "Act B"})
-        create_entity(tmp_path, "sequence", "seq-1",
-            {"title": "Seq 1", "act_id": "act-a"})
+        create_entity(tmp_path, "act", "act-a", {"title": "Act A"})
+        create_entity(tmp_path, "act", "act-b", {"title": "Act B"})
+        create_entity(tmp_path, "sequence", "seq-1", {"title": "Seq 1", "act_id": "act-a"})
 
         with pytest.raises(ValueError, match="act"):
-            create_entity(tmp_path, "scene", "bad-scene",
-                {"title": "Bad Scene", "sequence_id": "seq-1", "act_id": "act-b"})
+            create_entity(
+                tmp_path,
+                "scene",
+                "bad-scene",
+                {"title": "Bad Scene", "sequence_id": "seq-1", "act_id": "act-b"},
+            )
 
     def test_plot_unknown_character_rejected(self, tmp_path):
         """Create plot with non-existent character → error."""
         with pytest.raises(ValueError, match="Character not found|nonexistent-char"):
-            create_entity(tmp_path, "plot", "test-plot",
-                {"name": "Test Plot", "characters": ["nonexistent-char"]})
+            create_entity(
+                tmp_path,
+                "plot",
+                "test-plot",
+                {"name": "Test Plot", "characters": ["nonexistent-char"]},
+            )

@@ -1,12 +1,15 @@
 """Small UI-writable settings store (state.json next to config.toml)."""
+
 from __future__ import annotations
 import json
 from pathlib import Path
 
 from white_words.scriptwriting.core import paths
 
+
 def state_file() -> Path:
     return paths.config_dir() / "state.json"
+
 
 def load_state() -> dict:
     p = state_file()
@@ -16,6 +19,7 @@ def load_state() -> dict:
         return json.loads(p.read_text())
     except Exception:
         return {}
+
 
 def save_state(patch: dict) -> dict:
     p = state_file()

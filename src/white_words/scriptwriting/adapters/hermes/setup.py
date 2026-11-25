@@ -1,4 +1,5 @@
 """Hermes setup command implementation."""
+
 from __future__ import annotations
 
 import argparse
@@ -69,6 +70,7 @@ def setup(argv=None, dry_run=False, force=False, profile_name=PROFILE):
     meta_path = pd / "profile.yaml"
     if not dry and pd.exists():
         import yaml
+
         try:
             meta = yaml.safe_load(meta_path.read_text()) if meta_path.exists() else {}
         except Exception:
@@ -84,12 +86,20 @@ def setup(argv=None, dry_run=False, force=False, profile_name=PROFILE):
     state_db = pd / "state.db"
     if not state_db.exists():
         import sqlite3
+
         W_home = W.hermes_home()
-        candidates = [W_home / "state.db"] + [p / "state.db" for p in (W_home / "profiles").glob("*") if p.is_dir()]
+        candidates = [W_home / "state.db"] + [
+            p / "state.db" for p in (W_home / "profiles").glob("*") if p.is_dir()
+        ]
         src = next((c for c in candidates if c.exists() and c != state_db), None)
         if src is not None:
             con = sqlite3.connect(str(src))
-            schema = [r[0] for r in con.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index','trigger','view') AND sql IS NOT NULL").fetchall()]
+            schema = [
+                r[0]
+                for r in con.execute(
+                    "SELECT sql FROM sqlite_master WHERE type IN ('table','index','trigger','view') AND sql IS NOT NULL"
+                ).fetchall()
+            ]
             con.close()
             out_db = sqlite3.connect(str(state_db))
             for sql in schema:
@@ -119,7 +129,7 @@ def setup(argv=None, dry_run=False, force=False, profile_name=PROFILE):
             existing = soul_path.read_text()
             foreign = MARKER not in existing
             default_soul = _profile("default") / "SOUL.md"
-            identical_to_default = (default_soul.exists() and existing == default_soul.read_text())
+            identical_to_default = default_soul.exists() and existing == default_soul.read_text()
         else:
             existing = ""
             foreign = False
@@ -169,6 +179,7 @@ def setup(argv=None, dry_run=False, force=False, profile_name=PROFILE):
     # ensure function added below; fallback
     if api_key is None:
         import secrets
+
         akp = T.config_dir() / "api_key"
         if akp.exists():
             api_key = akp.read_text().strip()
@@ -188,6 +199,7 @@ def setup(argv=None, dry_run=False, force=False, profile_name=PROFILE):
         env_path.write_text("\n".join(lines) + "\n")
         out.append("API key written (not printed)")
     import yaml
+
     cfg_path = pd / "config.yaml"
     cfg = {}
     if cfg_path.exists():
@@ -216,9 +228,11 @@ def setup(argv=None, dry_run=False, force=False, profile_name=PROFILE):
     api_key = T.ensure_api_key() if hasattr(T, "ensure_api_key") else None
     cfg.setdefault("agent", {})
     import sys as _sys
+
     _sys.path.insert(0, "/home/davide/.hermes/hermes-agent")
     try:
         import toolsets as _ts
+
         cfg["agent"]["disabled_toolsets"] = sorted(_ts.BUILTIN_TOOLSET_NAMES)
     except Exception:
         cfg["agent"]["disabled_toolsets"] = []
@@ -238,12 +252,14 @@ def status(argv=None, profile_name=PROFILE):
     args = parser.parse_args(argv or [])
     pname = args.profile
     ok = True
+
     def check(label, cond, hint=""):
         nonlocal ok
         mark = "OK" if cond else "FAIL"
         if not cond:
             ok = False
         print(f"{mark:4} {label}" + (f"  ({hint})" if hint and not cond else ""))
+
     exe = W.find_hermes()
     check("hermes found", exe is not None)
     ver = W.version() if exe else None
@@ -251,11 +267,14 @@ def status(argv=None, profile_name=PROFILE):
     pd = _profile(pname)
     check("profile exists", pd.exists())
     check("SOUL.md present", (pd / "SOUL.md").exists() if pd.exists() else False)
-    check("skill present", (pd / "skills" / PROFILE / "SKILL.md").exists() if pd.exists() else False)
+    check(
+        "skill present", (pd / "skills" / PROFILE / "SKILL.md").exists() if pd.exists() else False
+    )
     cfg = {}
     cp = pd / "config.yaml" if pd.exists() else None
     if cp and cp.exists():
         import yaml
+
         try:
             cfg = yaml.safe_load(cp.read_text()) or {}
         except Exception:
@@ -268,6 +287,7 @@ def status(argv=None, profile_name=PROFILE):
     check("token present", T.load_token() is not None)
     # app reachable
     import urllib.request
+
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz", timeout=2) as r:
             app_ok = r.status == 200
@@ -282,19 +302,26 @@ def status(argv=None, profile_name=PROFILE):
             import asyncio
             from mcp.client.streamable_http import streamable_http_client
             from mcp import ClientSession
+
             async def _list():
                 try:
                     import httpx
                 except ImportError:
                     import httpx2 as httpx
-                http_client = httpx.AsyncClient(headers={"Authorization": f"Bearer {tok}"}, timeout=5.0)
-                async with streamable_http_client(f"http://127.0.0.1:{port}/mcp", http_client=http_client) as (r, w):
+                http_client = httpx.AsyncClient(
+                    headers={"Authorization": f"Bearer {tok}"}, timeout=5.0
+                )
+                async with streamable_http_client(
+                    f"http://127.0.0.1:{port}/mcp", http_client=http_client
+                ) as (r, w):
                     async with ClientSession(r, w) as session:
                         await session.initialize()
                         res = await session.list_tools()
                         return [t.name for t in res.tools]
+
             names = asyncio.run(_list())
             from white_words.scriptwriting.app.mcp_server import build_registry
+
             expected = {n for n, _, _ in build_registry()}
             mcp_ok = set(names) == expected
         except Exception:
@@ -314,7 +341,11 @@ def status(argv=None, profile_name=PROFILE):
                 import httpx2 as httpx
             # The host multiplexes profiles under /p/<profile>/; the bare /v1
             # path answers for the default profile and rejects this key.
-            r = httpx.get(f"http://127.0.0.1:{ap}/p/{pname}/v1/models", headers={"Authorization": f"Bearer {ak}"}, timeout=2.0)
+            r = httpx.get(
+                f"http://127.0.0.1:{ap}/p/{pname}/v1/models",
+                headers={"Authorization": f"Bearer {ak}"},
+                timeout=2.0,
+            )
             api_ok = r.status_code == 200
             if api_ok:
                 data = r.json()
@@ -324,6 +355,10 @@ def status(argv=None, profile_name=PROFILE):
             api_ok = False
     check("API server reachable", api_ok, "start gateway / run setup")
     check("API model id matches profile", model_ok, f"expected {pname}")
-    check("builtins disabled", "terminal" in (cfg.get("agent", {}).get("disabled_toolsets") or []), "run setup")
+    check(
+        "builtins disabled",
+        "terminal" in (cfg.get("agent", {}).get("disabled_toolsets") or []),
+        "run setup",
+    )
     print("ALL OK" if ok else "FAILURES PRESENT")
     return 0 if ok else 1

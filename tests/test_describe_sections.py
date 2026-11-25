@@ -7,6 +7,7 @@ reports them: `story_retrieve` only reveals `available_sections` as a side effec
 of a miss. These tests fail if that regresses, or if the reported list drifts
 from what the write path actually accepts.
 """
+
 import json
 
 import pytest
@@ -31,14 +32,22 @@ def test_every_type_reports_its_sections():
 def test_reported_sections_are_the_ones_the_write_path_accepts():
     """The whole point: the list is read from standard_sections, not restated."""
     for entity_type, entry in _describe().items():
-        assert entry["sections"]["standard_sections"] == standard_sections(entity_type), \
-            entity_type
+        assert entry["sections"]["standard_sections"] == standard_sections(entity_type), entity_type
 
 
 def test_the_character_vocabulary_is_present_and_named():
     sections = _describe("character")["character"]["sections"]["standard_sections"]
-    for name in ("Identity", "Desires", "Background", "Contradictions",
-                 "Psychology", "Arc", "Relationships", "Voice", "Notes"):
+    for name in (
+        "Identity",
+        "Desires",
+        "Background",
+        "Contradictions",
+        "Psychology",
+        "Arc",
+        "Relationships",
+        "Voice",
+        "Notes",
+    ):
         assert name in sections, name
 
 
@@ -55,8 +64,9 @@ def test_sections_do_not_shadow_a_field():
 
     for entity_type, entry in _describe().items():
         assert entity_type in ENTITY_SCHEMAS
-        assert "sections" not in ENTITY_SCHEMAS[entity_type], \
+        assert "sections" not in ENTITY_SCHEMAS[entity_type], (
             f"{entity_type} has a real field named 'sections' — the merged key collides"
+        )
 
 
 def test_every_type_has_at_least_one_section():

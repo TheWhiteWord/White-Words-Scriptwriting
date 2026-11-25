@@ -19,9 +19,7 @@ PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 HARNESS = PLUGIN_ROOT / "tests/trash_harness.js"
 TRASH_JS = PLUGIN_ROOT / "src/white_words/scriptwriting/web/js/views/trash.js"
 
-pytestmark = pytest.mark.skipif(
-    not shutil.which("node"), reason="node not available"
-)
+pytestmark = pytest.mark.skipif(not shutil.which("node"), reason="node not available")
 
 
 def run_harness():

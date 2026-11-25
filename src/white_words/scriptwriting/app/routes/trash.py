@@ -18,6 +18,7 @@ describe differently. In particular a restore whose parent is still in the trash
 is refused HERE, not there: `core.trash.restore` stays permissive for the agent,
 and this route is the one that reads `restore_check` first.
 """
+
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -25,8 +26,9 @@ from fastapi.responses import JSONResponse
 
 
 def _err(status: int, code: str, message: str, **extra):
-    return JSONResponse(status_code=status,
-                        content={"error": {"code": code, "message": message, **extra}})
+    return JSONResponse(
+        status_code=status, content={"error": {"code": code, "message": message, **extra}}
+    )
 
 
 def make_router(config, app):
@@ -34,17 +36,18 @@ def make_router(config, app):
 
     def _project(slug):
         from white_words.scriptwriting.tools.story_resolve import resolve_project
+
         return resolve_project(slug, Path(config.root))
 
     def _run(slug, fn):
         """Resolve the project, run `fn(project_path)`, translate refusals."""
         try:
             project = _project(slug)
-        except ValueError as e:                     # unknown project
+        except ValueError as e:  # unknown project
             return _err(404, "not_found", str(e))
         try:
             return fn(project)
-        except ValueError as e:                     # refused by core.trash
+        except ValueError as e:  # refused by core.trash
             return _err(422, "invalid", str(e))
 
     def _restore_refusal(result):
@@ -66,12 +69,14 @@ def make_router(config, app):
     def list_trash(slug: str, older_than_days: int = 30):
         """The list: one entry per deletion, children nested, restore readiness."""
         from white_words.scriptwriting.core import trash
+
         return _run(slug, lambda p: trash.trash_for_ui(p, older_than_days))
 
     @router.get("/api/projects/{slug}/trash/{etype}/{eid}")
     def detail(slug: str, etype: str, eid: str):
         """The preview: fields, prose, links, references, and what would change."""
         from white_words.scriptwriting.core import trash
+
         result = _run(slug, lambda p: trash.trash_detail(p, etype, eid))
         if isinstance(result, dict) and result.get("error"):
             if result.get("code") == "not_deleted":
@@ -89,14 +94,14 @@ def make_router(config, app):
 
         def go(p):
             from white_words.scriptwriting.core.db import get_db
+
             conn = get_db(p)
             try:
                 check = trash.restore_check(conn, eid)
             finally:
                 conn.close()
             if check["blockers"]:
-                return {"error": check["blockers"][0]["message"],
-                        "blockers": check["blockers"]}
+                return {"error": check["blockers"][0]["message"], "blockers": check["blockers"]}
             result = trash.restore(p, etype, eid, "restored from the trash")
             if result.get("error"):
                 return result
@@ -115,23 +120,28 @@ def make_router(config, app):
 
         targets = _targets(body)
         if not targets:
-            return _err(422, "invalid",
-                        "restore needs targets: [{entity_type, id}, …]")
+            return _err(422, "invalid", "restore needs targets: [{entity_type, id}, …]")
 
         def go(p):
             try:
                 return trash.restore_many(p, targets)
             except trash.RestoreRefused as refused:
-                return {"error": str(refused), "refused": refused.refused,
-                        "blockers": refused.refused[0].get("blockers") or []}
+                return {
+                    "error": str(refused),
+                    "refused": refused.refused,
+                    "blockers": refused.refused[0].get("blockers") or [],
+                }
 
         result = _run(slug, go)
         if isinstance(result, dict) and result.get("error"):
             blockers = result.get("blockers") or []
-            return _err(409, "restore_blocked" if blockers else "not_in_trash",
-                        result["error"],
-                        refused=result.get("refused") or [],
-                        blockers=blockers)
+            return _err(
+                409,
+                "restore_blocked" if blockers else "not_in_trash",
+                result["error"],
+                refused=result.get("refused") or [],
+                blockers=blockers,
+            )
         return result
 
     @router.post("/api/projects/{slug}/trash/purge-preview")
@@ -141,9 +151,12 @@ def make_router(config, app):
 
         targets = _targets(body)
         if not targets:
-            return _err(422, "invalid",
-                        "purge needs targets: [{entity_type, id}, …]. To remove "
-                        "everything, select every item: nothing is swept implicitly.")
+            return _err(
+                422,
+                "invalid",
+                "purge needs targets: [{entity_type, id}, …]. To remove "
+                "everything, select every item: nothing is swept implicitly.",
+            )
         result = _run(slug, lambda p: trash.purge_preview(p, targets))
         if result.get("refusal"):
             return _purge_refusal(result["refusal"])
@@ -156,8 +169,7 @@ def make_router(config, app):
 
         targets = _targets(body)
         if not targets:
-            return _err(422, "invalid",
-                        "purge needs targets: [{entity_type, id}, …]")
+            return _err(422, "invalid", "purge needs targets: [{entity_type, id}, …]")
         result = _run(slug, lambda p: trash.purge_selected(p, targets))
         if result.get("error"):
             return _purge_refusal(result)

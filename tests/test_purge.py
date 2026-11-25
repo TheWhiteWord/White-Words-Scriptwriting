@@ -31,9 +31,12 @@ def vault(tmp_path, monkeypatch):
     dest.parent.mkdir(parents=True)
     shutil.copytree(str(FIXTURE), str(dest))
     import white_words.scriptwriting.core.config
-    monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
-                        lambda: {"root_path": str(v)})
+
+    monkeypatch.setattr(
+        white_words.scriptwriting.core.config, "load_plugin_config", lambda: {"root_path": str(v)}
+    )
     from white_words.scriptwriting.tools.story_import import handler
+
     handler({"project": "stc", "confirm": True}, root_path=str(v))
     return v
 
@@ -49,6 +52,7 @@ def _edit(vault, action, **args):
     these bulk-purge tests must not send one; test_purge_one.py covers that form.
     """
     from white_words.scriptwriting.tools.story_admin import handler
+
     base = {"action": action, "project": "stc", "summary": "test"}
     if action == "restore":
         base["target"] = TARGET
@@ -58,24 +62,24 @@ def _edit(vault, action, **args):
 def _purge(vault, **kw):
     """What the approved draft runs: purge_deleted, with no confirmation inside."""
     from white_words.scriptwriting.core.trash import purge_deleted
-    return purge_deleted(vault / "projects" / "stc", kw.get("target"),
-                         kw.get("older_than_days", 30))
+
+    return purge_deleted(
+        vault / "projects" / "stc", kw.get("target"), kw.get("older_than_days", 30)
+    )
 
 
 def _exists(vault, entity_id):
-    conn = sqlite3.connect(
-        str(vault / "projects" / "stc" / ".story" / "story.db"))
+    conn = sqlite3.connect(str(vault / "projects" / "stc" / ".story" / "story.db"))
     try:
-        return bool(conn.execute(
-            "SELECT 1 FROM entities WHERE id=?", (entity_id,)).fetchone())
+        return bool(conn.execute("SELECT 1 FROM entities WHERE id=?", (entity_id,)).fetchone())
     finally:
         conn.close()
 
 
 def _delete(vault):
     from white_words.scriptwriting.core.writes import delete_entity
-    return delete_entity(vault / "projects" / "stc",
-                         "character", "kael", "test", True)
+
+    return delete_entity(vault / "projects" / "stc", "character", "kael", "test", True)
 
 
 class TestPurgeRemovesWhatItIsGiven:
@@ -108,12 +112,9 @@ class TestWhatPurgeRemoves:
 
     def test_prose_goes_with_it(self, purged):
         vault, _ = purged
-        conn = sqlite3.connect(
-            str(vault / "projects" / "stc" / ".story" / "story.db"))
+        conn = sqlite3.connect(str(vault / "projects" / "stc" / ".story" / "story.db"))
         try:
-            n = conn.execute(
-                "SELECT count(*) FROM sections WHERE entity_id='kael'"
-            ).fetchone()[0]
+            n = conn.execute("SELECT count(*) FROM sections WHERE entity_id='kael'").fetchone()[0]
         finally:
             conn.close()
         assert n == 0
@@ -127,8 +128,7 @@ class TestWhatPurgeRemoves:
         _, r = purged
         conn = sqlite3.connect(r["backup"])
         try:
-            n = conn.execute(
-                "SELECT count(*) FROM entities WHERE id='kael'").fetchone()[0]
+            n = conn.execute("SELECT count(*) FROM entities WHERE id='kael'").fetchone()[0]
         finally:
             conn.close()
         assert n == 1
@@ -151,8 +151,7 @@ class TestPurgeLeavesNoMarkdownToResurrect:
         # The sweep only touches files a previous export wrote, so the entity
         # has to be exported once while it still exists. The filename is the
         # title, so the path is only knowable after that first export.
-        export_handler({"project": "stc", "confirm": True},
-                       root_path=str(vault))
+        export_handler({"project": "stc", "confirm": True}, root_path=str(vault))
         proj = vault / "projects" / "stc"
         note = note_for(proj, "characters", "kael")
         assert note.exists()
@@ -160,15 +159,21 @@ class TestPurgeLeavesNoMarkdownToResurrect:
         _delete(vault)
         _purge(vault, older_than_days=0)
 
-        export_handler({"project": "stc", "confirm": True},
-                       root_path=str(vault))
+        export_handler({"project": "stc", "confirm": True}, root_path=str(vault))
         assert not note.exists(), "purged entity's note survived"
 
-        import_handler({"project": "stc", "confirm": True},
-                       root_path=str(vault))
-        r = json.loads(retrieve_handler({
-            "project": "stc", "entity_type": "character", "id": ["kael"],
-            "fields": ["one_sentence"]}, root_path=str(vault)))
+        import_handler({"project": "stc", "confirm": True}, root_path=str(vault))
+        r = json.loads(
+            retrieve_handler(
+                {
+                    "project": "stc",
+                    "entity_type": "character",
+                    "id": ["kael"],
+                    "fields": ["one_sentence"],
+                },
+                root_path=str(vault),
+            )
+        )
         assert not r.get("entities"), "purged entity came back"
 
 
@@ -180,19 +185,25 @@ class TestSoftDeleteSurvivesAnExportImportRoundTrip:
         from white_words.scriptwriting.tools.story_import import handler as import_handler
         from white_words.scriptwriting.tools.story_retrieve import handler as retrieve_handler
         from test_round_trip import note_for, note_rel
+
         # Export first, so the manifest knows the file exists. The filename is
         # the title, so the path is captured while the note still exists.
-        export_handler({"project": "stc", "confirm": True},
-                       root_path=str(vault))
+        export_handler({"project": "stc", "confirm": True}, root_path=str(vault))
         proj = vault / "projects" / "stc"
         note = note_for(proj, "characters", "kael")
         _delete(vault)
-        export_handler({"project": "stc", "confirm": True},
-                       root_path=str(vault))
+        export_handler({"project": "stc", "confirm": True}, root_path=str(vault))
         assert not note.exists()
-        import_handler({"project": "stc", "confirm": True},
-                       root_path=str(vault))
-        r = json.loads(retrieve_handler({
-            "project": "stc", "entity_type": "character", "id": ["kael"],
-            "fields": ["one_sentence"]}, root_path=str(vault)))
+        import_handler({"project": "stc", "confirm": True}, root_path=str(vault))
+        r = json.loads(
+            retrieve_handler(
+                {
+                    "project": "stc",
+                    "entity_type": "character",
+                    "id": ["kael"],
+                    "fields": ["one_sentence"],
+                },
+                root_path=str(vault),
+            )
+        )
         assert not r.get("entities"), "story_import resurrected a deleted entity"

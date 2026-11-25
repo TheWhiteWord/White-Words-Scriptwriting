@@ -1,4 +1,5 @@
 """Harness-agnostic bootstrap builder for the chat agent."""
+
 from __future__ import annotations
 
 
@@ -14,6 +15,10 @@ def build_bootstrap(project_slug: str, project_name: str, attachments: list | No
         "Never claim a change was made unless a tool confirmed it. Use dashboard_link when pointing the user at a place in the app.",
     ]
     if attachments:
-        labels = ", ".join(f"{a.get('kind', '')}:{a.get('id', '')} ({a.get('label', '')})" for a in attachments)
-        parts.append(f"The user attached these parts of the app to their message: {labels}. Use the tools to read them if relevant.")
+        labels = ", ".join(
+            f"{a.get('kind', '')}:{a.get('id', '')} ({a.get('label', '')})" for a in attachments
+        )
+        parts.append(
+            f"The user attached these parts of the app to their message: {labels}. Use the tools to read them if relevant."
+        )
     return " ".join(parts)

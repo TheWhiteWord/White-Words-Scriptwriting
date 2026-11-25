@@ -5,6 +5,7 @@ The configured directory is ``root_path``: the folder that holds
 markdown is an export (see tools/story_export.py), so the directory is a
 plain root, not a markdown vault.
 """
+
 from pathlib import Path
 
 from white_words.scriptwriting.core import paths

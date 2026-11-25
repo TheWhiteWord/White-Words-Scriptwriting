@@ -11,6 +11,7 @@ candidate to recover a display name, which is fine when there is one project to
 resolve — copying that into an enumeration would mean a connection per project
 on every call, on a root that may hold hundreds.
 """
+
 import json
 import shutil
 import sqlite3
@@ -43,6 +44,7 @@ def root(tmp_path, fixture_path):
 
 
 # ─── list_projects ───
+
 
 class TestListProjects:
     def test_finds_the_project(self, root):
@@ -80,16 +82,29 @@ class TestListProjects:
 
 # ─── create_project ───
 
+
 class TestCreateProject:
     def test_creates_folder_and_database(self, root):
-        result = _run({"action": "create_project", "project": "new-film",
-                       "frontmatter": {"name": "New Film"}}, root)
+        result = _run(
+            {
+                "action": "create_project",
+                "project": "new-film",
+                "frontmatter": {"name": "New Film"},
+            },
+            root,
+        )
         assert result["success"] is True
         assert (root / "projects" / "new-film" / ".story" / "story.db").exists()
 
     def test_appears_in_the_listing(self, root):
-        _run({"action": "create_project", "project": "new-film",
-              "frontmatter": {"name": "New Film"}}, root)
+        _run(
+            {
+                "action": "create_project",
+                "project": "new-film",
+                "frontmatter": {"name": "New Film"},
+            },
+            root,
+        )
         assert _run({"action": "list_projects"}, root)["count"] == 2
 
     def test_missing_required_field_reports_and_creates_nothing(self, root):
@@ -98,14 +113,16 @@ class TestCreateProject:
         assert not (root / "projects" / "thin").exists()
 
     def test_traversal_slug_refused(self, root):
-        result = _run({"action": "create_project", "project": "../escape",
-                       "frontmatter": {"name": "X"}}, root)
+        result = _run(
+            {"action": "create_project", "project": "../escape", "frontmatter": {"name": "X"}}, root
+        )
         assert "error" in result
         assert not (root.parent / "escape").exists()
 
 
 def _exists(project, entity_id):
     from white_words.scriptwriting.core.db import get_db
+
     conn = get_db(project)
     try:
         return bool(conn.execute("SELECT 1 FROM entities WHERE id=?", (entity_id,)).fetchone())
@@ -114,6 +131,7 @@ def _exists(project, entity_id):
 
 
 # ─── delete_project ───
+
 
 class TestDeleteProject:
     def test_no_confirmation_is_asked_for(self, root):
@@ -128,8 +146,14 @@ class TestDeleteProject:
 
     def test_a_stray_delete_confirm_changes_nothing(self, root):
         """An old client may still send it. It is not a parameter any more."""
-        result = _run({"action": "delete_project", "project": "save-the-children",
-                       "delete_confirm": "DELETE some-other-film"}, root)
+        result = _run(
+            {
+                "action": "delete_project",
+                "project": "save-the-children",
+                "delete_confirm": "DELETE some-other-film",
+            },
+            root,
+        )
         assert result["success"] is True
 
     def test_it_can_be_undone(self, root):
@@ -146,8 +170,9 @@ class TestDeleteProject:
         result = _run({"action": "delete_project", "project": "save-the-children"}, root)
         trashed = Path(result["trashed_to"])
         assert trashed.is_dir(), f"trashed project missing: {trashed}"
-        assert (root / "projects") not in trashed.parents, \
+        assert (root / "projects") not in trashed.parents, (
             "the trashed copy must be outside projects/"
+        )
         conn = sqlite3.connect(str(trashed / ".story" / "story.db"))
         try:
             n = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
@@ -159,8 +184,9 @@ class TestDeleteProject:
         (root / "projects" / "just-a-folder").mkdir()
         result = _run({"action": "delete_project", "project": "just-a-folder"}, root)
         assert "error" in result
-        assert (root / "projects" / "just-a-folder").exists(), \
+        assert (root / "projects" / "just-a-folder").exists(), (
             "rmtree must not run on something that is not a project"
+        )
 
     def test_unknown_project_reports_rather_than_deleting(self, root):
         result = _run({"action": "delete_project", "project": "no-such-film"}, root)
@@ -169,6 +195,7 @@ class TestDeleteProject:
 
 
 # ─── restore ───
+
 
 class TestRestore:
     def test_undoes_a_soft_delete_exactly(self, root):
@@ -187,37 +214,59 @@ class TestRestore:
 
         delete_entity(project, "location", "the-garden", "s", confirm=True)
 
-        result = _run({"action": "restore", "project": "save-the-children",
-                       "target": {"entity_type": "location", "id": "the-garden"},
-                       "summary": "the garden"}, root)
+        result = _run(
+            {
+                "action": "restore",
+                "project": "save-the-children",
+                "target": {"entity_type": "location", "id": "the-garden"},
+                "summary": "the garden",
+            },
+            root,
+        )
         assert result["success"] is True
         assert result["entity_id"] == "the-garden"
 
         conn = get_db(project)
         try:
-            assert conn.execute(
-                "SELECT is_deleted FROM entities WHERE id='the-garden'"
-            ).fetchone()[0] == 0
-            assert conn.execute(
-                "SELECT COUNT(*) FROM sections WHERE entity_id='the-garden'"
-            ).fetchone()[0] == sections_before, "prose must come back intact"
+            assert (
+                conn.execute("SELECT is_deleted FROM entities WHERE id='the-garden'").fetchone()[0]
+                == 0
+            )
+            assert (
+                conn.execute(
+                    "SELECT COUNT(*) FROM sections WHERE entity_id='the-garden'"
+                ).fetchone()[0]
+                == sections_before
+            ), "prose must come back intact"
         finally:
             conn.close()
 
     def test_restoring_a_live_entity_reports_rather_than_pretending(self, root):
-        result = _run({"action": "restore", "project": "save-the-children",
-                       "target": {"entity_type": "location",
-                                  "id": "the-central-room"}}, root)
+        result = _run(
+            {
+                "action": "restore",
+                "project": "save-the-children",
+                "target": {"entity_type": "location", "id": "the-central-room"},
+            },
+            root,
+        )
         assert "error" in result
         assert "not deleted" in result["error"]
 
     def test_unknown_entity_reports(self, root):
-        result = _run({"action": "restore", "project": "save-the-children",
-                       "target": {"entity_type": "location", "id": "nowhere"}}, root)
+        result = _run(
+            {
+                "action": "restore",
+                "project": "save-the-children",
+                "target": {"entity_type": "location", "id": "nowhere"},
+            },
+            root,
+        )
         assert "error" in result
 
 
 # ─── purge ───
+
 
 class TestPurge:
     def test_it_only_proposes(self, root):
@@ -234,6 +283,7 @@ class TestPurge:
         person has approved a purge."""
         from white_words.scriptwriting.core import drafts
         from white_words.scriptwriting.core.writes import delete_entity
+
         project = root / "projects" / "save-the-children"
         delete_entity(project, "location", "the-garden", "s", confirm=True)
 
@@ -251,31 +301,33 @@ class TestPurge:
         # Backdate past the floor.
         conn = get_db(project)
         try:
-            conn.execute("UPDATE entities SET deleted_at='2000-01-01T00:00:00' "
-                         "WHERE is_deleted=1")
+            conn.execute("UPDATE entities SET deleted_at='2000-01-01T00:00:00' WHERE is_deleted=1")
         finally:
             conn.close()
 
         from white_words.scriptwriting.core import drafts
         from white_words.scriptwriting.core.backups import list_backups
+
         staged = _run({"action": "purge", "project": "save-the-children"}, root)
         assert staged["purged"] is False and _exists(project, "the-garden")
         assert "the-garden" in staged["preview_md"], "the card names what will go"
 
         before = len(list_backups(project))
-        assert drafts.commit(project, staged["draft_id"])["committed"]   # the person approves
+        assert drafts.commit(project, staged["draft_id"])["committed"]  # the person approves
         assert len(list_backups(project)) == before + 1, "purge takes a backup first"
 
         conn = get_db(project)
         try:
-            assert conn.execute(
-                "SELECT COUNT(*) FROM entities WHERE id='the-garden'"
-            ).fetchone()[0] == 0
+            assert (
+                conn.execute("SELECT COUNT(*) FROM entities WHERE id='the-garden'").fetchone()[0]
+                == 0
+            )
         finally:
             conn.close()
 
 
 # ─── the tool boundary ───
+
 
 def test_unknown_action_reports_rather_than_crashing(root):
     result = _run({"action": "delete_everything"}, root)

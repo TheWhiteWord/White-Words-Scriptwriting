@@ -11,6 +11,7 @@ Ops mirror what the write functions already take, so staging is the same
 computation as a dry run with a different sink. Design of record:
 tasks/task_28/draft-staging-design.md.
 """
+
 import json
 import sqlite3
 from datetime import datetime
@@ -71,9 +72,7 @@ def new_draft_id(conn: sqlite3.Connection) -> str:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     candidate = f"d-{stamp}"
     n = 1
-    while conn.execute(
-        "SELECT 1 FROM drafts WHERE id=?", (candidate,)
-    ).fetchone():
+    while conn.execute("SELECT 1 FROM drafts WHERE id=?", (candidate,)).fetchone():
         candidate = f"d-{stamp}-{n}"
         n += 1
     return candidate
@@ -98,54 +97,46 @@ def validate_ops(ops) -> list[dict]:
             raise DraftError(f"{where} must be an object.")
         kind = op.get("op")
         if kind not in OP_ORDER:
-            raise DraftError(
-                f"{where}.op must be one of {sorted(OP_ORDER)}; got {kind!r}."
-            )
+            raise DraftError(f"{where}.op must be one of {sorted(OP_ORDER)}; got {kind!r}.")
         missing = [k for k in REQUIRED_OP_KEYS[kind] if k not in op]
         if missing:
-            raise DraftError(
-                f"{where} ({kind}) is missing: {', '.join(missing)}."
-            )
+            raise DraftError(f"{where} ({kind}) is missing: {', '.join(missing)}.")
         if kind == "create":
             if op["type"] not in ENTITY_SCHEMAS:
-                raise DraftError(
-                    f"{where}.type: unknown entity_type {op['type']!r}."
-                )
+                raise DraftError(f"{where}.type: unknown entity_type {op['type']!r}.")
             if op["type"] == "project":
                 # A project that does not exist has no DB to hold the draft,
                 # and _create_project is a separate arg shape entirely.
                 raise DraftError(
                     f"{where}: projects cannot be drafted. "
-                    "Call story_admin(action=\"create_project\") directly."
+                    'Call story_admin(action="create_project") directly.'
                 )
             if not op["id"].replace("-", "").replace("_", "").isalnum():
-                raise DraftError(
-                    f"{where}.id must be alphanumeric with hyphens/underscores only."
-                )
+                raise DraftError(f"{where}.id must be alphanumeric with hyphens/underscores only.")
             if not isinstance(op["frontmatter"], dict):
                 raise DraftError(f"{where}.frontmatter must be an object.")
         if kind in ("edit", "delete", "reorder"):
             if op["entity_type"] not in ENTITY_SCHEMAS:
-                raise DraftError(
-                    f"{where}.entity_type: unknown entity_type {op['entity_type']!r}."
-                )
+                raise DraftError(f"{where}.entity_type: unknown entity_type {op['entity_type']!r}.")
         if kind == "purge":
             if len(ops) != 1 and any(o.get("op") != "purge" for o in ops if isinstance(o, dict)):
                 raise DraftError(
                     f"{where}: a purge cannot be bundled with other changes. Stage it "
-                    "on its own, so what the user approves is exactly the removal.")
+                    "on its own, so what the user approves is exactly the removal."
+                )
             target = op.get("target")
             if target is not None and not (
-                    isinstance(target, dict) and target.get("entity_type") and target.get("id")):
+                isinstance(target, dict) and target.get("entity_type") and target.get("id")
+            ):
                 raise DraftError(f"{where}.target needs both entity_type and id.")
             days = op.get("older_than_days", 30)
             if isinstance(days, bool) or not isinstance(days, int) or days < 0:
-                raise DraftError(f"{where}.older_than_days must be a whole number of days, 0 or more.")
+                raise DraftError(
+                    f"{where}.older_than_days must be a whole number of days, 0 or more."
+                )
         if kind == "edit" and not isinstance(op["data"], dict):
             raise DraftError(f"{where}.data must be an object of field → value.")
-        if kind == "reorder" and (
-            not isinstance(op["ordered_ids"], list) or not op["ordered_ids"]
-        ):
+        if kind == "reorder" and (not isinstance(op["ordered_ids"], list) or not op["ordered_ids"]):
             raise DraftError(f"{where}.ordered_ids must be a non-empty list of ids.")
         if kind == "reorder" and op["entity_type"] not in REORDERABLE_TYPES:
             # Refused here, not at commit. A reorder the write path cannot do
@@ -195,16 +186,20 @@ def validate_shape(ops: list) -> list[str]:
         # agent can still be told. Checked for every op kind, not just create:
         # a create cannot carry one (the merge drops it), an edit can.
         payload = op.get("frontmatter") if op["op"] == "create" else op.get("data")
-        for key in (payload or {}):
+        for key in payload or {}:
             if schema.get(key, {}).get("computed"):
                 findings.append(
                     f"{where}: '{key}' is read-only (computed from "
-                    f"{entity_type} entities) — it cannot be set")
+                    f"{entity_type} entities) — it cannot be set"
+                )
 
         if op["op"] != "create":
             continue
-        merged = {f: op["frontmatter"].get(f, m["default"])
-                  for f, m in schema.items() if not m.get("computed")}
+        merged = {
+            f: op["frontmatter"].get(f, m["default"])
+            for f, m in schema.items()
+            if not m.get("computed")
+        }
         # Unrecognised keys would land in `extra` verbatim. They are reported
         # rather than written.
         for key in [k for k in op["frontmatter"] if k not in schema]:
@@ -213,11 +208,15 @@ def validate_shape(ops: list) -> list[str]:
         # is refused at commit. Said here, where the agent is still reading the
         # preview, rather than as a commit failure.
         from .entity import standard_sections
-        for heading in [h for h in (op.get("sections") or {}) if h not in standard_sections(entity_type)]:
+
+        for heading in [
+            h for h in (op.get("sections") or {}) if h not in standard_sections(entity_type)
+        ]:
             findings.append(
                 f"{where}: unknown {entity_type} section '{heading}' — the "
                 f"section set is closed; use one of: "
-                f"{', '.join(standard_sections(entity_type))}")
+                f"{', '.join(standard_sections(entity_type))}"
+            )
         for field in REQUIRED_FIELDS.get(entity_type, []):
             if not merged.get(field):
                 findings.append(f"{where}: Missing required field: {field}")
@@ -225,8 +224,7 @@ def validate_shape(ops: list) -> list[str]:
     return findings
 
 
-def stage(project_path: Path, ops, summary: str = "",
-         draft_id: str | None = None) -> dict:
+def stage(project_path: Path, ops, summary: str = "", draft_id: str | None = None) -> dict:
     """Store an op list as a draft and replay it against a copy of the project.
 
     Writes one row to the project and nothing else: the replay runs on a
@@ -279,8 +277,12 @@ def stage(project_path: Path, ops, summary: str = "",
         "draft_id": new_id,
         "op_count": len(ops),
         "preview_md": render_preview_md(
-            project_path, ops, new_id, _project_name(project_path),
-            summary=summary or (row[1] if row else ""), changes=restaged_changes,
+            project_path,
+            ops,
+            new_id,
+            _project_name(project_path),
+            summary=summary or (row[1] if row else ""),
+            changes=restaged_changes,
         ),
         "validation": validate_shape(ops),
         "dry_run": dry_run(project_path, new_id),
@@ -301,9 +303,7 @@ def _project_name(project_path: Path) -> str:
 
     conn = get_db(project_path)
     try:
-        row = conn.execute(
-            "SELECT name FROM entities WHERE type='project' LIMIT 1"
-        ).fetchone()
+        row = conn.execute("SELECT name FROM entities WHERE type='project' LIMIT 1").fetchone()
     except Exception:
         row = None
     finally:
@@ -390,8 +390,9 @@ def reconcile_snapshots(project_path: Path, snapshots: list) -> list:
     see what was stored, so this is for serving a conversation, never for
     saving one.
     """
-    ids = sorted({s["id"] for s in snapshots
-                  if s.get("status") in ("open", "failed") and s.get("id")})
+    ids = sorted(
+        {s["id"] for s in snapshots if s.get("status") in ("open", "failed") and s.get("id")}
+    )
     rows = {}
     if ids:
         from .db import get_db
@@ -399,13 +400,14 @@ def reconcile_snapshots(project_path: Path, snapshots: list) -> list:
         conn = get_db(project_path)
         try:
             marks = ",".join("?" * len(ids))
-            rows = dict(conn.execute(
-                f"SELECT id, status FROM drafts WHERE id IN ({marks})", ids
-            ).fetchall())
+            rows = dict(
+                conn.execute(f"SELECT id, status FROM drafts WHERE id IN ({marks})", ids).fetchall()
+            )
         finally:
             conn.close()
-    return [{**s, "status": reconcile_status(s.get("status"), rows.get(s.get("id")))}
-            for s in snapshots]
+    return [
+        {**s, "status": reconcile_status(s.get("status"), rows.get(s.get("id")))} for s in snapshots
+    ]
 
 
 def sorted_ops(ops: list) -> list:
@@ -443,9 +445,7 @@ def commit(project_path: Path, draft_id: str) -> dict:
 
     conn = get_db(project_path)
     try:
-        row = conn.execute(
-            "SELECT ops, status FROM drafts WHERE id=?", (draft_id,)
-        ).fetchone()
+        row = conn.execute("SELECT ops, status FROM drafts WHERE id=?", (draft_id,)).fetchone()
     finally:
         conn.close()
     if not row:
@@ -467,9 +467,11 @@ def commit(project_path: Path, draft_id: str) -> dict:
             "draft_id": draft_id,
             "applied": landed,
             "preview_md": _commit_report(landed, None, draft_id),
-            "message": (f"Draft {draft_id} was already committed — "
-                        f"{len(landed)} change(s) are in the project. "
-                        f"Nothing was written twice."),
+            "message": (
+                f"Draft {draft_id} was already committed — "
+                f"{len(landed)} change(s) are in the project. "
+                f"Nothing was written twice."
+            ),
         }
 
     if all(op["op"] == "purge" for op in ops):
@@ -484,25 +486,35 @@ def commit(project_path: Path, draft_id: str) -> dict:
                 # A write function reports a refusal either by raising (which
                 # `_call` turns into an error dict) or by returning one.
                 if result.get("error") or result.get("success") is False:
-                    raise _OpFailed(n, op, str(result.get("error")
-                                               or result.get("message")
-                                               or "the write was refused"))
+                    raise _OpFailed(
+                        n,
+                        op,
+                        str(
+                            result.get("error") or result.get("message") or "the write was refused"
+                        ),
+                    )
                 landed.append(_describe(op))
             _mark_committed(conn, draft_id)
     except _OpFailed as stop:
         label = _describe(stop.op)
         return _failure_report(
-            draft_id, label, stop.error,
+            draft_id,
+            label,
+            stop.error,
             f"Nothing was changed. Change {stop.position} of {len(ops)} failed "
-            f"({label}: {stop.error}). Fix it and re-stage — draft {draft_id} is kept.")
+            f"({label}: {stop.error}). Fix it and re-stage — draft {draft_id} is kept.",
+        )
     except Exception as e:
         # Not an op's fault — the lock could not be taken, the commit itself
         # failed, the mark failed. The transaction has already rolled back.
         error = f"{type(e).__name__}: {e}"
         return _failure_report(
-            draft_id, "save the draft", error,
+            draft_id,
+            "save the draft",
+            error,
             f"Nothing was changed. The batch could not be saved as a whole ({error}). "
-            f"Draft {draft_id} is kept — commit it again.")
+            f"Draft {draft_id} is kept — commit it again.",
+        )
     finally:
         conn.close()
     return {
@@ -529,18 +541,21 @@ def _commit_purges(project_path: Path, draft_id: str, ops: list) -> dict:
     for n, op in enumerate(ops, 1):
         result = _dispatch(project_path, op)
         if result.get("error") or result.get("success") is False:
-            error = str(result.get("error") or result.get("message")
-                        or "the write was refused")
+            error = str(result.get("error") or result.get("message") or "the write was refused")
             label = _describe(op)
             if landed:
-                message = (f"{len(landed)} of {len(ops)} purge(s) were done and cannot be "
-                           f"undone (a backup was taken first), then change {n} failed "
-                           f"({label}: {error}). Draft {draft_id} is kept; stage the "
-                           f"purges that did not run again.")
+                message = (
+                    f"{len(landed)} of {len(ops)} purge(s) were done and cannot be "
+                    f"undone (a backup was taken first), then change {n} failed "
+                    f"({label}: {error}). Draft {draft_id} is kept; stage the "
+                    f"purges that did not run again."
+                )
             else:
-                message = (f"Nothing was changed. Change {n} of {len(ops)} failed "
-                           f"({label}: {error}). Fix it and re-stage — "
-                           f"draft {draft_id} is kept.")
+                message = (
+                    f"Nothing was changed. Change {n} of {len(ops)} failed "
+                    f"({label}: {error}). Fix it and re-stage — "
+                    f"draft {draft_id} is kept."
+                )
             return _failure_report(draft_id, label, error, message, landed)
         landed.append(_describe(op))
 
@@ -571,13 +586,15 @@ def _mark_committed(conn: sqlite3.Connection, draft_id: str) -> None:
     conn.execute("UPDATE drafts SET status='committed' WHERE id=?", (draft_id,))
     # The receipt only matters while a repeated commit might still arrive; old
     # ones would otherwise pile up for good. Never the one just written.
-    conn.execute("DELETE FROM drafts WHERE status='committed' AND id != ? "
-                 "AND created_at < ?",
-                 (draft_id, clock.ago_iso(RECEIPT_DAYS)))
+    conn.execute(
+        "DELETE FROM drafts WHERE status='committed' AND id != ? AND created_at < ?",
+        (draft_id, clock.ago_iso(RECEIPT_DAYS)),
+    )
 
 
-def _failure_report(draft_id: str, op: str, error: str, message: str,
-                    landed: list | None = None) -> dict:
+def _failure_report(
+    draft_id: str, op: str, error: str, message: str, landed: list | None = None
+) -> dict:
     """The answer for a commit that did not finish. The draft row is untouched.
 
     `landed` is empty for every draft except a multi-purge one (see
@@ -628,8 +645,7 @@ def dry_run(project_path: Path, draft_id: str) -> dict:
             try:
                 result = commit(Path(tmp), draft_id)
             except Exception as e:
-                return {"status": "unavailable",
-                        "error": f"{type(e).__name__}: {e}"}
+                return {"status": "unavailable", "error": f"{type(e).__name__}: {e}"}
     except Exception as e:
         return {"status": "unavailable", "error": f"{type(e).__name__}: {e}"}
 
@@ -656,13 +672,20 @@ def _commit_report(landed: list, failed: dict | None, draft_id: str) -> str:
     if landed:
         lines = [f"### ⚠️ Partly done · draft `{draft_id}`", ""]
         lines += [f"· ✅ `{op}`" for op in landed]
-        lines += [f"· ❌ `{failed['op']}` — {failed['error']}", "",
-                  f"Those purges cannot be undone. Draft `{draft_id}` is still open; "
-                  f"stage the purges that did not run again."]
+        lines += [
+            f"· ❌ `{failed['op']}` — {failed['error']}",
+            "",
+            f"Those purges cannot be undone. Draft `{draft_id}` is still open; "
+            f"stage the purges that did not run again.",
+        ]
     else:
-        lines = [f"### ❌ Not saved · draft `{draft_id}`", "",
-                 f"· ❌ `{failed['op']}` — {failed['error']}", "",
-                 f"Nothing was changed. Draft `{draft_id}` is still open."]
+        lines = [
+            f"### ❌ Not saved · draft `{draft_id}`",
+            "",
+            f"· ❌ `{failed['op']}` — {failed['error']}",
+            "",
+            f"Nothing was changed. Draft `{draft_id}` is still open.",
+        ]
     return "\n".join(lines) + "\n"
 
 
@@ -680,14 +703,22 @@ def _dispatch(project_path: Path, op: dict, conn=None) -> dict:
     kind = op["op"]
     if kind == "create":
         return _call(
-            writes.create_entity, project_path,
-            op["type"], op["id"], op["frontmatter"], op.get("sections") or {},
+            writes.create_entity,
+            project_path,
+            op["type"],
+            op["id"],
+            op["frontmatter"],
+            op.get("sections") or {},
             conn=conn,
         )
     if kind == "edit":
         return _call(
-            writes.edit_entity, project_path,
-            op["entity_type"], op["entity_id"], op["data"], op["summary"],
+            writes.edit_entity,
+            project_path,
+            op["entity_type"],
+            op["entity_id"],
+            op["data"],
+            op["summary"],
             conn=conn,
         )
     if kind == "delete":
@@ -697,8 +728,12 @@ def _dispatch(project_path: Path, op: dict, conn=None) -> dict:
         # The delete is still reversible, and the preview still listed the
         # cascade, so nothing is hidden from the person deciding.
         return _call(
-            writes.delete_entity, project_path,
-            op["entity_type"], op["entity_id"], op["summary"], True,
+            writes.delete_entity,
+            project_path,
+            op["entity_type"],
+            op["entity_id"],
+            op["summary"],
+            True,
             conn=conn,
         )
     if kind == "purge":
@@ -706,11 +741,14 @@ def _dispatch(project_path: Path, op: dict, conn=None) -> dict:
         # is no confirmation inside purge_deleted because this IS it. A backup is
         # taken first. See core/trash.py.
         from .trash import purge_deleted
-        return _call(purge_deleted, project_path, op.get("target"),
-                     op.get("older_than_days", 30))
+
+        return _call(purge_deleted, project_path, op.get("target"), op.get("older_than_days", 30))
     return _call(
-        writes.reorder, project_path,
-        op["entity_type"], op["ordered_ids"], op["summary"],
+        writes.reorder,
+        project_path,
+        op["entity_type"],
+        op["ordered_ids"],
+        op["summary"],
         conn=conn,
     )
 
@@ -729,6 +767,7 @@ def _call(fn, *args, **kwargs) -> dict:
 
 
 # ─── op identity and the restage diff ───
+
 
 def op_key(op: dict) -> tuple:
     """What makes two ops "the same change" across restages.
@@ -767,10 +806,12 @@ def diff_ops(prev: list, current: list) -> dict:
         else:
             remaining.remove(match)
             if match != op:
-                changed.append({
-                    "op": _describe(op),
-                    "fields": _changed_keys(match, op),
-                })
+                changed.append(
+                    {
+                        "op": _describe(op),
+                        "fields": _changed_keys(match, op),
+                    }
+                )
     return {
         "added": added,
         "dropped": [_describe(op) for op in remaining],
@@ -816,14 +857,17 @@ def describe_ops(project_path: Path, ops: list) -> list[dict]:
             fm = op.get("frontmatter") or {}
             schema = ENTITY_SCHEMAS.get(entity_type, {})
             settable = [f for f, m in schema.items() if not m.get("computed")]
-            unfilled = [f for f in settable
-                        if not _is_set(fm.get(f))]
-            fields = [{"field": f, "before": None, "after": v}
-                      for f, v in fm.items()]
-            sections = [{"name": n, "before": None, "after": v}
-                        for n, v in (op.get("sections") or {}).items()]
-            label = _display_name(entity_type, fm.get("name") or fm.get("title")
-                                  or _scene_heading_label(project_path, fm), entity_id)
+            unfilled = [f for f in settable if not _is_set(fm.get(f))]
+            fields = [{"field": f, "before": None, "after": v} for f, v in fm.items()]
+            sections = [
+                {"name": n, "before": None, "after": v}
+                for n, v in (op.get("sections") or {}).items()
+            ]
+            label = _display_name(
+                entity_type,
+                fm.get("name") or fm.get("title") or _scene_heading_label(project_path, fm),
+                entity_id,
+            )
             # optional schema hint for UI ordering of structured fields
             schema_hint = {}
             for f, m in schema.items():
@@ -834,17 +878,19 @@ def describe_ops(project_path: Path, ops: list) -> list[dict]:
                     if m.get("keyed"):
                         entry["keyed"] = True
                     schema_hint[f] = entry
-            changes.append({
-                "kind": "create",
-                "entity_type": entity_type,
-                "entity_id": entity_id,
-                "label": label,
-                "summary": op["summary"],
-                "fields": fields,
-                "sections": sections,
-                "unfilled": unfilled,
-                "schema": schema_hint,
-            })
+            changes.append(
+                {
+                    "kind": "create",
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "label": label,
+                    "summary": op["summary"],
+                    "fields": fields,
+                    "sections": sections,
+                    "unfilled": unfilled,
+                    "schema": schema_hint,
+                }
+            )
         elif kind == "edit":
             entity_type = op["entity_type"]
             entity_id = op["entity_id"]
@@ -876,44 +922,53 @@ def describe_ops(project_path: Path, ops: list) -> list[dict]:
                         entry["keyed"] = True
                     schema_hint[f] = entry
             label = _entity_name(project_path, entity_type, entity_id) or entity_id
-            changes.append({
-                "kind": "edit",
-                "entity_type": entity_type,
-                "entity_id": entity_id,
-                "label": label,
-                "summary": op["summary"],
-                "fields": fields,
-                "sections": sections,
-                "schema": schema_hint,
-            })
+            changes.append(
+                {
+                    "kind": "edit",
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "label": label,
+                    "summary": op["summary"],
+                    "fields": fields,
+                    "sections": sections,
+                    "schema": schema_hint,
+                }
+            )
         elif kind == "delete":
             entity_type = op["entity_type"]
             entity_id = op["entity_id"]
             name, detail = _entity_name_and_detail(project_path, entity_type, entity_id)
-            changes.append({
-                "kind": "delete",
-                "entity_type": entity_type,
-                "entity_id": entity_id,
-                "label": name or entity_id,
-                "summary": op["summary"],
-                "detail": detail,
-                "reversible": True,
-            })
+            changes.append(
+                {
+                    "kind": "delete",
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "label": name or entity_id,
+                    "summary": op["summary"],
+                    "detail": detail,
+                    "reversible": True,
+                }
+            )
         elif kind == "purge":
             items, refusal = _purge_items(project_path, op)
             shown = [f"{i['type']} {i['name']}" for i in items[:8]]
             if len(items) > 8:
                 shown.append(f"…and {len(items) - 8} more")
-            changes.append({
-                "kind": "delete",
-                "entity_type": "trash",
-                "entity_id": "",
-                "label": (f"{len(items)} deleted item{'s' if len(items) != 1 else ''}"
-                          if not refusal else "nothing (will be refused)"),
-                "summary": op["summary"],
-                "detail": (refusal.get("error") if refusal else "; ".join(shown)),
-                "reversible": False,
-            })
+            changes.append(
+                {
+                    "kind": "delete",
+                    "entity_type": "trash",
+                    "entity_id": "",
+                    "label": (
+                        f"{len(items)} deleted item{'s' if len(items) != 1 else ''}"
+                        if not refusal
+                        else "nothing (will be refused)"
+                    ),
+                    "summary": op["summary"],
+                    "detail": (refusal.get("error") if refusal else "; ".join(shown)),
+                    "reversible": False,
+                }
+            )
         elif kind == "reorder":
             entity_type = op["entity_type"]
             ordered_ids = op.get("ordered_ids") or []
@@ -921,21 +976,25 @@ def describe_ops(project_path: Path, ops: list) -> list[dict]:
             pos_map, name_map = _reorder_current(project_path, entity_type)
             order = []
             for i, eid in enumerate(ordered_ids, 1):
-                order.append({
-                    "id": eid,
-                    "label": name_map.get(eid, eid),
-                    "from": pos_map.get(eid),
-                    "to": i,
-                })
-            changes.append({
-                "kind": "reorder",
-                "entity_type": entity_type,
-                "entity_id": None,
-                "label": entity_type,
-                "summary": op["summary"],
-                "count": len(ordered_ids),
-                "order": order,
-            })
+                order.append(
+                    {
+                        "id": eid,
+                        "label": name_map.get(eid, eid),
+                        "from": pos_map.get(eid),
+                        "to": i,
+                    }
+                )
+            changes.append(
+                {
+                    "kind": "reorder",
+                    "entity_type": entity_type,
+                    "entity_id": None,
+                    "label": entity_type,
+                    "summary": op["summary"],
+                    "count": len(ordered_ids),
+                    "order": order,
+                }
+            )
     return changes
 
 
@@ -951,11 +1010,13 @@ def _scene_heading_label(project_path, fm):
     is resolved against the project; an unresolvable one composes to nothing.
     """
     from .scene_script import scene_heading
+
     loc = fm.get("location") or ""
     name = ""
     if loc:
         try:
             from .db import get_db
+
             conn = get_db(project_path)
             try:
                 row = conn.execute("SELECT name FROM entities WHERE id=?", (loc,)).fetchone()
@@ -964,18 +1025,25 @@ def _scene_heading_label(project_path, fm):
                 conn.close()
         except Exception:
             pass
-    return scene_heading(fm.get("int_ext") or "", name, fm.get("place") or "",
-                         fm.get("time_of_day") or "", fm.get("forced_heading") or "")
+    return scene_heading(
+        fm.get("int_ext") or "",
+        name,
+        fm.get("place") or "",
+        fm.get("time_of_day") or "",
+        fm.get("forced_heading") or "",
+    )
 
 
 def _entity_name(project_path, entity_type, slug):
     try:
         from .db import get_db
+
         conn = get_db(project_path)
         try:
             row = conn.execute(
                 "SELECT name FROM entities WHERE type=? AND id=? AND is_deleted=0",
-                (entity_type, slug)).fetchone()
+                (entity_type, slug),
+            ).fetchone()
             if row and row[0]:
                 return row[0]
         finally:
@@ -988,11 +1056,13 @@ def _entity_name(project_path, entity_type, slug):
 def _entity_name_and_detail(project_path, entity_type, slug):
     try:
         from .db import get_db
+
         conn = get_db(project_path)
         try:
             row = conn.execute(
                 "SELECT name, one_sentence FROM entities WHERE type=? AND id=? AND is_deleted=0",
-                (entity_type, slug)).fetchone()
+                (entity_type, slug),
+            ).fetchone()
             if row:
                 return row[0], (row[1] if row and len(row) > 1 else None)
         finally:
@@ -1007,12 +1077,14 @@ def _reorder_current(project_path, entity_type):
     name_map = {}
     try:
         from .db import get_db
+
         conn = get_db(project_path)
         try:
             rows = conn.execute(
                 "SELECT id, name, one_sentence, order_key FROM entities "
                 "WHERE type=? AND is_deleted=0 ORDER BY order_key",
-                (entity_type,)).fetchall()
+                (entity_type,),
+            ).fetchall()
             for i, r in enumerate(rows, 1):
                 pos_map[r[0]] = r[3] if r[3] else i
                 # use order_key as position? contract: from = current 1-based position by order_key
@@ -1020,7 +1092,7 @@ def _reorder_current(project_path, entity_type):
         finally:
             conn.close()
         # recompute positions by sorted order_key
-        sorted_rows = sorted(rows, key=lambda r: (r[3] if r[3] is not None else 0))
+        sorted_rows = sorted(rows, key=lambda r: r[3] if r[3] is not None else 0)
         pos_map = {r[0]: i for i, r in enumerate(sorted_rows, 1)}
     except Exception:
         pass
@@ -1029,21 +1101,30 @@ def _reorder_current(project_path, entity_type):
 
 # ─── preview renderer ───
 
-def render_preview_md(project_path: Path, ops: list, draft_id: str, project_name: str,
-                      summary: str = "", changes: dict | None = None,
-                      committed: bool = False) -> str:
+
+def render_preview_md(
+    project_path: Path,
+    ops: list,
+    draft_id: str,
+    project_name: str,
+    summary: str = "",
+    changes: dict | None = None,
+    committed: bool = False,
+) -> str:
     """Render an op list as the block the user reads.
 
     One renderer, two callers — the stage and commit responses share it, so
     what the user approves and what they are told landed are the same
     rendering. Pure presentation: it reads, it never writes.
     """
-    lines = [f"### {'✅' if committed else '📝'} Draft `{draft_id}`"
-             + (f" — *{summary}*" if summary else "")
-             + (" committed" if committed else ""),
-             "",
-             f"**{project_name}** · {len(ops)} change" + ("s" if len(ops) != 1 else ""),
-             ""]
+    lines = [
+        f"### {'✅' if committed else '📝'} Draft `{draft_id}`"
+        + (f" — *{summary}*" if summary else "")
+        + (" committed" if committed else ""),
+        "",
+        f"**{project_name}** · {len(ops)} change" + ("s" if len(ops) != 1 else ""),
+        "",
+    ]
 
     for op in ops:
         lines += ["---", ""] + _render_op(project_path, op) + [""]
@@ -1061,9 +1142,10 @@ def _render_op(project_path: Path, op: dict) -> list[str]:
     if kind == "edit":
         return _render_edit(project_path, op)
     if kind == "delete":
-        return [f"**🗑 DELETE** · `{op['entity_type']}/{op['entity_id']}`",
-                f"_{op['summary']}_ — reversible; "
-                f"`story_admin(action=\"restore\")` undoes it."]
+        return [
+            f"**🗑 DELETE** · `{op['entity_type']}/{op['entity_id']}`",
+            f'_{op["summary"]}_ — reversible; `story_admin(action="restore")` undoes it.',
+        ]
     if kind == "purge":
         return _render_purge(project_path, op)
     return _render_reorder(op)
@@ -1072,6 +1154,7 @@ def _render_op(project_path: Path, op: dict) -> list[str]:
 def _purge_items(project_path: Path, op: dict) -> tuple:
     """What this purge would remove, and the refusal it would meet (or None)."""
     from .trash import preview_purge
+
     found = preview_purge(project_path, op.get("target"), op.get("older_than_days", 30))
     return found["items"], found["refusal"]
 
@@ -1080,8 +1163,10 @@ def _render_purge(project_path: Path, op: dict) -> list[str]:
     items, refusal = _purge_items(project_path, op)
     if refusal:
         return ["**⚠ PURGE** — will be refused", f"_{refusal.get('error', 'refused')}_"]
-    lines = [f"**⚠ PURGE** · {len(items)} deleted item(s) removed for good",
-             f"_{op['summary']}_ — **cannot be undone.** A backup is taken first."]
+    lines = [
+        f"**⚠ PURGE** · {len(items)} deleted item(s) removed for good",
+        f"_{op['summary']}_ — **cannot be undone.** A backup is taken first.",
+    ]
     lines += [f"- `{i['type']}/{i['id']}` — {i['name']}" for i in items[:10]]
     if len(items) > 10:
         lines.append(f"- …and {len(items) - 10} more")
@@ -1224,19 +1309,22 @@ def _current_values(project_path: Path, op: dict) -> dict:
 
     try:
         result = current_values(
-            project_path, op["entity_type"], op["entity_id"], op["data"],
+            project_path,
+            op["entity_type"],
+            op["entity_id"],
+            op["data"],
         )
     except Exception:
         return {}
-    return {c["field"]: (c.get("from"), c.get("stored_in"))
-            for c in result.get("changes", [])}
+    return {c["field"]: (c.get("from"), c.get("stored_in")) for c in result.get("changes", [])}
 
 
 def _render_reorder(op: dict) -> list[str]:
     ids = op["ordered_ids"]
-    return [f"**↕ REORDER** · `{op['entity_type']}`",
-            " → ".join(f"**`{i}`**" if n == 1 else f"`{i}`"
-                        for n, i in enumerate(ids, 1))]
+    return [
+        f"**↕ REORDER** · `{op['entity_type']}`",
+        " → ".join(f"**`{i}`**" if n == 1 else f"`{i}`" for n, i in enumerate(ids, 1)),
+    ]
 
 
 def _render_diff(changes: dict) -> list[str]:
@@ -1285,8 +1373,8 @@ def _fmt(value) -> str:
             return "—"
         if isinstance(value[0], dict):
             return "<br>".join(
-                ", ".join(f"{k}: {_fmt_scalar(v)}" for k, v in item.items())
-                for item in value)
+                ", ".join(f"{k}: {_fmt_scalar(v)}" for k, v in item.items()) for item in value
+            )
         return ", ".join(str(v) for v in value)
     if isinstance(value, bool):
         return "yes" if value else "no"

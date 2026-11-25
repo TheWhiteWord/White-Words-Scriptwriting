@@ -65,7 +65,7 @@ def _from_config_file() -> int | None:
         with _config_file().open("rb") as f:
             table = tomllib.load(f).get("white_words", {})
         return _valid(table.get("max_response_chars"))
-    except Exception:   # a missing or malformed file just means "not set"
+    except Exception:  # a missing or malformed file just means "not set"
         return None
 
 
@@ -85,8 +85,9 @@ def json_size(obj) -> int:
     return len(json.dumps(obj))
 
 
-def largest_fitting(build: Callable[[int], object], n_units: int,
-                    budget: int) -> tuple[int, object]:
+def largest_fitting(
+    build: Callable[[int], object], n_units: int, budget: int
+) -> tuple[int, object]:
     """Largest k in [0, n_units] for which `build(k)` fits `budget`.
 
     `build(k)` returns the response with the FIRST k units at full detail and
@@ -101,7 +102,7 @@ def largest_fitting(build: Callable[[int], object], n_units: int,
     full = build(n_units)
     if json_size(full) <= budget:
         return n_units, full
-    lo, hi = 0, n_units - 1   # n_units is known not to fit
+    lo, hi = 0, n_units - 1  # n_units is known not to fit
     best = 0
     while lo <= hi:
         mid = (lo + hi) // 2
@@ -117,7 +118,9 @@ def compacted_note(unit_name: str, ids: list[str], expand_hint: str) -> dict:
     get it back. Present only when something was compacted."""
     return {
         "compacted": ids,
-        "reason": (f"The full response would exceed the size budget, so these "
-                   f"{unit_name}s are listed compactly. Nothing was removed."),
+        "reason": (
+            f"The full response would exceed the size budget, so these "
+            f"{unit_name}s are listed compactly. Nothing was removed."
+        ),
         "expand": expand_hint,
     }

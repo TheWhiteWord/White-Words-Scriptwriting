@@ -12,6 +12,7 @@ dashboard's Trash tab reads `trash_for_ui`, and restores and purges through
 second implementation — `tools/story_admin.py` calls them for its own actions,
 so the browser and the agent can never disagree about what a bundle is.
 """
+
 from __future__ import annotations
 
 import json
@@ -55,17 +56,16 @@ def select_one_deletion(conn, target: dict):
     entity_id = target.get("id") or ""
     entity_type = target.get("entity_type") or ""
     row = conn.execute(
-        "SELECT id, type, deleted_at, is_deleted FROM entities WHERE id=?",
-        (entity_id,)).fetchone()
+        "SELECT id, type, deleted_at, is_deleted FROM entities WHERE id=?", (entity_id,)
+    ).fetchone()
     if not row:
         return None, {"error": f"Entity not found: {entity_type}/{entity_id}"}
     if entity_type and entity_type != row[1]:
-        return None, {"error": f"{row[0]} is a {row[1]}, not a {entity_type}. "
-                               f"Nothing was purged."}
+        return None, {"error": f"{row[0]} is a {row[1]}, not a {entity_type}. Nothing was purged."}
     if not row[3]:
         return None, {
             "error": f"{row[0]} is not in the trash — purge only removes entities "
-                     f"that are already deleted. Nothing was purged.",
+            f"that are already deleted. Nothing was purged.",
             "entity_id": row[0],
         }
     return [(row[0], row[1], row[2])] + deleted_together(conn, row[0], row[2]), None
@@ -84,7 +84,8 @@ def deleted_together(conn, entity_id: str, deleted_at) -> list:
     return conn.execute(
         "SELECT id, type, deleted_at FROM entities "
         "WHERE parent_id=? AND is_deleted=1 AND deleted_at = ? ORDER BY type, id",
-        (entity_id, deleted_at)).fetchall()
+        (entity_id, deleted_at),
+    ).fetchall()
 
 
 def hard_delete(conn, ids: list) -> list:
@@ -105,8 +106,9 @@ def hard_delete(conn, ids: list) -> list:
     affected = scrub_live_extras(conn, ids)
     conn.execute(f"DELETE FROM sections WHERE entity_id IN ({marks})", ids)
     conn.execute(f"DELETE FROM revisions WHERE entity_id IN ({marks})", ids)
-    conn.execute(f"DELETE FROM relations WHERE from_id IN ({marks}) "
-                 f"OR to_id IN ({marks})", ids + ids)
+    conn.execute(
+        f"DELETE FROM relations WHERE from_id IN ({marks}) OR to_id IN ({marks})", ids + ids
+    )
     conn.execute(f"DELETE FROM entities WHERE id IN ({marks})", ids)
     conn.execute(f"UPDATE entities SET parent_id='' WHERE parent_id IN ({marks})", ids)
     conn.execute(f"UPDATE entities SET location_id='' WHERE location_id IN ({marks})", ids)
@@ -124,12 +126,15 @@ def select_for_purge(conn, target: dict | None, older_than_days: int):
     rows = conn.execute(
         "SELECT id, type, deleted_at FROM entities "
         "WHERE is_deleted=1 AND deleted_at <= ? "
-        "ORDER BY type, id", (purge_cutoff(older_than_days),)).fetchall()
+        "ORDER BY type, id",
+        (purge_cutoff(older_than_days),),
+    ).fetchall()
     return rows, None
 
 
-def preview_purge(project_path: Path, target: dict | None = None,
-                  older_than_days: int = 30) -> dict:
+def preview_purge(
+    project_path: Path, target: dict | None = None, older_than_days: int = 30
+) -> dict:
     """What `purge_deleted` would remove, read-only: {items, refusal}.
 
     Each item is {id, type, name, deleted_at}; `refusal` is the error dict a purge
@@ -143,15 +148,25 @@ def preview_purge(project_path: Path, target: dict | None = None,
         if refusal:
             return {"items": [], "refusal": refusal}
         names = _names(conn, [r[0] for r in rows])
-        return {"items": [{"id": r[0], "type": r[1],
-                           "name": (names.get(r[0]) or (r[0], r[1]))[0],
-                           "deleted_at": r[2]} for r in rows], "refusal": None}
+        return {
+            "items": [
+                {
+                    "id": r[0],
+                    "type": r[1],
+                    "name": (names.get(r[0]) or (r[0], r[1]))[0],
+                    "deleted_at": r[2],
+                }
+                for r in rows
+            ],
+            "refusal": None,
+        }
     finally:
         conn.close()
 
 
-def purge_deleted(project_path: Path, target: dict | None = None,
-                  older_than_days: int = 30) -> dict:
+def purge_deleted(
+    project_path: Path, target: dict | None = None, older_than_days: int = 30
+) -> dict:
     """Remove deleted entities for good. The ONLY irreversible entity operation.
 
     * no `target` — everything deleted more than `older_than_days` ago (default
@@ -179,13 +194,15 @@ def purge_deleted(project_path: Path, target: dict | None = None,
                 return refusal
             if not rows:
                 younger = conn.execute(
-                    "SELECT count(*) FROM entities WHERE is_deleted=1").fetchone()[0]
+                    "SELECT count(*) FROM entities WHERE is_deleted=1"
+                ).fetchone()[0]
                 return {
                     "success": True,
                     "purged": [],
                     "message": (
                         f"Nothing is old enough to purge ({younger} deleted entities are "
-                        f"younger than {older_than_days} days). They stay restorable."),
+                        f"younger than {older_than_days} days). They stay restorable."
+                    ),
                 }
 
             ids = [r[0] for r in rows]
@@ -199,12 +216,12 @@ def purge_deleted(project_path: Path, target: dict | None = None,
         "message": f"Purged {len(ids)} entities permanently.",
         "purged": [{"id": r[0], "type": r[1], "deleted_at": r[2]} for r in rows],
         "backup": backup,
-        "note": ("Markdown files for these entities are removed by the next "
-                 "story_export."),
+        "note": ("Markdown files for these entities are removed by the next story_export."),
     }
 
 
 # ─── reading the trash ───────────────────────────────────────────────────────
+
 
 def _label(type_name: str) -> str:
     return ENTITY_LABELS.get(type_name) or type_name.replace("_", " ").capitalize()
@@ -216,8 +233,8 @@ def _names(conn, ids) -> dict:
     if not ids:
         return {}
     rows = conn.execute(
-        f"SELECT id, name, type FROM entities WHERE id IN ({','.join('?' * len(ids))})",
-        ids).fetchall()
+        f"SELECT id, name, type FROM entities WHERE id IN ({','.join('?' * len(ids))})", ids
+    ).fetchall()
     return {r[0]: (r[1] or r[0], r[2]) for r in rows}
 
 
@@ -229,17 +246,28 @@ def _affected(conn, holders, detached) -> list:
     `references_to` before anything was deleted.
     """
     names = _names(conn, list(holders) + [d.get("entity_id", "") for d in detached])
-    out = [{"entity_type": (names.get(h) or ("", ""))[1], "id": h,
-            "name": (names.get(h) or (h, ""))[0], "field": ""} for h in holders]
-    out += [{"entity_type": d.get("entity_type") or (names.get(d.get("entity_id")) or ("", ""))[1],
-             "id": d.get("entity_id", ""),
-             "name": (names.get(d.get("entity_id")) or ("", ""))[0],
-             "field": d.get("field", "")} for d in detached]
+    out = [
+        {
+            "entity_type": (names.get(h) or ("", ""))[1],
+            "id": h,
+            "name": (names.get(h) or (h, ""))[0],
+            "field": "",
+        }
+        for h in holders
+    ]
+    out += [
+        {
+            "entity_type": d.get("entity_type") or (names.get(d.get("entity_id")) or ("", ""))[1],
+            "id": d.get("entity_id", ""),
+            "name": (names.get(d.get("entity_id")) or ("", ""))[0],
+            "field": d.get("field", ""),
+        }
+        for d in detached
+    ]
     return out
 
 
-def list_deleted(project_path: Path, older_than_days: int = 30, *,
-                 conn=None) -> dict:
+def list_deleted(project_path: Path, older_than_days: int = 30, *, conn=None) -> dict:
     """The trash: every soft-deleted entity, newest deletion first.
 
     One entry per *deletion*. Deleting a scene also deletes its beats, all
@@ -265,7 +293,8 @@ def list_deleted(project_path: Path, older_than_days: int = 30, *,
     try:
         rows = conn.execute(
             "SELECT id, type, name, deleted_at, parent_id FROM entities "
-            "WHERE is_deleted=1 ORDER BY deleted_at DESC, type, id").fetchall()
+            "WHERE is_deleted=1 ORDER BY deleted_at DESC, type, id"
+        ).fetchall()
     finally:
         if own_conn:
             conn.close()
@@ -278,7 +307,8 @@ def list_deleted(project_path: Path, older_than_days: int = 30, *,
         if parent is not None and parent[3] == row[3]:
             # Same deletion stamp as its parent: deleted in the same operation.
             includes.setdefault(parent[0], []).append(
-                {"type": row[1], "id": row[0], "name": row[2] or row[0]})
+                {"type": row[1], "id": row[0], "name": row[2] or row[0]}
+            )
         else:
             entries[row[0]] = row
 
@@ -293,17 +323,24 @@ def list_deleted(project_path: Path, older_than_days: int = 30, *,
         }
         for r in entries.values()
     ]
-    result = {"success": True, "count": len(deleted), "deleted": deleted,
-              "purge_older_than_days": days}
+    result = {
+        "success": True,
+        "count": len(deleted),
+        "deleted": deleted,
+        "purge_older_than_days": days,
+    }
     if not deleted:
         result["message"] = "Nothing has been deleted."
     else:
-        result["hint"] = ('Bring one back with action="restore" and target '
-                          '{entity_type, id}; anything in `includes` comes back with it.')
+        result["hint"] = (
+            'Bring one back with action="restore" and target '
+            "{entity_type, id}; anything in `includes` comes back with it."
+        )
     return result
 
 
 # ─── what a restore would change, and would refuse ───────────────────────────
+
 
 def _warning(warnings: dict, code: str, refs: list) -> None:
     """File one warning's refs under its code, keeping the payload JSON-shaped.
@@ -338,8 +375,12 @@ def _classify_refs(conn, warnings: dict, ids, field: str, dead, existing, batch)
         if vid in batch:
             continue
         known = names.get(vid)
-        ref = {"entity_type": (known or ("", ""))[1], "id": vid,
-               "name": (known or (vid, ""))[0], "field": field}
+        ref = {
+            "entity_type": (known or ("", ""))[1],
+            "id": vid,
+            "name": (known or (vid, ""))[0],
+            "field": field,
+        }
         if vid in dead:
             in_trash.append(ref)
         elif vid not in existing:
@@ -357,8 +398,9 @@ def _relations_touching(conn, entity_id: str) -> list:
     preview's "these links stay hidden" warning, and the panel's Links list.
     """
     return conn.execute(
-        "SELECT from_id, to_id, kind, note FROM relations "
-        "WHERE from_id=? OR to_id=? ORDER BY kind", (entity_id, entity_id)).fetchall()
+        "SELECT from_id, to_id, kind, note FROM relations WHERE from_id=? OR to_id=? ORDER BY kind",
+        (entity_id, entity_id),
+    ).fetchall()
 
 
 def restore_check(conn, entity_id: str, *, also_restoring=()) -> dict:
@@ -383,7 +425,9 @@ def restore_check(conn, entity_id: str, *, also_restoring=()) -> dict:
 
     row = conn.execute(
         "SELECT id, type, name, parent_id, location_id, extra, is_deleted, deleted_at "
-        "FROM entities WHERE id=?", (entity_id,)).fetchone()
+        "FROM entities WHERE id=?",
+        (entity_id,),
+    ).fetchone()
     if not row:
         return {"blockers": [], "warnings": {}, "returned": {}}
     eid, etype, ename, parent_id, location_id, extra_json, is_deleted, deleted_at = row
@@ -397,45 +441,80 @@ def restore_check(conn, entity_id: str, *, also_restoring=()) -> dict:
     # 1. The parent link.
     if parent_id:
         prow = conn.execute(
-            "SELECT id, type, name, is_deleted, deleted_at FROM entities WHERE id=?",
-            (parent_id,)).fetchone()
+            "SELECT id, type, name, is_deleted, deleted_at FROM entities WHERE id=?", (parent_id,)
+        ).fetchone()
         structural = etype in _NEEDS_PARENT
         if prow is None:
-            msg = (f"Its {_label(etype)} parent no longer exists — it was removed "
-                   f"for good, so this would come back with nothing to hang from.")
+            msg = (
+                f"Its {_label(etype)} parent no longer exists — it was removed "
+                f"for good, so this would come back with nothing to hang from."
+            )
             if structural:
                 blockers.append({"code": "parent_missing", "message": msg, "fix": None})
             else:
-                _warning(warnings, "parent_missing",
-                         [{"entity_type": etype, "id": eid, "field": "parent",
-                           "name": ename or eid}])
+                _warning(
+                    warnings,
+                    "parent_missing",
+                    [{"entity_type": etype, "id": eid, "field": "parent", "name": ename or eid}],
+                )
         elif prow[3] and prow[0] not in batch:
-            msg = (f"“{prow[2] or prow[0]}” is still in the trash. Restore it too, "
-                   f"or this comes back where nothing can see it.")
+            msg = (
+                f"“{prow[2] or prow[0]}” is still in the trash. Restore it too, "
+                f"or this comes back where nothing can see it."
+            )
             if structural:
-                blockers.append({
-                    "code": "parent_trashed", "message": msg,
-                    "fix": {"entity_type": prow[1], "id": prow[0],
-                            "name": prow[2] or prow[0]},
-                })
+                blockers.append(
+                    {
+                        "code": "parent_trashed",
+                        "message": msg,
+                        "fix": {"entity_type": prow[1], "id": prow[0], "name": prow[2] or prow[0]},
+                    }
+                )
             else:
-                _warning(warnings, "parent_trashed",
-                         [{"entity_type": prow[1], "id": prow[0], "name": prow[2] or prow[0],
-                           "field": "parent"}])
+                _warning(
+                    warnings,
+                    "parent_trashed",
+                    [
+                        {
+                            "entity_type": prow[1],
+                            "id": prow[0],
+                            "name": prow[2] or prow[0],
+                            "field": "parent",
+                        }
+                    ],
+                )
 
     # 2. A location that is still in the trash reads as no location (dead column).
     if location_id:
         lrow = conn.execute(
-            "SELECT id, type, name, is_deleted FROM entities WHERE id=?",
-            (location_id,)).fetchone()
+            "SELECT id, type, name, is_deleted FROM entities WHERE id=?", (location_id,)
+        ).fetchone()
         if lrow and lrow[3] and lrow[0] not in batch:
-            _warning(warnings, "reference_in_trash",
-                     [{"entity_type": lrow[1], "id": lrow[0], "name": lrow[2] or lrow[0],
-                       "field": "location"}])
+            _warning(
+                warnings,
+                "reference_in_trash",
+                [
+                    {
+                        "entity_type": lrow[1],
+                        "id": lrow[0],
+                        "name": lrow[2] or lrow[0],
+                        "field": "location",
+                    }
+                ],
+            )
         elif lrow is None:
-            _warning(warnings, "reference_purged",
-                     [{"entity_type": "location", "id": location_id, "name": location_id,
-                       "field": "location"}])
+            _warning(
+                warnings,
+                "reference_purged",
+                [
+                    {
+                        "entity_type": "location",
+                        "id": location_id,
+                        "name": location_id,
+                        "field": "location",
+                    }
+                ],
+            )
 
     # 3. Relation rows that stay hidden: the view drops a row with a dead end.
     kind_by_other = {}
@@ -448,9 +527,12 @@ def restore_check(conn, entity_id: str, *, also_restoring=()) -> dict:
         names = _names(conn, [i for i in kind_by_other if i in existing])
         dead_refs, gone_refs = [], []
         for other, kinds in kind_by_other.items():
-            ref = {"entity_type": (names.get(other) or ("", ""))[1], "id": other,
-                   "name": (names.get(other) or (other, ""))[0],
-                   "field": "/".join(sorted(kinds))}
+            ref = {
+                "entity_type": (names.get(other) or ("", ""))[1],
+                "id": other,
+                "name": (names.get(other) or (other, ""))[0],
+                "field": "/".join(sorted(kinds)),
+            }
             if other in dead:
                 dead_refs.append(ref)
             elif other not in existing:
@@ -462,13 +544,11 @@ def restore_check(conn, entity_id: str, *, also_restoring=()) -> dict:
     for field in REFERENCE_LISTS:
         values = extra.get(field)
         if isinstance(values, list):
-            _classify_refs(conn, warnings, [str(v) for v in values], field,
-                           dead, existing, batch)
+            _classify_refs(conn, warnings, [str(v) for v in values], field, dead, existing, batch)
     for field in REFERENCE_MAPS:
         values = extra.get(field)
         if isinstance(values, dict):
-            _classify_refs(conn, warnings, [str(v) for v in values], field,
-                           dead, existing, batch)
+            _classify_refs(conn, warnings, [str(v) for v in values], field, dead, existing, batch)
 
     # 5. Children in the trash that this restore does NOT bring back.
     #
@@ -478,33 +558,51 @@ def restore_check(conn, entity_id: str, *, also_restoring=()) -> dict:
     # leaves it in the trash, and a reader that walks `parent_id` will not see it.
     bundle = deleted_together(conn, eid, deleted_at) if deleted_at else []
     in_bundle = {c[0] for c in bundle}
-    stranded = [r for r in conn.execute(
-        "SELECT id, type FROM entities WHERE parent_id=? AND is_deleted=1 "
-        "AND (deleted_at IS NULL OR deleted_at <> ?) ORDER BY type, id",
-        (eid, deleted_at)).fetchall() if r[0] not in in_bundle]
+    stranded = [
+        r
+        for r in conn.execute(
+            "SELECT id, type FROM entities WHERE parent_id=? AND is_deleted=1 "
+            "AND (deleted_at IS NULL OR deleted_at <> ?) ORDER BY type, id",
+            (eid, deleted_at),
+        ).fetchall()
+        if r[0] not in in_bundle
+    ]
     if stranded:
         names = _names(conn, [c[0] for c in stranded])
-        _warning(warnings, "stranded_children",
-                 [{"entity_type": c[1], "id": c[0], "field": "parent",
-                   "name": (names.get(c[0]) or (c[0], ""))[0]} for c in stranded])
+        _warning(
+            warnings,
+            "stranded_children",
+            [
+                {
+                    "entity_type": c[1],
+                    "id": c[0],
+                    "field": "parent",
+                    "name": (names.get(c[0]) or (c[0], ""))[0],
+                }
+                for c in stranded
+            ],
+        )
 
     # 6. What becomes visible again.
     names = _names(conn, [c[0] for c in bundle])
-    children = [{"type": c[1], "id": c[0],
-                 "name": (names.get(c[0]) or (c[0], ""))[0]} for c in bundle]
+    children = [
+        {"type": c[1], "id": c[0], "name": (names.get(c[0]) or (c[0], ""))[0]} for c in bundle
+    ]
     live_relations = conn.execute(
-        "SELECT count(*) FROM live_relations WHERE from_id=? OR to_id=?",
-        (eid, eid)).fetchone()[0]
-    sections = conn.execute(
-        "SELECT count(*) FROM sections WHERE entity_id=?", (eid,)).fetchone()[0]
+        "SELECT count(*) FROM live_relations WHERE from_id=? OR to_id=?", (eid, eid)
+    ).fetchone()[0]
+    sections = conn.execute("SELECT count(*) FROM sections WHERE entity_id=?", (eid,)).fetchone()[0]
     holders, detached = references_to(conn, [eid])
 
     return {
         "blockers": blockers,
         "warnings": warnings,
-        "returned": {"children": children, "relations": live_relations,
-                     "sections": sections,
-                     "referenced_by": _affected(conn, holders, detached)},
+        "returned": {
+            "children": children,
+            "relations": live_relations,
+            "sections": sections,
+            "referenced_by": _affected(conn, holders, detached),
+        },
     }
 
 
@@ -523,16 +621,23 @@ def trash_for_ui(project_path: Path, older_than_days: int = 30) -> dict:
         rows = conn.execute(
             "SELECT e.id, e.type, e.name, e.one_sentence, e.location_id, e.extra, "
             "l.name FROM entities e LEFT JOIN entities l ON l.id = e.location_id "
-            "WHERE e.is_deleted=1").fetchall()
-        content = {r[0]: r[1] for r in conn.execute(
-            "SELECT entity_id, body FROM sections WHERE heading='Content'")}
+            "WHERE e.is_deleted=1"
+        ).fetchall()
+        content = {
+            r[0]: r[1]
+            for r in conn.execute("SELECT entity_id, body FROM sections WHERE heading='Content'")
+        }
 
         info = {}
         for eid, etype, name, one_sentence, location_id, extra_json, location_name in rows:
             extra = json.loads(extra_json) if extra_json else {}
-            info[eid] = {"type": etype, "name": name or eid,
-                         "one_sentence": one_sentence or "",
-                         "extra": extra, "location_name": location_name or ""}
+            info[eid] = {
+                "type": etype,
+                "name": name or eid,
+                "one_sentence": one_sentence or "",
+                "extra": extra,
+                "location_name": location_name or "",
+            }
 
         items = []
         for entry in base["deleted"]:
@@ -542,22 +647,29 @@ def trash_for_ui(project_path: Path, older_than_days: int = 30) -> dict:
             has_script = False
             if entry["type"] == "scene":
                 from .scene_script import scene_heading
+
                 heading = scene_heading(
-                    extra.get("int_ext", ""), row.get("location_name", ""),
-                    extra.get("place", ""), extra.get("time_of_day", ""),
-                    extra.get("forced_heading", ""))
+                    extra.get("int_ext", ""),
+                    row.get("location_name", ""),
+                    extra.get("place", ""),
+                    extra.get("time_of_day", ""),
+                    extra.get("forced_heading", ""),
+                )
                 preview = heading or preview
                 body = content.get(entry["id"]) or ""
                 has_script = bool(body.strip()) and not _PLACEHOLDER.match(body)
-            items.append({
-                **entry,
-                "label": _label(entry["type"]),
-                "preview": preview or entry["name"],
-                "has_script": has_script,
-                "includes": [{**inc, "label": _label(inc["type"])}
-                             for inc in entry["includes"]],
-                "restore": restore_check(conn, entry["id"]),
-            })
+            items.append(
+                {
+                    **entry,
+                    "label": _label(entry["type"]),
+                    "preview": preview or entry["name"],
+                    "has_script": has_script,
+                    "includes": [
+                        {**inc, "label": _label(inc["type"])} for inc in entry["includes"]
+                    ],
+                    "restore": restore_check(conn, entry["id"]),
+                }
+            )
 
         counts = {}
         for eid, row in info.items():
@@ -593,15 +705,25 @@ def trash_detail(project_path: Path, entity_type: str, entity_id: str) -> dict:
         row = conn.execute(
             "SELECT id, type, name, one_sentence, order_key, status, parent_id, "
             "location_id, deleted_at, extra FROM entities WHERE id=?",
-            (entity_id,)).fetchone()
+            (entity_id,),
+        ).fetchone()
         if not row or row[1] != entity_type:
-            return {"error": f"Entity not found: {entity_type}/{entity_id}",
-                    "code": "not_found"}
+            return {"error": f"Entity not found: {entity_type}/{entity_id}", "code": "not_found"}
         if row[8] is None:
             return {"error": f"{entity_id} is not in the trash.", "code": "not_deleted"}
 
-        eid, etype, name, one_sentence, order_key, status, parent_id, location_id, \
-            deleted_at, extra_json = row
+        (
+            eid,
+            etype,
+            name,
+            one_sentence,
+            order_key,
+            status,
+            parent_id,
+            location_id,
+            deleted_at,
+            extra_json,
+        ) = row
         extra = json.loads(extra_json) if extra_json else {}
 
         bundle = deleted_together(conn, eid, deleted_at)
@@ -619,17 +741,17 @@ def trash_detail(project_path: Path, entity_type: str, entity_id: str) -> dict:
             known = names.get(vid) or ("", "")
             return {"id": vid, "entity_type": known[1], "name": known[0] or vid}
 
-        sections = {r[0]: r[1] for r in conn.execute(
-            "SELECT heading, body FROM sections WHERE entity_id=?", (eid,))}
+        sections = {
+            r[0]: r[1]
+            for r in conn.execute("SELECT heading, body FROM sections WHERE entity_id=?", (eid,))
+        }
         content = sections.get("Content") or ""
 
         relations, out_links, in_links = [], [], []
-        live = {r[0] for r in conn.execute(
-            "SELECT id FROM entities WHERE is_deleted=0")}
+        live = {r[0] for r in conn.execute("SELECT id FROM entities WHERE is_deleted=0")}
         for from_id, to_id, kind, note in relation_rows:
             other = to_id if from_id == eid else from_id
-            link = {**_ref(other), "kind": kind, "note": note or "",
-                    "live": other in live}
+            link = {**_ref(other), "kind": kind, "note": note or "", "live": other in live}
             relations.append(link)
             (out_links if from_id == eid else in_links).append(link)
 
@@ -638,24 +760,29 @@ def trash_detail(project_path: Path, entity_type: str, entity_id: str) -> dict:
 
         return {
             "entity": {
-                "id": eid, "type": etype, "name": name or eid,
-                "label": _label(etype), "deleted_at": deleted_at,
+                "id": eid,
+                "type": etype,
+                "name": name or eid,
+                "label": _label(etype),
+                "deleted_at": deleted_at,
                 "one_sentence": one_sentence or "",
                 "has_script": bool(content.strip()) and not _PLACEHOLDER.match(content),
-                "fields": {"name": name or "", "one_sentence": one_sentence or "",
-                           "status": status or "", "order_key": order_key,
-                           "parent": _ref(parent_id) if parent_id else None,
-                           "location": _ref(location_id) if location_id else None},
+                "fields": {
+                    "name": name or "",
+                    "one_sentence": one_sentence or "",
+                    "status": status or "",
+                    "order_key": order_key,
+                    "parent": _ref(parent_id) if parent_id else None,
+                    "location": _ref(location_id) if location_id else None,
+                },
                 "extra": extra,
             },
-            "includes": [{**_ref(c[0]), "type": c[1], "label": _label(c[1])}
-                         for c in bundle],
+            "includes": [{**_ref(c[0]), "type": c[1], "label": _label(c[1])} for c in bundle],
             "sections": sections,
             "relations": {"out": out_links, "in": in_links, "all": relations},
             "referenced_by": _affected(conn, holders, detached),
             "restore": check,
-            "purge": purge_preview(project_path, [{"entity_type": etype, "id": eid}],
-                                   conn=conn),
+            "purge": purge_preview(project_path, [{"entity_type": etype, "id": eid}], conn=conn),
         }
     finally:
         conn.close()
@@ -663,20 +790,19 @@ def trash_detail(project_path: Path, entity_type: str, entity_id: str) -> dict:
 
 # ─── restoring ───────────────────────────────────────────────────────────────
 
+
 def _clear_flags(conn, entity_id: str, deleted_at) -> list:
     """Un-flag one row and the children this same delete flagged. Returns ids."""
-    conn.execute("UPDATE entities SET is_deleted=0, deleted_at=NULL WHERE id=?",
-                 (entity_id,))
+    conn.execute("UPDATE entities SET is_deleted=0, deleted_at=NULL WHERE id=?", (entity_id,))
     children = sorted(r[0] for r in deleted_together(conn, entity_id, deleted_at))
     if children:
         conn.executemany(
-            "UPDATE entities SET is_deleted=0, deleted_at=NULL WHERE id=?",
-            [(c,) for c in children])
+            "UPDATE entities SET is_deleted=0, deleted_at=NULL WHERE id=?", [(c,) for c in children]
+        )
     return [entity_id] + children
 
 
-def restore(project_path: Path, entity_type: str, entity_id: str,
-            summary: str = "") -> dict:
+def restore(project_path: Path, entity_type: str, entity_id: str, summary: str = "") -> dict:
     """Undelete an entity by clearing is_deleted. The exact inverse of the delete.
 
     The delete changes nothing but the flags: sections, relation rows, the names
@@ -766,23 +892,38 @@ def restore_many(project_path: Path, targets: list) -> dict:
             restored, also, refused = [], [], []
             for eid, etype in wanted:
                 row = conn.execute(
-                    "SELECT id, type, name, is_deleted, deleted_at FROM entities "
-                    "WHERE id=?", (eid,)).fetchone()
+                    "SELECT id, type, name, is_deleted, deleted_at FROM entities WHERE id=?", (eid,)
+                ).fetchone()
                 if not row:
-                    refused.append({"entity_type": etype, "id": eid,
-                                    "error": f"Entity not found: {etype}/{eid}",
-                                    "blockers": []})
+                    refused.append(
+                        {
+                            "entity_type": etype,
+                            "id": eid,
+                            "error": f"Entity not found: {etype}/{eid}",
+                            "blockers": [],
+                        }
+                    )
                     continue
                 if not row[3]:
-                    refused.append({"entity_type": row[1], "id": eid,
-                                    "error": f"{eid} is not deleted — nothing to restore.",
-                                    "blockers": []})
+                    refused.append(
+                        {
+                            "entity_type": row[1],
+                            "id": eid,
+                            "error": f"{eid} is not deleted — nothing to restore.",
+                            "blockers": [],
+                        }
+                    )
                     continue
                 check = restore_check(conn, eid, also_restoring=batch)
                 if check["blockers"]:
-                    refused.append({"entity_type": row[1], "id": eid,
-                                    "error": check["blockers"][0]["message"],
-                                    "blockers": check["blockers"]})
+                    refused.append(
+                        {
+                            "entity_type": row[1],
+                            "id": eid,
+                            "error": check["blockers"][0]["message"],
+                            "blockers": check["blockers"],
+                        }
+                    )
                     continue
                 children = _clear_flags(conn, eid, row[4])
                 restored.append({"type": row[1], "id": eid, "name": row[2] or eid})
@@ -794,13 +935,17 @@ def restore_many(project_path: Path, targets: list) -> dict:
     finally:
         conn.close()
 
-    return {"success": True,
-            "message": f"Restored {len(restored)} item(s).",
-            "restored": restored, "also_restored": sorted(set(also)),
-            "returned": {"entities": len(restored) + len(set(also))}}
+    return {
+        "success": True,
+        "message": f"Restored {len(restored)} item(s).",
+        "restored": restored,
+        "also_restored": sorted(set(also)),
+        "returned": {"entities": len(restored) + len(set(also))},
+    }
 
 
 # ─── removing for good, by name ──────────────────────────────────────────────
+
 
 def _normalise_targets(targets) -> list:
     out = []
@@ -838,10 +983,15 @@ def purge_preview(project_path: Path, targets: list, *, conn=None) -> dict:
         holders, detached = references_to(conn, ids)
         affected = _affected(conn, holders, detached)
         return {
-            "items": [{"id": rid, "type": names.get(rid, ("", ""))[1] or "",
-                       "name": (names.get(rid) or (rid, ""))[0],
-                       "label": _label(names.get(rid, ("", ""))[1] or "")}
-                      for rid in ids],
+            "items": [
+                {
+                    "id": rid,
+                    "type": names.get(rid, ("", ""))[1] or "",
+                    "name": (names.get(rid) or (rid, ""))[0],
+                    "label": _label(names.get(rid, ("", ""))[1] or ""),
+                }
+                for rid in ids
+            ],
             "affected": affected,
             "backup": True,
             "refusal": None,
@@ -883,10 +1033,15 @@ def purge_selected(project_path: Path, targets: list) -> dict:
             names = _names(conn, ids)
             holders, detached = references_to(conn, ids)
             affected = _affected(conn, holders, detached)
-            purged = [{"id": rid, "type": names.get(rid, ("", ""))[1],
-                       "name": (names.get(rid) or (rid, ""))[0],
-                       "deleted_at": next((r[2] for r in rows if r[0] == rid), None)}
-                      for rid in ids]
+            purged = [
+                {
+                    "id": rid,
+                    "type": names.get(rid, ("", ""))[1],
+                    "name": (names.get(rid) or (rid, ""))[0],
+                    "deleted_at": next((r[2] for r in rows if r[0] == rid), None),
+                }
+                for rid in ids
+            ]
             backup = create_backup(project_path, automatic=True)
             cleared = hard_delete(conn, ids)
     finally:
@@ -899,6 +1054,8 @@ def purge_selected(project_path: Path, targets: list) -> dict:
         "backup": backup,
         "affected": affected,
         "cleared": cleared,
-        "note": ("A backup was taken first. Markdown files for these entities are "
-                 "removed by the next story_export."),
+        "note": (
+            "A backup was taken first. Markdown files for these entities are "
+            "removed by the next story_export."
+        ),
     }

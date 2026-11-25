@@ -1,4 +1,5 @@
 """backup_database: one function, atomic, with an optional destination."""
+
 import re
 import sqlite3
 import threading
@@ -35,7 +36,7 @@ def test_default_destination_and_name(project):
 
 
 def test_destination_and_prefix(project, tmp_path):
-    dest = tmp_path / "elsewhere" / "deeper"   # does not exist yet
+    dest = tmp_path / "elsewhere" / "deeper"  # does not exist yet
     path = Path(backup_database(project, dest_dir=dest, prefix="stc"))
     assert path.parent == dest
     assert path.name.startswith("stc_") and path.suffix == ".db"
@@ -59,7 +60,7 @@ def test_a_failed_snapshot_leaves_no_file(project, tmp_path, monkeypatch):
 
         def backup(self, target):
             target.execute("CREATE TABLE half_written (x)")  # something was written...
-            raise OSError("disk full")                        # ...then it failed
+            raise OSError("disk full")  # ...then it failed
 
         def close(self):
             self._conn.close()

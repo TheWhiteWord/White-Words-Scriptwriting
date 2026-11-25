@@ -7,6 +7,7 @@ the only two places the vocabulary now lives; everything else derives from
 them. The first test is what keeps those two from drifting — a comment would
 not, which is why it is a test.
 """
+
 import json
 import re
 import shutil
@@ -30,7 +31,14 @@ class TestVocabulary:
 
     def test_the_six_dramatic_roles(self):
         """The dramatic roles. `transition`/`non-event` are scene beats, not plot roles."""
-        assert PLOT_ROLES == ["setup", "inciting_incident", "complication", "crisis", "climax", "resolution"]
+        assert PLOT_ROLES == [
+            "setup",
+            "inciting_incident",
+            "complication",
+            "crisis",
+            "climax",
+            "resolution",
+        ]
 
     def test_the_plot_schema_declares_the_roles_in_dramatic_order(self):
         """Field order is part of the contract, not an accident of the dict.
@@ -46,23 +54,44 @@ class TestVocabulary:
         field-name-is-not-role-name trap as `crisis` staying singular.
         """
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+
         role_fields = [f for f in ENTITY_SCHEMAS["plot"] if f in PLOT_BEAT_FIELDS]
-        assert role_fields == ["setups", "inciting_incident", "complications",
-                               "crisis", "climax", "resolutions"]
+        assert role_fields == [
+            "setups",
+            "inciting_incident",
+            "complications",
+            "crisis",
+            "climax",
+            "resolutions",
+        ]
 
     def test_the_identity_fields_come_before_the_roles(self):
         """What a plot IS, then WHO it involves, then what it does. A reader
         meeting `one_sentence` halfway through the role list has to hold the
         plot's identity in their head while reading its beats."""
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+
         order = list(ENTITY_SCHEMAS["plot"])
-        assert order[:7] == ["name", "one_sentence", "status", "characters",
-                             "value_arc", "plot_scope", "plot_type"]
+        assert order[:7] == [
+            "name",
+            "one_sentence",
+            "status",
+            "characters",
+            "value_arc",
+            "plot_scope",
+            "plot_type",
+        ]
         # The roles sit after the identity block. The plot no longer carries
         # value fields — the values moved onto `value` entities.
         roles = [f for f in order if f in PLOT_BEAT_FIELDS]
-        assert roles == ["setups", "inciting_incident", "complications",
-                         "crisis", "climax", "resolutions"]
+        assert roles == [
+            "setups",
+            "inciting_incident",
+            "complications",
+            "crisis",
+            "climax",
+            "resolutions",
+        ]
         assert order.index("resolutions") > order.index("plot_type")
 
     def test_the_dashboard_role_list_is_the_same_list(self):
@@ -73,10 +102,13 @@ class TestVocabulary:
         not an error.
         """
         from pathlib import Path
+
         js = (REPO / "src/white_words/scriptwriting/web/js/colors.js").read_text()
         found = re.search(r"DASH\.PLOT_ROLES = \[([^\]]*)\]", js)
         assert found, "colors.js no longer declares DASH.PLOT_ROLES"
-        assert [r.strip().strip("'\"") for r in found.group(1).split(",") if r.strip()] == PLOT_ROLES
+        assert [
+            r.strip().strip("'\"") for r in found.group(1).split(",") if r.strip()
+        ] == PLOT_ROLES
 
     def test_field_names_are_not_role_names_pluralised(self):
         """`crisis` and `climax` stay singular — so the map cannot be derived
@@ -96,23 +128,49 @@ def full_role_project(tmp_path):
     project = root / "projects" / "stc"
 
     create_entity(project, "act", "act-1", {"title": "Act One", "order": 1, "status": "drafted"})
-    create_entity(project, "sequence", "seq-1", {"title": "Seq", "order": 1,
-                                                 "status": "drafted", "act_id": "act-1"})
+    create_entity(
+        project,
+        "sequence",
+        "seq-1",
+        {"title": "Seq", "order": 1, "status": "drafted", "act_id": "act-1"},
+    )
     # One scene per role. The role is written on the SCENE as `plot_roles` —
     # the plot's own fields are computed, so this is the only write path.
     for i, role in enumerate(PLOT_ROLES):
-        create_entity(project, "scene", f"scene-{i}", {
-            "title": f"Scene {i}", "order": i, "status": "written",
-            "dramatic_role": role, "sequence_id": "seq-1", "act_id": "act-1",
-        })
+        create_entity(
+            project,
+            "scene",
+            f"scene-{i}",
+            {
+                "title": f"Scene {i}",
+                "order": i,
+                "status": "written",
+                "dramatic_role": role,
+                "sequence_id": "seq-1",
+                "act_id": "act-1",
+            },
+        )
 
-    create_entity(project, "plot", "the-plot", {
-        "name": "The Plot", "one_sentence": "x", "plot_scope": "main",
-    })
+    create_entity(
+        project,
+        "plot",
+        "the-plot",
+        {
+            "name": "The Plot",
+            "one_sentence": "x",
+            "plot_scope": "main",
+        },
+    )
     for i, role in enumerate(PLOT_ROLES):
-        edit_entity(project, "scene", f"scene-{i}", {
-            "plot_roles": [{"plot": "the-plot", "role": role, "description": "d"}],
-        }, f"record the {role}")
+        edit_entity(
+            project,
+            "scene",
+            f"scene-{i}",
+            {
+                "plot_roles": [{"plot": "the-plot", "role": role, "description": "d"}],
+            },
+            f"record the {role}",
+        )
     return project
 
 
@@ -126,13 +184,14 @@ class TestHasRoleFlags:
         from white_words.scriptwriting.core.db import get_dashboard_data
 
         data = get_dashboard_data(full_role_project)["story_data"]
-        rows = (data["sequences"] if owner == "sequence" else data["acts"])
+        rows = data["sequences"] if owner == "sequence" else data["acts"]
         plots = [p for row in rows for p in row.get("plots", [])]
         assert plots, f"no plot row on the {owner}"
         for plot in plots:
             for role in PLOT_ROLES:
-                assert plot.get(f"has_{role}") is True, \
+                assert plot.get(f"has_{role}") is True, (
                     f"{owner} row missing has_{role}: {sorted(plot)}"
+                )
 
     def test_flag_set_is_exactly_the_roles(self, full_role_project):
         """No stale hardcoded flag survives, and none is missing."""

@@ -1,4 +1,5 @@
 """MCP Streamable HTTP endpoint mounted into the app factory."""
+
 from __future__ import annotations
 
 import asyncio
@@ -35,12 +36,13 @@ TOOL_MODULES = [
 
 import importlib
 
+
 def _mod(name: str):
     return importlib.import_module(f"white_words.scriptwriting.tools.{name}")
 
 
 def mcp_tool_name(module_name: str) -> str:
-    return module_name[len("story_"):] if module_name.startswith("story_") else module_name
+    return module_name[len("story_") :] if module_name.startswith("story_") else module_name
 
 
 def build_registry() -> list[tuple[str, Any, Any]]:
@@ -55,7 +57,10 @@ def create_mcp_server(config: Config) -> Server:
     reg = {name: (schema, handler) for name, schema, handler in build_registry()}
 
     async def on_list_tools(ctx, params):
-        tools = [types.Tool(name=n, description=s.get("description", ""), input_schema=s) for n, (s, _) in reg.items()]
+        tools = [
+            types.Tool(name=n, description=s.get("description", ""), input_schema=s)
+            for n, (s, _) in reg.items()
+        ]
         return types.ListToolsResult(tools=tools)
 
     async def on_call_tool(ctx, params):
@@ -65,21 +70,44 @@ def create_mcp_server(config: Config) -> Server:
         schema, handler = reg[name]
         args = params.arguments or {}
         call_id = uuid.uuid4().hex
-        await _publish_bus({"type": "started", "id": call_id, "name": name, "args": args, "status": "started"})
+        await _publish_bus(
+            {"type": "started", "id": call_id, "name": name, "args": args, "status": "started"}
+        )
         start = time.monotonic()
         try:
             result = await asyncio.to_thread(handler, args, root_path=config.root)
         except Exception as e:
             log.exception("tool %s raised", name)
             dur = int((time.monotonic() - start) * 1000)
-            await _publish_bus({"type": "failed", "id": call_id, "name": name, "args": args, "status": "failed", "duration_ms": dur, "result_preview": str(e)[:800]})
+            await _publish_bus(
+                {
+                    "type": "failed",
+                    "id": call_id,
+                    "name": name,
+                    "args": args,
+                    "status": "failed",
+                    "duration_ms": dur,
+                    "result_preview": str(e)[:800],
+                }
+            )
             raise RuntimeError(f"{name}: {e}") from e
         dur = int((time.monotonic() - start) * 1000)
         preview = result[:800] if isinstance(result, str) else str(result)[:800]
-        await _publish_bus({"type": "finished", "id": call_id, "name": name, "args": args, "status": "finished", "duration_ms": dur, "result_preview": preview})
+        await _publish_bus(
+            {
+                "type": "finished",
+                "id": call_id,
+                "name": name,
+                "args": args,
+                "status": "finished",
+                "duration_ms": dur,
+                "result_preview": preview,
+            }
+        )
         # draft detection
         if name == "draft":
             import pathlib as _pl
+
             _pl.Path("/tmp/draft_debug.txt").write_text(repr(result)[:500])
             try:
                 obj = json.loads(result) if isinstance(result, str) else result
@@ -88,11 +116,14 @@ def create_mcp_server(config: Config) -> Server:
             if isinstance(obj, dict) and "draft_id" in obj:
                 dry = obj.get("dry_run")
                 if not (isinstance(dry, dict) and dry.get("status") == "clean"):
-                    return types.CallToolResult(content=[types.TextContent(type="text", text=result)])
+                    return types.CallToolResult(
+                        content=[types.TextContent(type="text", text=result)]
+                    )
                 from pathlib import Path
                 from white_words.scriptwriting.core import clock
                 from white_words.scriptwriting.tools.story_resolve import resolve_project
                 from white_words.scriptwriting.core.drafts import describe_ops
+
                 try:
                     pp = resolve_project(args.get("project", ""), Path(config.root))
                 except Exception:

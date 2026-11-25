@@ -10,6 +10,7 @@ role.
 Now every row stays, and every READ of relations goes through the
 `live_relations` view, which drops a row whose either end is flagged deleted.
 """
+
 import json
 import re
 import shutil
@@ -64,21 +65,30 @@ def _sql(p, sql, *args):
 
 
 def _raw(p):
-    return sorted(_sql(p, "SELECT from_id, to_id, kind, note, \"order\" FROM relations"))
+    return sorted(_sql(p, 'SELECT from_id, to_id, kind, note, "order" FROM relations'))
 
 
 def _visible(p):
-    return sorted(_sql(p, "SELECT from_id, to_id, kind, note, \"order\" FROM live_relations"))
+    return sorted(_sql(p, 'SELECT from_id, to_id, kind, note, "order" FROM live_relations'))
 
 
 def _restore(proj, etype, eid):
     p, vault = proj
-    return json.loads(admin({"action": "restore", "project": SLUG,
-                             "target": {"entity_type": etype, "id": eid},
-                             "summary": "t"}, root_path=str(vault)))
+    return json.loads(
+        admin(
+            {
+                "action": "restore",
+                "project": SLUG,
+                "target": {"entity_type": etype, "id": eid},
+                "summary": "t",
+            },
+            root_path=str(vault),
+        )
+    )
 
 
 # ─── the view ───
+
 
 class TestTheView:
     def test_a_new_project_has_it(self, tmp_path):
@@ -87,18 +97,23 @@ class TestTheView:
         create_project("stc", {"name": "STC", "logline": "L"}, root)
         conn = get_db(root / "projects" / "stc")
         try:
-            assert conn.execute("SELECT 1 FROM sqlite_master WHERE type='view' "
-                                "AND name='live_relations'").fetchone()
+            assert conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='view' AND name='live_relations'"
+            ).fetchone()
         finally:
             conn.close()
 
-    def test_a_database_one_step_behind_is_upgraded_on_open_and_keeps_its_rows(self, proj, one_step):
+    def test_a_database_one_step_behind_is_upgraded_on_open_and_keeps_its_rows(
+        self, proj, one_step
+    ):
         p, _ = proj
         before = _raw(p)
         _sql(p, f"PRAGMA user_version = {core_db.BASELINE_VERSION}")
         conn = get_db(p)
         try:
-            assert conn.execute("SELECT 1 FROM sqlite_master WHERE name='test_only_step'").fetchone()
+            assert conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE name='test_only_step'"
+            ).fetchone()
         finally:
             conn.close()
         assert one_step == [1]
@@ -108,7 +123,7 @@ class TestTheView:
     def test_a_row_with_either_end_deleted_is_hidden(self, proj):
         p, _ = proj
         c = sqlite3.connect(str(p / ".story" / "story.db"))
-        c.execute("UPDATE entities SET is_deleted=1 WHERE id='kael'")        # a from_id
+        c.execute("UPDATE entities SET is_deleted=1 WHERE id='kael'")  # a from_id
         c.execute("UPDATE entities SET is_deleted=1 WHERE id='the-core-day'")  # a to_id
         c.commit()
         c.close()
@@ -123,8 +138,9 @@ class TestTheView:
         conn = get_db(p)
         try:
             create_schema(conn)
-            assert conn.execute("SELECT 1 FROM sqlite_master WHERE type='view' "
-                                "AND name='live_relations'").fetchone()
+            assert conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='view' AND name='live_relations'"
+            ).fetchone()
         finally:
             conn.close()
         assert _raw(p) == before
@@ -132,10 +148,17 @@ class TestTheView:
 
 # ─── delete keeps every row ───
 
-@pytest.mark.parametrize("etype,eid", [
-    ("character", "kael"), ("scene", "central-room-day"), ("plot", "the-resistance"),
-    ("location", "the-central-room"), ("world", "the-i"),
-])
+
+@pytest.mark.parametrize(
+    "etype,eid",
+    [
+        ("character", "kael"),
+        ("scene", "central-room-day"),
+        ("plot", "the-resistance"),
+        ("location", "the-central-room"),
+        ("world", "the-i"),
+    ],
+)
 class TestDeleteKeepsRowsAndRestoreIsExact:
     def test_no_relation_row_is_removed_by_a_delete(self, proj, etype, eid):
         p, _ = proj
@@ -164,25 +187,43 @@ class TestNoGhostsInReaders:
     Each reader below used to show kael in the cast of a live scene, through
     the relation row he owned.
     """
+
     SCENE = "central-room-day"
 
     @pytest.fixture
     def gone(self, proj):
         p, vault = proj
-        assert "kael" in {r[0] for r in _sql(
-            p, "SELECT from_id FROM relations WHERE to_id=? AND kind='character_scene'", self.SCENE)}
+        assert "kael" in {
+            r[0]
+            for r in _sql(
+                p,
+                "SELECT from_id FROM relations WHERE to_id=? AND kind='character_scene'",
+                self.SCENE,
+            )
+        }
         delete_entity(p, "character", "kael", "t", True)
         return p, vault
 
     def test_story_retrieve(self, gone):
         from white_words.scriptwriting.tools.story_retrieve import handler
+
         p, vault = gone
-        out = json.loads(handler({"project": SLUG, "entity_type": "scene", "id": self.SCENE,
-                                  "fields": ["characters"]}, root_path=str(vault)))
+        out = json.loads(
+            handler(
+                {
+                    "project": SLUG,
+                    "entity_type": "scene",
+                    "id": self.SCENE,
+                    "fields": ["characters"],
+                },
+                root_path=str(vault),
+            )
+        )
         assert out["entities"][0]["fields"]["characters"] == ["mira"]
 
     def test_the_entity_form(self, gone):
         from white_words.scriptwriting.core.manual_entities import load_entity
+
         p, _ = gone
         form = load_entity(p, "scene", self.SCENE)
         assert form["values"]["characters"] == ["mira"]
@@ -190,15 +231,20 @@ class TestNoGhostsInReaders:
 
     def test_the_script_editor_cast(self, gone):
         from white_words.scriptwriting.core.manual_edits import load_scene_script
+
         p, _ = gone
         assert [c["id"] for c in load_scene_script(p, self.SCENE)["cast"]] == ["mira"]
 
     def test_the_markdown_export(self, gone):
         from white_words.scriptwriting.tools.story_export import handler
+
         p, vault = gone
         assert json.loads(handler({"project": SLUG}, root_path=str(vault)))["success"]
-        text = next(f.read_text() for f in (p / "scenes").rglob("*.md")
-                    if f"id: {self.SCENE}\n" in f.read_text())
+        text = next(
+            f.read_text()
+            for f in (p / "scenes").rglob("*.md")
+            if f"id: {self.SCENE}\n" in f.read_text()
+        )
         front = text.split("---")[1]
         cast = re.search(r"^characters:\n((?:- .*\n)+)", front, re.M)
         assert cast and "kael" not in cast.group(1) and "mira" in cast.group(1)
@@ -206,11 +252,23 @@ class TestNoGhostsInReaders:
     def test_a_dead_plots_role_is_not_a_plot_of_the_scene(self, proj):
         """story_load's values view and the retrieve plot_roles field."""
         from white_words.scriptwriting.tools.story_retrieve import handler
+
         p, vault = proj
         delete_entity(p, "plot", "the-resistance", "t", True)
-        out = json.loads(handler({"project": SLUG, "entity_type": "scene", "id": self.SCENE,
-                                  "fields": ["plot_roles"]}, root_path=str(vault)))
-        assert "the-resistance" not in [r["plot"] for r in out["entities"][0]["fields"]["plot_roles"]]
+        out = json.loads(
+            handler(
+                {
+                    "project": SLUG,
+                    "entity_type": "scene",
+                    "id": self.SCENE,
+                    "fields": ["plot_roles"],
+                },
+                root_path=str(vault),
+            )
+        )
+        assert "the-resistance" not in [
+            r["plot"] for r in out["entities"][0]["fields"]["plot_roles"]
+        ]
 
 
 class TestPreviewAndPurge:
@@ -224,6 +282,7 @@ class TestPreviewAndPurge:
         p, vault = proj
         delete_entity(p, "character", "kael", "t", True)
         from white_words.scriptwriting.core.trash import purge_deleted
+
         res = purge_deleted(p, {"entity_type": "character", "id": "kael"})
         assert res.get("success"), res
         assert [r for r in _raw(p) if "kael" in r[:2]] == []
@@ -231,10 +290,12 @@ class TestPreviewAndPurge:
 
 # ─── story_load on a database one step behind ───
 
+
 def test_story_load_upgrades_a_database_one_step_behind(proj, one_step):
     """It opens through get_db, not a bare connect, so a behind database is
     brought forward before the readers use it."""
     from white_words.scriptwriting.tools.story_load import handler
+
     p, vault = proj
     _sql(p, f"PRAGMA user_version = {core_db.BASELINE_VERSION}")
     for view in (None, "dramatic_elements", "values"):
@@ -245,6 +306,7 @@ def test_story_load_upgrades_a_database_one_step_behind(proj, one_step):
 
 
 # ─── the rule, enforced ───
+
 
 def test_every_read_of_relations_goes_through_the_view():
     """A raw `FROM relations` read would show a deleted entity again.
@@ -264,18 +326,30 @@ def test_every_read_of_relations_goes_through_the_view():
         if n:
             found[str(f.relative_to(SRC))] = n
     assert found == {"core/db.py": 1, "core/integrity.py": 2, "core/trash.py": 1}, (
-        f"raw reads of the relations table: {found}. Read `live_relations` instead.")
+        f"raw reads of the relations table: {found}. Read `live_relations` instead."
+    )
 
 
 # ─── hiding is the same as removing, for every reader ───
 
-@pytest.mark.parametrize("etype,eid", [
-    ("character", "kael"), ("character", "mira"), ("scene", "central-room-day"),
-    ("scene", "the-core-day"), ("plot", "the-resistance"), ("location", "the-central-room"),
-    ("location", "the-garden"), ("world", "the-i"), ("relationship", "kael-mira"),
-])
+
+@pytest.mark.parametrize(
+    "etype,eid",
+    [
+        ("character", "kael"),
+        ("character", "mira"),
+        ("scene", "central-room-day"),
+        ("scene", "the-core-day"),
+        ("plot", "the-resistance"),
+        ("location", "the-central-room"),
+        ("location", "the-garden"),
+        ("world", "the-i"),
+        ("relationship", "kael-mira"),
+    ],
+)
 def test_hiding_a_deleted_entitys_relations_reads_the_same_as_removing_them(
-        fixture_path, tmp_path, etype, eid):
+    fixture_path, tmp_path, etype, eid
+):
     """The invariant behind the whole change, checked against every reader.
 
     Twin projects, one entity deleted in both. In one the relation rows stay
@@ -301,15 +375,23 @@ def test_hiding_a_deleted_entitys_relations_reads_the_same_as_removing_them(
 
 # ─── the two writers that read relations ───
 
+
 class TestWritersSeeOnlyLiveRelations:
     def test_a_dead_plots_role_does_not_block_marking_the_scene_a_transition(self, proj):
         """`transition` requires no plot roles. The only role here belongs to a
         plot that is in the trash, so the scene has none that count."""
         from white_words.scriptwriting.core.writes import edit_entity
+
         p, _ = proj
         scene = "the-core-day"
-        roles = [r for r in _sql(p, "SELECT from_id FROM relations WHERE to_id=? "
-                                    "AND kind LIKE 'plot\\_%' ESCAPE '\\'", scene)]
+        roles = [
+            r
+            for r in _sql(
+                p,
+                "SELECT from_id FROM relations WHERE to_id=? AND kind LIKE 'plot\\_%' ESCAPE '\\'",
+                scene,
+            )
+        ]
         assert roles, "fixture changed: this scene needs a plot role"
         for (plot_id,) in set(roles):
             delete_entity(p, "plot", plot_id, "t", True)

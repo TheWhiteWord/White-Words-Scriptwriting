@@ -1,4 +1,5 @@
 """story_dashboard_link — return the app URL for a project's dashboard."""
+
 import json
 
 SCHEMA = {
@@ -28,6 +29,7 @@ def handler(args: dict, **kwargs) -> str:
 
     try:
         from white_words.scriptwriting.app.config import load_config
+
         port = load_config().port
     except Exception:
         port = 8731

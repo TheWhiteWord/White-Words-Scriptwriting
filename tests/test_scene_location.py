@@ -7,6 +7,7 @@ The ordering note in validate_scene_location is load-bearing — the check reads
 the DB, so a location created in the same draft is invisible to it. That is
 why the "create it first" test is here as a positive case rather than assumed.
 """
+
 import pytest
 
 from white_words.scriptwriting.core.writes import create_entity
@@ -18,9 +19,12 @@ def _act_and_sequence(project):
 
 
 def _scene(project, **overrides):
-    return create_entity(project, "scene", "s1", {
-        "title": "The room", "sequence_id": "seq-1", "act_id": "act-1",
-        **overrides})
+    return create_entity(
+        project,
+        "scene",
+        "s1",
+        {"title": "The room", "sequence_id": "seq-1", "act_id": "act-1", **overrides},
+    )
 
 
 class TestSceneLocation:
@@ -32,23 +36,26 @@ class TestSceneLocation:
     def test_a_character_slug_is_not_a_location(self, tmp_path):
         """The check is on type, not on existence alone."""
         _act_and_sequence(tmp_path)
-        create_entity(tmp_path, "character", "kael",
-                      {"name": "Kael", "story_role": "Protagonist",
-                       "one_sentence": "T"})
+        create_entity(
+            tmp_path,
+            "character",
+            "kael",
+            {"name": "Kael", "story_role": "Protagonist", "one_sentence": "T"},
+        )
         with pytest.raises(ValueError, match="Location not found"):
             _scene(tmp_path, location="kael")
 
     def test_existing_location_commits(self, tmp_path):
         _act_and_sequence(tmp_path)
-        create_entity(tmp_path, "location", "the-shed",
-                      {"name": "The shed", "one_sentence": "T"})
+        create_entity(tmp_path, "location", "the-shed", {"name": "The shed", "one_sentence": "T"})
         assert _scene(tmp_path, location="the-shed")["success"] is True
 
     def test_create_the_location_first_then_the_scene(self, tmp_path):
         """The order the error message tells the agent to use."""
         _act_and_sequence(tmp_path)
-        create_entity(tmp_path, "location", "the-burnt-shed",
-                      {"name": "The burnt shed", "one_sentence": "T"})
+        create_entity(
+            tmp_path, "location", "the-burnt-shed", {"name": "The burnt shed", "one_sentence": "T"}
+        )
         assert _scene(tmp_path, location="the-burnt-shed")["success"] is True
 
     def test_empty_location_is_a_field_still_to_set(self, tmp_path):
@@ -61,11 +68,11 @@ class TestSceneLocation:
         _act_and_sequence(tmp_path)
         assert _scene(tmp_path)["success"] is True
         from white_words.scriptwriting.core.entity import unfilled_fields
+
         assert "location" in unfilled_fields("scene", {})
 
     def test_free_text_that_happens_to_match_commits(self, tmp_path):
         """Free text stays legal — it is the resolution that is required."""
         _act_and_sequence(tmp_path)
-        create_entity(tmp_path, "location", "the-shed",
-                      {"name": "The shed", "one_sentence": "T"})
+        create_entity(tmp_path, "location", "the-shed", {"name": "The shed", "one_sentence": "T"})
         assert _scene(tmp_path, location="the-shed")["success"] is True

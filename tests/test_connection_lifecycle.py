@@ -1,4 +1,5 @@
 """Test connection lifecycle — each tool call opens + closes its own connection."""
+
 import pytest
 import json
 import tempfile
@@ -19,6 +20,7 @@ def test_import_does_not_leak_connections(fixture_path):
 
         # Patch get_db to track connections
         from white_words.scriptwriting.core import db
+
         original_get_db = db.get_db
         connections = []
 
@@ -27,7 +29,7 @@ def test_import_does_not_leak_connections(fixture_path):
             connections.append(conn)
             return conn
 
-        with patch.object(db, 'get_db', side_effect=tracking_get_db):
+        with patch.object(db, "get_db", side_effect=tracking_get_db):
             result = import_handler({"project": str(project_path), "root_path": Path(tmp)})
 
         data = json.loads(result)
@@ -50,6 +52,7 @@ def test_export_does_not_leak_connections(fixture_path):
         import_handler({"project": str(project_path), "root_path": Path(tmp)})
 
         from white_words.scriptwriting.core import db
+
         original_get_db = db.get_db
         connections = []
 
@@ -58,7 +61,7 @@ def test_export_does_not_leak_connections(fixture_path):
             connections.append(conn)
             return conn
 
-        with patch.object(db, 'get_db', side_effect=tracking_get_db):
+        with patch.object(db, "get_db", side_effect=tracking_get_db):
             result = export_handler({"project": str(project_path), "root_path": Path(tmp)})
 
         data = json.loads(result)
@@ -79,6 +82,7 @@ def test_backup_does_not_leak_connections(fixture_path):
         import_handler({"project": str(project_path), "root_path": Path(tmp)})
 
         from white_words.scriptwriting.core import db
+
         original_get_db = db.get_db
         connections = []
 
@@ -87,7 +91,7 @@ def test_backup_does_not_leak_connections(fixture_path):
             connections.append(conn)
             return conn
 
-        with patch.object(db, 'get_db', side_effect=tracking_get_db):
+        with patch.object(db, "get_db", side_effect=tracking_get_db):
             result = backup_handler({"project": str(project_path), "root_path": Path(tmp)})
 
         data = json.loads(result)

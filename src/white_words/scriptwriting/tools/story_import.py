@@ -1,4 +1,5 @@
 """story_import tool — reads markdown vault → populates story.db."""
+
 import json
 from pathlib import Path
 
@@ -6,19 +7,23 @@ from white_words.scriptwriting.core.entity import plot_role_relations
 
 SCHEMA = {
     "description": "DESTRUCTIVE. Rebuilds the database from the Markdown vault: deletes every row "
-                   "and re-imports, discarding all work done since the last story_export. The "
-                   "database is the source of truth, not Markdown. Only for an intentional re-sync "
-                   "from Markdown files. Never use this to repair a problem — take a "
-                   "story_backup first, and prefer story_draft to change things.",
+    "and re-imports, discarding all work done since the last story_export. The "
+    "database is the source of truth, not Markdown. Only for an intentional re-sync "
+    "from Markdown files. Never use this to repair a problem — take a "
+    "story_backup first, and prefer story_draft to change things.",
     "type": "object",
     "properties": {
         "project": {"type": "string", "description": "Project slug or path"},
-        "dry_run": {"type": "boolean",
-                    "description": "Report what would be deleted and re-imported without "
-                                   "changing anything. Use this first."},
-        "confirm": {"type": "boolean",
-                    "description": "Required to actually import when the database holds work that "
-                                   "exists only in the database. Set after reading the dry_run report."},
+        "dry_run": {
+            "type": "boolean",
+            "description": "Report what would be deleted and re-imported without "
+            "changing anything. Use this first.",
+        },
+        "confirm": {
+            "type": "boolean",
+            "description": "Required to actually import when the database holds work that "
+            "exists only in the database. Set after reading the dry_run report.",
+        },
     },
     "required": ["project"],
 }
@@ -31,6 +36,7 @@ def _backup(project_path: Path) -> str:
     story_backup also uses.
     """
     from white_words.scriptwriting.core.backups import create_backup
+
     return create_backup(project_path, automatic=True)
 
 
@@ -68,8 +74,17 @@ def _diff(project_path: Path) -> dict:
         return found
 
     markdown_ids = set()
-    for folder in ("characters", "locations", "worlds", "plots", "scenes",
-                   "scene_beats", "sequences", "acts", "relationships"):
+    for folder in (
+        "characters",
+        "locations",
+        "worlds",
+        "plots",
+        "scenes",
+        "scene_beats",
+        "sequences",
+        "acts",
+        "relationships",
+    ):
         markdown_ids |= _ids_in(project_path / folder)
 
     # Values live in one root file, not a folder, so they would otherwise be
@@ -82,9 +97,9 @@ def _diff(project_path: Path) -> dict:
                 markdown_ids.add(str(fm["id"]))
 
     at_risk = sorted(
-        entity_id for entity_id, entity_type in rows
-        if entity_type != "project"
-        and entity_id not in markdown_ids
+        entity_id
+        for entity_id, entity_type in rows
+        if entity_type != "project" and entity_id not in markdown_ids
     )
     return {"entities_in_db": len(rows), "would_be_destroyed": at_risk}
 
@@ -102,8 +117,13 @@ def handler(args, **kwargs) -> str:
         return json.dumps({"error": str(e)})
 
     from white_words.scriptwriting.core.db import (
-        get_db, create_schema, has_schema, get_project_memory, transaction,
-        empty_memory, validate_memory,
+        get_db,
+        create_schema,
+        has_schema,
+        get_project_memory,
+        transaction,
+        empty_memory,
+        validate_memory,
     )
 
     db_file = project_path / ".story" / "story.db"
@@ -140,16 +160,18 @@ def handler(args, **kwargs) -> str:
         report = _diff(project_path)
         if report["would_be_destroyed"]:
             backup = _backup(project_path)
-            return json.dumps({
-                "success": False,
-                "error": f"Refusing to import: {len(report['would_be_destroyed'])} entities exist "
-                         f"only in the database and would be destroyed.",
-                "would_be_destroyed": report["would_be_destroyed"],
-                "backup_created": backup,
-                "action_required": "A backup was saved. Run story_export to keep these entities in "
-                                   "Markdown, then re-run with confirm=true to import anyway.",
-                "hint": "Run with dry_run=true first to see this report before doing anything.",
-            })
+            return json.dumps(
+                {
+                    "success": False,
+                    "error": f"Refusing to import: {len(report['would_be_destroyed'])} entities exist "
+                    f"only in the database and would be destroyed.",
+                    "would_be_destroyed": report["would_be_destroyed"],
+                    "backup_created": backup,
+                    "action_required": "A backup was saved. Run story_export to keep these entities in "
+                    "Markdown, then re-run with confirm=true to import anyway.",
+                    "hint": "Run with dry_run=true first to see this report before doing anything.",
+                }
+            )
         # Nothing would be lost — a clean re-sync. Allow it, but still back up.
 
     existing_memory = get_project_memory(project_path) if db_file.exists() else None
@@ -157,6 +179,7 @@ def handler(args, **kwargs) -> str:
     imported_memory = None
     if memory_path.exists():
         import frontmatter
+
         try:
             memory_fm = dict(frontmatter.load(memory_path).metadata)
             imported_memory = validate_memory(memory_fm)
@@ -180,7 +203,9 @@ def handler(args, **kwargs) -> str:
                     "UPDATE entities SET extra=? WHERE id=?",
                     (json.dumps(extra, ensure_ascii=False), project_exists[0]),
                 )
-            return json.dumps({"success": True, "message": f"Imported memory for {project_path.name}"})
+            return json.dumps(
+                {"success": True, "message": f"Imported memory for {project_path.name}"}
+            )
 
         # Last line of defence: the wipe below is irreversible from here.
         backup_path = _backup(project_path)
@@ -189,27 +214,39 @@ def handler(args, **kwargs) -> str:
             _clear_all(conn)
             _import_all(conn, project_path)
             if imported_memory is not None:
-                row = conn.execute("SELECT id, extra FROM entities WHERE type='project' LIMIT 1").fetchone()
+                row = conn.execute(
+                    "SELECT id, extra FROM entities WHERE type='project' LIMIT 1"
+                ).fetchone()
                 if row:
                     extra = json.loads(row[1]) if row[1] else {}
                     extra["memory"] = imported_memory
-                    conn.execute("UPDATE entities SET extra=? WHERE id=?", (json.dumps(extra, ensure_ascii=False), row[0]))
+                    conn.execute(
+                        "UPDATE entities SET extra=? WHERE id=?",
+                        (json.dumps(extra, ensure_ascii=False), row[0]),
+                    )
             elif existing_memory is not None:
-                row = conn.execute("SELECT id, extra FROM entities WHERE type='project' LIMIT 1").fetchone()
+                row = conn.execute(
+                    "SELECT id, extra FROM entities WHERE type='project' LIMIT 1"
+                ).fetchone()
                 if row:
                     extra = json.loads(row[1]) if row[1] else {}
                     extra["memory"] = existing_memory
-                    conn.execute("UPDATE entities SET extra=? WHERE id=?", (json.dumps(extra, ensure_ascii=False), row[0]))
+                    conn.execute(
+                        "UPDATE entities SET extra=? WHERE id=?",
+                        (json.dumps(extra, ensure_ascii=False), row[0]),
+                    )
     except Exception as e:
         return json.dumps({"error": str(e)})
     finally:
         conn.close()
 
-    return json.dumps({
-        "success": True,
-        "message": f"Imported {project_path.name}",
-        "backup_created": backup_path,
-    })
+    return json.dumps(
+        {
+            "success": True,
+            "message": f"Imported {project_path.name}",
+            "backup_created": backup_path,
+        }
+    )
 
 
 def _clear_all(conn) -> None:
@@ -251,6 +288,7 @@ def _import_project(conn, project_path: Path) -> None:
     body = post.content
 
     from white_words.scriptwriting.core.db import empty_memory
+
     extra = {"memory": empty_memory()}
     skip = {"name", "logline", "memory"}
     for k, v in fm.items():
@@ -259,7 +297,13 @@ def _import_project(conn, project_path: Path) -> None:
 
     conn.execute(
         "INSERT INTO entities (id, type, name, one_sentence, extra) VALUES (?, ?, ?, ?, ?)",
-        (project_path.name, "project", fm.get("name", ""), fm.get("logline", ""), json.dumps(extra)),
+        (
+            project_path.name,
+            "project",
+            fm.get("name", ""),
+            fm.get("logline", ""),
+            json.dumps(extra),
+        ),
     )
 
     headings = list_sections(body)
@@ -284,6 +328,7 @@ def _iter_value_blocks(text: str):
     half block.
     """
     import yaml
+
     lines = text.split("\n")
     i, n = 0, len(lines)
     while i < n:
@@ -316,13 +361,15 @@ def _import_values(conn, project_path: Path) -> None:
     if not text.strip():
         return
     from white_words.scriptwriting.core.writes import validate_value
+
     for fm, body in _iter_value_blocks(text):
         entity_id = str(fm.get("id") or "").strip()
         name = str(fm.get("name") or "").strip()
         if not entity_id or not name:
             raise ValueError(
                 f"A value block in {values_file.name} is missing an id or name "
-                f"(got id={entity_id!r}, name={name!r}). Every value needs both.")
+                f"(got id={entity_id!r}, name={name!r}). Every value needs both."
+            )
         # Same checks the write path runs, so a hand-edited values.md is
         # refused exactly as story_draft would refuse it. validate_value opens
         # its own read connection, so it sees the values already inserted in
@@ -359,13 +406,15 @@ def _import_folder(conn, project_path: Path, folder_name: str, entity_type: str)
         # opening its own connection would not see the scenes already imported.
         if entity_type == "scene":
             from white_words.scriptwriting.core.entity import validate_scene_plot_roles
+
             validate_scene_plot_roles(project_path, fm.get("plot_roles", []), conn=conn)
         fm = _insert_entity(conn, entity_type, entity_id, fm, body, locations=locations)
         _insert_relations(conn, entity_type, entity_id, fm)
 
 
-def _insert_entity(conn, entity_type: str, slug: str, fm: dict, body: str,
-                   locations: dict | None = None) -> dict:
+def _insert_entity(
+    conn, entity_type: str, slug: str, fm: dict, body: str, locations: dict | None = None
+) -> dict:
     """Insert entity row + sections + relations. Returns the frontmatter used.
 
     A scene's Content heading line can contribute fields, so the caller needs
@@ -377,9 +426,17 @@ def _insert_entity(conn, entity_type: str, slug: str, fm: dict, body: str,
     columns = _columns_for(entity_type, slug, fm)
     conn.execute(
         "INSERT INTO entities (id, type, name, one_sentence, order_key, status, parent_id, location_id, extra) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (columns["id"], columns["type"], columns["name"], columns["one_sentence"],
-         columns["order_key"], columns["status"], columns["parent_id"],
-         columns["location_id"], json.dumps(columns["extra"])),
+        (
+            columns["id"],
+            columns["type"],
+            columns["name"],
+            columns["one_sentence"],
+            columns["order_key"],
+            columns["status"],
+            columns["parent_id"],
+            columns["location_id"],
+            json.dumps(columns["extra"]),
+        ),
     )
     _insert_sections(conn, columns["id"], body, entity_type)
     return fm
@@ -392,9 +449,10 @@ def _location_slugs_by_name(conn) -> dict:
     where the frontmatter wants a slug. Keyed upper-case with collapsed
     whitespace, the way two writers case a heading differently.
     """
-    return {" ".join(name.upper().split()): entity_id
-            for entity_id, name in conn.execute(
-                "SELECT id, name FROM entities WHERE type='location'")}
+    return {
+        " ".join(name.upper().split()): entity_id
+        for entity_id, name in conn.execute("SELECT id, name FROM entities WHERE type='location'")
+    }
 
 
 def _absorb_content_heading(slug: str, fm: dict, body: str, locations: dict) -> tuple[dict, str]:
@@ -433,13 +491,14 @@ def _absorb_content_heading(slug: str, fm: dict, body: str, locations: dict) -> 
                 raise ValueError(
                     f"{slug}: the heading line names location "
                     f"{parsed['location']!r}, which is not a registered location. "
-                    f"Register it, or set 'location' in the note's frontmatter.")
+                    f"Register it, or set 'location' in the note's frontmatter."
+                )
             fm["location"] = resolved
-    if fm.get("forced_heading") and (fm.get("int_ext") or fm.get("place")
-                                     or fm.get("time_of_day")):
+    if fm.get("forced_heading") and (fm.get("int_ext") or fm.get("place") or fm.get("time_of_day")):
         raise ValueError(
             f"{slug}: forced_heading is exclusive with the composed heading — "
-            f"clear int_ext, place and time_of_day, or unset forced_heading")
+            f"clear int_ext, place and time_of_day, or unset forced_heading"
+        )
     return fm, replace_section(body, "Content", rest)
 
 
@@ -460,7 +519,8 @@ def _insert_sections(conn, entity_id: str, body: str, entity_type: str) -> None:
         raise ValueError(
             f"{entity_id}: unrecognised {entity_type} section name(s): "
             f"{', '.join(sorted(unknown))}. The section set is closed — use one "
-            f"of: {', '.join(standard)}.")
+            f"of: {', '.join(standard)}."
+        )
 
     for h in headings:
         text = get_section(body, h)
@@ -483,81 +543,135 @@ def _columns_for(entity_type: str, slug: str, fm: dict) -> dict:
     """Map frontmatter fields to entity columns."""
     if entity_type == "character":
         return {
-            "id": slug, "type": "character",
-            "name": fm.get("name", ""), "one_sentence": fm.get("one_sentence", ""),
-            "order_key": 0, "status": "", "parent_id": None, "location_id": None,
+            "id": slug,
+            "type": "character",
+            "name": fm.get("name", ""),
+            "one_sentence": fm.get("one_sentence", ""),
+            "order_key": 0,
+            "status": "",
+            "parent_id": None,
+            "location_id": None,
             "extra": _extra_for("character", fm),
         }
     elif entity_type == "location":
         return {
-            "id": slug, "type": "location",
-            "name": fm.get("name", ""), "one_sentence": fm.get("one_sentence", ""),
-            "order_key": 0, "status": "", "parent_id": fm.get("world"), "location_id": None,
+            "id": slug,
+            "type": "location",
+            "name": fm.get("name", ""),
+            "one_sentence": fm.get("one_sentence", ""),
+            "order_key": 0,
+            "status": "",
+            "parent_id": fm.get("world"),
+            "location_id": None,
             "extra": _extra_for("location", fm),
         }
     elif entity_type == "world":
         return {
-            "id": slug, "type": "world",
-            "name": fm.get("name", ""), "one_sentence": fm.get("one_sentence", ""),
-            "order_key": 0, "status": "", "parent_id": None, "location_id": None,
+            "id": slug,
+            "type": "world",
+            "name": fm.get("name", ""),
+            "one_sentence": fm.get("one_sentence", ""),
+            "order_key": 0,
+            "status": "",
+            "parent_id": None,
+            "location_id": None,
             "extra": _extra_for("world", fm),
         }
     elif entity_type == "plot":
         return {
-            "id": slug, "type": "plot",
-            "name": fm.get("name", ""), "one_sentence": fm.get("one_sentence", ""),
-            "order_key": 0, "status": fm.get("status", "active"), "parent_id": None, "location_id": None,
+            "id": slug,
+            "type": "plot",
+            "name": fm.get("name", ""),
+            "one_sentence": fm.get("one_sentence", ""),
+            "order_key": 0,
+            "status": fm.get("status", "active"),
+            "parent_id": None,
+            "location_id": None,
             "extra": _extra_for("plot", fm),
         }
     elif entity_type == "scene":
         return {
-            "id": slug, "type": "scene",
-            "name": fm.get("title", ""), "one_sentence": "",
-            "order_key": fm.get("order", 0), "status": fm.get("status", "planned"),
-            "parent_id": fm.get("sequence_id"), "location_id": fm.get("location"),
+            "id": slug,
+            "type": "scene",
+            "name": fm.get("title", ""),
+            "one_sentence": "",
+            "order_key": fm.get("order", 0),
+            "status": fm.get("status", "planned"),
+            "parent_id": fm.get("sequence_id"),
+            "location_id": fm.get("location"),
             "extra": _extra_for("scene", fm),
         }
     elif entity_type == "sequence":
         return {
-            "id": slug, "type": "sequence",
-            "name": fm.get("title", ""), "one_sentence": "",
-            "order_key": fm.get("order", 0), "status": fm.get("status", "planned"),
-            "parent_id": fm.get("act_id"), "location_id": None,
+            "id": slug,
+            "type": "sequence",
+            "name": fm.get("title", ""),
+            "one_sentence": "",
+            "order_key": fm.get("order", 0),
+            "status": fm.get("status", "planned"),
+            "parent_id": fm.get("act_id"),
+            "location_id": None,
             "extra": _extra_for("sequence", fm),
         }
     elif entity_type == "act":
         return {
-            "id": slug, "type": "act",
-            "name": fm.get("title", ""), "one_sentence": "",
-            "order_key": fm.get("order", 0), "status": fm.get("status", "planned"),
-            "parent_id": None, "location_id": None,
+            "id": slug,
+            "type": "act",
+            "name": fm.get("title", ""),
+            "one_sentence": "",
+            "order_key": fm.get("order", 0),
+            "status": fm.get("status", "planned"),
+            "parent_id": None,
+            "location_id": None,
             "extra": _extra_for("act", fm),
         }
     elif entity_type == "scene_beats":
         return {
-            "id": slug, "type": "scene_beats",
-            "name": "", "one_sentence": "",
-            "order_key": 0, "status": "",
-            "parent_id": fm.get("scene"), "location_id": None,
+            "id": slug,
+            "type": "scene_beats",
+            "name": "",
+            "one_sentence": "",
+            "order_key": 0,
+            "status": "",
+            "parent_id": fm.get("scene"),
+            "location_id": None,
             "extra": _extra_for("scene_beats", fm),
         }
     elif entity_type == "relationship":
         return {
-            "id": slug, "type": "relationship",
-            "name": fm.get("name", ""), "one_sentence": "",
-            "order_key": 0, "status": fm.get("status", ""),
-            "parent_id": None, "location_id": None,
+            "id": slug,
+            "type": "relationship",
+            "name": fm.get("name", ""),
+            "one_sentence": "",
+            "order_key": 0,
+            "status": fm.get("status", ""),
+            "parent_id": None,
+            "location_id": None,
             "extra": _extra_for("relationship", fm),
         }
     elif entity_type == "value":
         return {
-            "id": slug, "type": "value",
-            "name": fm.get("name", ""), "one_sentence": "",
-            "order_key": 0, "status": "", "parent_id": None, "location_id": None,
+            "id": slug,
+            "type": "value",
+            "name": fm.get("name", ""),
+            "one_sentence": "",
+            "order_key": 0,
+            "status": "",
+            "parent_id": None,
+            "location_id": None,
             "extra": _extra_for("value", fm),
         }
-    return {"id": slug, "type": entity_type, "name": "", "one_sentence": "",
-            "order_key": 0, "status": "", "parent_id": None, "location_id": None, "extra": {}}
+    return {
+        "id": slug,
+        "type": entity_type,
+        "name": "",
+        "one_sentence": "",
+        "order_key": 0,
+        "status": "",
+        "parent_id": None,
+        "location_id": None,
+        "extra": {},
+    }
 
 
 def _extra_for(entity_type: str, fm: dict) -> dict:
@@ -578,12 +692,14 @@ def _extra_for(entity_type: str, fm: dict) -> dict:
     # Only the value checks, NOT the structural ones. `value_problems` is the
     # split, and it lives beside the checks so the two kinds cannot drift.
     from white_words.scriptwriting.core.entity import value_problems
+
     problems = value_problems(entity_type, fm)
     if problems:
         raise ValueError(
             f"Invalid {entity_type} frontmatter in the note: "
             f"{'; '.join(problems)}. story_describe lists the valid fields "
-            f"for this type.")
+            f"for this type."
+        )
 
     # Fields that go to columns or relations (not extra)
     skip = {
@@ -592,8 +708,16 @@ def _extra_for(entity_type: str, fm: dict) -> dict:
         "world": {"name", "one_sentence", "id", "variant_of"},
         "plot": {"name", "one_sentence", "status", "id"},
         # `plot_roles` is relation-stored, so it must not land in extra.
-        "scene": {"title", "order", "status", "sequence_id", "location", "id", "characters",
-                  "plot_roles"},
+        "scene": {
+            "title",
+            "order",
+            "status",
+            "sequence_id",
+            "location",
+            "id",
+            "characters",
+            "plot_roles",
+        },
         "scene_beats": {"scene", "id"},
         "sequence": {"title", "order", "status", "act_id", "id"},
         "act": {"title", "order", "status", "id"},
@@ -607,7 +731,8 @@ def _extra_for(entity_type: str, fm: dict) -> dict:
         raise ValueError(
             f"Unrecognised {entity_type} field(s) in frontmatter: "
             f"{', '.join(sorted(unknown))}. story_describe lists the valid "
-            f"fields for this type.")
+            f"fields for this type."
+        )
 
     extra = {}
     for k, v in fm.items():
@@ -620,7 +745,8 @@ def _extra_for(entity_type: str, fm: dict) -> dict:
             raise ValueError(
                 f"Unrecognised {entity_type} field(s) in frontmatter: {k}. "
                 f"It is read-only (computed) — set it on the scene as "
-                f"plot_roles, or on the relationship that derives it.")
+                f"plot_roles, or on the relationship that derives it."
+            )
         if k not in s and v not in (None, "", [], {}):
             extra[k] = v
     # The one cross-field rule a scene has. The importer is a write path like
@@ -628,8 +754,8 @@ def _extra_for(entity_type: str, fm: dict) -> dict:
     # note could import a contradiction the write tools would have refused.
     if entity_type == "scene":
         from white_words.scriptwriting.core.entity import validate_scene_dramatic_role
-        validate_scene_dramatic_role(extra.get("dramatic_role", ""),
-                                     fm.get("plot_roles", []))
+
+        validate_scene_dramatic_role(extra.get("dramatic_role", ""), fm.get("plot_roles", []))
     return extra
 
 
@@ -651,7 +777,7 @@ def _insert_relations(conn, entity_type: str, slug: str, fm: dict) -> None:
         # (from_id=plot), which is the direction every reader expects.
         for row in plot_role_relations(slug, fm.get("plot_roles")):
             conn.execute(
-                "INSERT OR IGNORE INTO relations (from_id, to_id, kind, note, \"order\") "
+                'INSERT OR IGNORE INTO relations (from_id, to_id, kind, note, "order") '
                 "VALUES (?, ?, ?, ?, ?)",
                 (row["from_id"], row["to_id"], row["kind"], row["note"], row["order"]),
             )
@@ -669,6 +795,3 @@ def _insert_relations(conn, entity_type: str, slug: str, fm: dict) -> None:
                 "INSERT OR IGNORE INTO relations (from_id, to_id, kind) VALUES (?, ?, ?)",
                 (slug, target, "world_variant"),
             )
-
-
-

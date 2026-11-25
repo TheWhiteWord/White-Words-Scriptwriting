@@ -11,6 +11,7 @@ rather than a snapshot. The values are named words, never a/b/c — a single
 letter is a column on the scene, and a turn naming one would read as that
 column instead of a value.
 """
+
 import json
 
 import pytest
@@ -36,10 +37,15 @@ def _value(project, name):
 
 
 def _turn(value, plot):
-    return {"plot": plot, "value": value, "from": "p1", "to": "c1",
-            "effects": [{"character": "kael",
-                         "levels": [{"conflict_level": "inner",
-                                     "effect": "He notices."}]}]}
+    return {
+        "plot": plot,
+        "value": value,
+        "from": "p1",
+        "to": "c1",
+        "effects": [
+            {"character": "kael", "levels": [{"conflict_level": "inner", "effect": "He notices."}]}
+        ],
+    }
 
 
 def _scenes_with_turns(project, seq_id, act_id, plan):
@@ -49,9 +55,12 @@ def _scenes_with_turns(project, seq_id, act_id, plan):
     carries.
     """
     for i, turns in enumerate(plan, 1):
-        create_entity(project, "scene", f"{seq_id}-s{i}",
-                      {"title": f"S{i}", "sequence_id": seq_id,
-                       "act_id": act_id, "value_turns": turns})
+        create_entity(
+            project,
+            "scene",
+            f"{seq_id}-s{i}",
+            {"title": f"S{i}", "sequence_id": seq_id, "act_id": act_id, "value_turns": turns},
+        )
 
 
 def _cast(project):
@@ -60,29 +69,36 @@ def _cast(project):
 
 
 def _plot(project, scope, plot_id):
-    create_entity(project, "plot", plot_id,
-                  {"name": plot_id.title(), "characters": ["kael"],
-                   "plot_scope": scope})
+    create_entity(
+        project,
+        "plot",
+        plot_id,
+        {"name": plot_id.title(), "characters": ["kael"], "plot_scope": scope},
+    )
 
 
 def _retrieve(project, entity_type, entity_id, fields=("value_focus",)):
-    return json.loads(retrieve_handler({
-        "project": str(project), "entity_type": entity_type,
-        "id": [entity_id], "fields": list(fields),
-    }))["entities"][0]["fields"]["value_focus"]
+    return json.loads(
+        retrieve_handler(
+            {
+                "project": str(project),
+                "entity_type": entity_type,
+                "id": [entity_id],
+                "fields": list(fields),
+            }
+        )
+    )["entities"][0]["fields"]["value_focus"]
 
 
 def _names(focus):
-    return ([i["value"] for i in focus["major"]],
-            [i["value"] for i in focus["minor"]])
+    return ([i["value"] for i in focus["major"]], [i["value"] for i in focus["minor"]])
 
 
 def _structure(project, *sequences):
     _cast(project)
     create_entity(project, "act", "act-1", {"title": "Act I"})
-    for seq_id in (sequences or ("seq-1",)):
-        create_entity(project, "sequence", seq_id,
-                      {"title": seq_id, "act_id": "act-1"})
+    for seq_id in sequences or ("seq-1",):
+        create_entity(project, "sequence", seq_id, {"title": seq_id, "act_id": "act-1"})
 
 
 class TestTheCount:
@@ -95,11 +111,15 @@ class TestTheCount:
         _plot(project, "main", "main")
         for v in ("trust", "loyalty", "justice", "freedom"):
             _value(project, v)
-        _scenes_with_turns(project, "seq-1", "act-1",
-                           [[_turn("trust", "main")]] * 4
-                           + [[_turn("loyalty", "main")]] * 3
-                           + [[_turn("justice", "main")]] * 2
-                           + [[_turn("freedom", "main")]] * 1)
+        _scenes_with_turns(
+            project,
+            "seq-1",
+            "act-1",
+            [[_turn("trust", "main")]] * 4
+            + [[_turn("loyalty", "main")]] * 3
+            + [[_turn("justice", "main")]] * 2
+            + [[_turn("freedom", "main")]] * 1,
+        )
         focus = for_plot(project, "main")
         assert _names(focus) == (["trust", "loyalty", "justice"], ["freedom"])
         assert [i["scenes"] for i in focus["major"]] == [4, 3, 2]
@@ -111,12 +131,17 @@ class TestTheCount:
         _plot(project, "main", "main")
         _value(project, "trust")
         _value(project, "loyalty")
-        _scenes_with_turns(project, "seq-1", "act-1",
-                           [[_turn("trust", "main"), _turn("trust", "main")],
-                            [_turn("loyalty", "main")]])
+        _scenes_with_turns(
+            project,
+            "seq-1",
+            "act-1",
+            [[_turn("trust", "main"), _turn("trust", "main")], [_turn("loyalty", "main")]],
+        )
         focus = for_plot(project, "main")
         assert [(i["value"], i["scenes"]) for i in focus["major"]] == [
-            ("loyalty", 1), ("trust", 1)]  # a tie: name breaks it
+            ("loyalty", 1),
+            ("trust", 1),
+        ]  # a tie: name breaks it
 
 
 class TestTheCut:
@@ -129,21 +154,28 @@ class TestTheCut:
         _plot(project, "main", "main")
         for v in ("trust", "loyalty", "justice", "freedom"):
             _value(project, v)
-        _scenes_with_turns(project, "seq-1", "act-1",
-                           [[_turn("trust", "main")]] * 4
-                           + [[_turn("loyalty", "main")]] * 3
-                           + [[_turn("justice", "main")]] * 2
-                           + [[_turn("freedom", "main")]] * 2)
+        _scenes_with_turns(
+            project,
+            "seq-1",
+            "act-1",
+            [[_turn("trust", "main")]] * 4
+            + [[_turn("loyalty", "main")]] * 3
+            + [[_turn("justice", "main")]] * 2
+            + [[_turn("freedom", "main")]] * 2,
+        )
         assert _names(for_plot(project, "main")) == (
-            ["trust", "loyalty", "freedom", "justice"], [])  # justice and freedom tie at 2
+            ["trust", "loyalty", "freedom", "justice"],
+            [],
+        )  # justice and freedom tie at 2
 
     def test_fewer_values_than_the_cut_are_all_major(self, project):
         _structure(project)
         _plot(project, "main", "main")
         _value(project, "trust")
         _value(project, "loyalty")
-        _scenes_with_turns(project, "seq-1", "act-1",
-                           [[_turn("trust", "main")], [_turn("loyalty", "main")]])
+        _scenes_with_turns(
+            project, "seq-1", "act-1", [[_turn("trust", "main")], [_turn("loyalty", "main")]]
+        )
         assert _names(for_plot(project, "main")) == (["loyalty", "trust"], [])
 
 
@@ -158,13 +190,14 @@ class TestTheScopes:
         _plot(project, "sub", "sub")
         _value(project, "trust")
         _value(project, "loyalty")
-        _scenes_with_turns(project, "seq-1", "act-1",
-                           [[_turn("trust", "main")],
-                            [_turn("trust", "sub")],
-                            [_turn("loyalty", "sub")]])
+        _scenes_with_turns(
+            project,
+            "seq-1",
+            "act-1",
+            [[_turn("trust", "main")], [_turn("trust", "sub")], [_turn("loyalty", "sub")]],
+        )
         focus = for_sequence(project, "seq-1")
-        assert [(i["value"], i["scenes"]) for i in focus["major"]] == [
-            ("trust", 2), ("loyalty", 1)]
+        assert [(i["value"], i["scenes"]) for i in focus["major"]] == [("trust", 2), ("loyalty", 1)]
 
     def test_act_counts_all_its_sequences(self, project):
         _structure(project, "seq-1", "seq-2")
@@ -182,9 +215,12 @@ class TestTheScopes:
         _plot(project, "main", "main")
         _plot(project, "sub", "sub")
         _value(project, "trust")
-        _scenes_with_turns(project, "seq-1", "act-1",
-                           [[_turn("trust", "main")]] * 2
-                           + [[_turn("trust", "sub")]] * 3)
+        _scenes_with_turns(
+            project,
+            "seq-1",
+            "act-1",
+            [[_turn("trust", "main")]] * 2 + [[_turn("trust", "sub")]] * 3,
+        )
         assert for_plot(project, "main")["major"][0]["scenes"] == 2
         assert for_plot(project, "sub")["major"][0]["scenes"] == 3
 
@@ -201,11 +237,15 @@ class TestTheStory:
             _value(project, v)
         # Main: trust×3, loyalty×2, justice×1 → major [trust,loyalty,justice].
         # Sub: courage×2 → major [courage].
-        _scenes_with_turns(project, "seq-1", "act-1",
-                           [[_turn("trust", "main")]] * 3
-                           + [[_turn("loyalty", "main")]] * 2
-                           + [[_turn("justice", "main")]]
-                           + [[_turn("courage", "sub")]] * 2)
+        _scenes_with_turns(
+            project,
+            "seq-1",
+            "act-1",
+            [[_turn("trust", "main")]] * 3
+            + [[_turn("loyalty", "main")]] * 2
+            + [[_turn("justice", "main")]]
+            + [[_turn("courage", "sub")]] * 2,
+        )
         focus = for_project(project)
         assert _names(focus) == (["trust", "loyalty", "justice"], ["courage"])
         assert focus["minor"][0]["scenes"] == 2
@@ -218,19 +258,24 @@ class TestTheStory:
             _value(project, v)
         # trust is major in both plots; loyalty is major in neither — in
         # main it is below the cut, in sub it ties trust for the cut.
-        _scenes_with_turns(project, "seq-1", "act-1",
-                           [[_turn("trust", "main")]] * 3
-                           + [[_turn("loyalty", "main")]]
-                           + [[_turn("trust", "sub")]] * 2
-                           + [[_turn("loyalty", "sub")]] * 2)
+        _scenes_with_turns(
+            project,
+            "seq-1",
+            "act-1",
+            [[_turn("trust", "main")]] * 3
+            + [[_turn("loyalty", "main")]]
+            + [[_turn("trust", "sub")]] * 2
+            + [[_turn("loyalty", "sub")]] * 2,
+        )
         assert _names(for_project(project)) == (["trust", "loyalty"], [])
 
 
 class TestEmpty:
     def test_no_turns_anywhere_is_empty(self, project):
         _structure(project)
-        create_entity(project, "scene", "s1", {"title": "S1", "sequence_id": "seq-1",
-                                                "act_id": "act-1"})
+        create_entity(
+            project, "scene", "s1", {"title": "S1", "sequence_id": "seq-1", "act_id": "act-1"}
+        )
         assert for_plot(project, "nope") == {"major": [], "minor": []}
         assert for_sequence(project, "seq-1") == {"major": [], "minor": []}
         assert for_act(project, "act-1") == {"major": [], "minor": []}
@@ -245,13 +290,15 @@ class TestRetrieveReadBack:
         _plot(project, "main", "main")
         _value(project, "trust")
         _value(project, "loyalty")
-        _scenes_with_turns(project, "seq-1", "act-1",
-                           [[_turn("trust", "main")]] * 3
-                           + [[_turn("loyalty", "main")]])
+        _scenes_with_turns(
+            project, "seq-1", "act-1", [[_turn("trust", "main")]] * 3 + [[_turn("loyalty", "main")]]
+        )
         assert _names(_retrieve(project, "plot", "main")) == (["trust", "loyalty"], [])
         assert _names(_retrieve(project, "sequence", "seq-1")) == (["trust", "loyalty"], [])
         assert _names(_retrieve(project, "act", "act-1")) == (["trust", "loyalty"], [])
         assert _names(_retrieve(project, "project", "stc")) == (["trust", "loyalty"], [])
         # fields=['all'] carries it too, in schema position.
         assert _names(_retrieve(project, "plot", "main", fields=("all",))) == (
-            ["trust", "loyalty"], [])
+            ["trust", "loyalty"],
+            [],
+        )

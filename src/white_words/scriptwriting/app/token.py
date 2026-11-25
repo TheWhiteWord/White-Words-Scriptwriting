@@ -1,4 +1,5 @@
 """Bearer token management for the MCP endpoint."""
+
 from __future__ import annotations
 
 import secrets

@@ -1,4 +1,5 @@
 """ChatBackend protocol (harness-agnostic)."""
+
 from __future__ import annotations
 
 from typing import Any, AsyncIterator, Protocol, runtime_checkable

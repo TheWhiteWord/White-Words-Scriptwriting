@@ -14,6 +14,7 @@ cast, status). They change often and are small; this is the *text*. Not
 touched by the Markdown import either, which rebuilds sections wholesale after
 taking a full backup of its own.
 """
+
 from . import clock
 from pathlib import Path
 
@@ -23,8 +24,9 @@ from pathlib import Path
 REVISIONS_KEPT = 50
 
 
-def snapshot_replaced_body(conn, entity_id: str, heading: str, new_body: str,
-                           summary: str = "") -> bool:
+def snapshot_replaced_body(
+    conn, entity_id: str, heading: str, new_body: str, summary: str = ""
+) -> bool:
     """Keep the current body of a section before it is overwritten with new_body.
 
     Call it inside the write's transaction, before the UPDATE. Returns whether a
@@ -33,20 +35,21 @@ def snapshot_replaced_body(conn, entity_id: str, heading: str, new_body: str,
     body is empty (nothing to lose).
     """
     row = conn.execute(
-        "SELECT body FROM sections WHERE entity_id=? AND heading=?",
-        (entity_id, heading)).fetchone()
+        "SELECT body FROM sections WHERE entity_id=? AND heading=?", (entity_id, heading)
+    ).fetchone()
     if row is None or not row[0] or row[0] == new_body:
         return False
     conn.execute(
         "INSERT INTO revisions (entity_id, heading, body, replaced_at, summary) "
         "VALUES (?, ?, ?, ?, ?)",
-        (entity_id, heading, row[0],
-         clock.now_iso(), summary or ""))
+        (entity_id, heading, row[0], clock.now_iso(), summary or ""),
+    )
     conn.execute(
         "DELETE FROM revisions WHERE entity_id=? AND heading=? AND id NOT IN ("
         " SELECT id FROM revisions WHERE entity_id=? AND heading=? "
         " ORDER BY id DESC LIMIT ?)",
-        (entity_id, heading, entity_id, heading, REVISIONS_KEPT))
+        (entity_id, heading, entity_id, heading, REVISIONS_KEPT),
+    )
     return True
 
 
@@ -58,8 +61,7 @@ def list_revisions(project_path: Path, entity_id: str, heading: str | None = Non
     """
     from .db import get_db
 
-    sql = ("SELECT id, heading, replaced_at, summary, body FROM revisions "
-           "WHERE entity_id=?")
+    sql = "SELECT id, heading, replaced_at, summary, body FROM revisions WHERE entity_id=?"
     params = [entity_id]
     if heading:
         sql += " AND heading=?"
@@ -69,11 +71,17 @@ def list_revisions(project_path: Path, entity_id: str, heading: str | None = Non
         rows = conn.execute(sql + " ORDER BY id DESC", params).fetchall()
     finally:
         conn.close()
-    return [{
-        "id": r[0], "heading": r[1], "replaced_at": r[2], "summary": r[3],
-        "chars": len(r[4]),
-        "preview": next((ln.strip() for ln in r[4].splitlines() if ln.strip()), "")[:100],
-    } for r in rows]
+    return [
+        {
+            "id": r[0],
+            "heading": r[1],
+            "replaced_at": r[2],
+            "summary": r[3],
+            "chars": len(r[4]),
+            "preview": next((ln.strip() for ln in r[4].splitlines() if ln.strip()), "")[:100],
+        }
+        for r in rows
+    ]
 
 
 def get_revision(project_path: Path, entity_id: str, revision_id: int) -> dict | None:
@@ -84,7 +92,9 @@ def get_revision(project_path: Path, entity_id: str, revision_id: int) -> dict |
     try:
         r = conn.execute(
             "SELECT id, heading, body, replaced_at, summary FROM revisions "
-            "WHERE id=? AND entity_id=?", (revision_id, entity_id)).fetchone()
+            "WHERE id=? AND entity_id=?",
+            (revision_id, entity_id),
+        ).fetchone()
     finally:
         conn.close()
     if r is None:
@@ -92,8 +102,9 @@ def get_revision(project_path: Path, entity_id: str, revision_id: int) -> dict |
     return {"id": r[0], "heading": r[1], "body": r[2], "replaced_at": r[3], "summary": r[4]}
 
 
-def restore_revision(project_path: Path, entity_id: str, revision_id: int,
-                     summary: str | None = None) -> dict:
+def restore_revision(
+    project_path: Path, entity_id: str, revision_id: int, summary: str | None = None
+) -> dict:
     """Put a revision's text back as the section's current text.
 
     An ordinary edit, so the text it replaces becomes a revision in turn.
@@ -110,8 +121,8 @@ def restore_revision(project_path: Path, entity_id: str, revision_id: int,
     conn = get_db(project_path)
     try:
         ent = conn.execute(
-            "SELECT type, status FROM entities WHERE id=? AND is_deleted=0",
-            (entity_id,)).fetchone()
+            "SELECT type, status FROM entities WHERE id=? AND is_deleted=0", (entity_id,)
+        ).fetchone()
     finally:
         conn.close()
     if ent is None:
@@ -119,9 +130,19 @@ def restore_revision(project_path: Path, entity_id: str, revision_id: int,
     if ent[1] == "locked":
         raise ValueError(f"{entity_id} is locked. Unlock it before restoring a revision.")
 
-    result = edit_entity(project_path, ent[0], entity_id, {rev["heading"]: rev["body"]},
-                         summary or f"Restored the version of {rev['replaced_at']}")
+    result = edit_entity(
+        project_path,
+        ent[0],
+        entity_id,
+        {rev["heading"]: rev["body"]},
+        summary or f"Restored the version of {rev['replaced_at']}",
+    )
     if rev["heading"] not in result.get("applied", {}).get("sections", []):
         raise ValueError(f"{entity_id} has no section '{rev['heading']}' any more.")
-    return {"success": True, "entity_id": entity_id, "heading": rev["heading"],
-            "restored_from": rev["replaced_at"], "revision_id": rev["id"]}
+    return {
+        "success": True,
+        "entity_id": entity_id,
+        "heading": rev["heading"],
+        "restored_from": rev["replaced_at"],
+        "revision_id": rev["id"],
+    }

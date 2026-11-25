@@ -8,6 +8,7 @@ The fix coerces on write *and* on read. Both halves are needed: a write-side
 fix alone leaves every database written before it still broken, while looking
 complete.
 """
+
 import json
 import shutil
 import sqlite3
@@ -40,7 +41,7 @@ class TestNumericFieldsCoerceOnRead:
         from white_words.scriptwriting.core.db import get_dashboard_data
 
         path, _ = project_with_string_act_count
-        data = get_dashboard_data(path)          # used to raise
+        data = get_dashboard_data(path)  # used to raise
         act_count = data["story_data"]["project"]["act_count"]
         assert isinstance(act_count, int)
         assert act_count >= 3
@@ -54,25 +55,36 @@ class TestNumericFieldsCoerceOnRead:
 
 class TestNumericFieldsCoerceOnWrite:
     def test_a_string_written_to_a_number_field_stores_a_number(
-            self, project_with_string_act_count):
+        self, project_with_string_act_count
+    ):
         from white_words.scriptwriting.core.writes import edit_entity
 
         path, project_id = project_with_string_act_count
         edit_entity(path, "project", project_id, {"act_count": "5"}, "set five")
-        raw = json.loads(sqlite3.connect(
-            str(path / ".story" / "story.db")
-        ).execute("SELECT extra FROM entities WHERE type='project'").fetchone()[0])
+        raw = json.loads(
+            sqlite3.connect(str(path / ".story" / "story.db"))
+            .execute("SELECT extra FROM entities WHERE type='project'")
+            .fetchone()[0]
+        )
         assert raw["act_count"] == 5
         assert isinstance(raw["act_count"], int)
 
 
 class TestCoerceNumber:
-    @pytest.mark.parametrize("value,expected", [
-        ("3", 3), ("-2", -2), ("2.5", 2.5),   # the string cases that broke the dashboard
-        (7, 7), (2.5, 2.5),                   # already correct — untouched
-        (None, 3), ("", 3), ("  ", 3),        # "not set" → the default
-        ("abc", "abc"),                       # not a number: returned, not silently defaulted
-    ])
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            ("3", 3),
+            ("-2", -2),
+            ("2.5", 2.5),  # the string cases that broke the dashboard
+            (7, 7),
+            (2.5, 2.5),  # already correct — untouched
+            (None, 3),
+            ("", 3),
+            ("  ", 3),  # "not set" → the default
+            ("abc", "abc"),  # not a number: returned, not silently defaulted
+        ],
+    )
     def test_edges(self, value, expected):
         from white_words.scriptwriting.core.db import _coerce_number
 

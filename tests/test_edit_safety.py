@@ -10,6 +10,7 @@ Three defects pinned here:
    so the refusal must not claim otherwise.
 3. A preview did not exist for any operation.
 """
+
 import json
 import shutil
 import sqlite3
@@ -55,8 +56,7 @@ def _gone(project, entity_id):
     """
     conn = sqlite3.connect(str(project / ".story" / "story.db"))
     try:
-        row = conn.execute(
-            "SELECT is_deleted FROM entities WHERE id=?", (entity_id,)).fetchone()
+        row = conn.execute("SELECT is_deleted FROM entities WHERE id=?", (entity_id,)).fetchone()
         return row is not None and row[0] == 1
     finally:
         conn.close()
@@ -65,8 +65,10 @@ def _gone(project, entity_id):
 def _extra(project, entity_id):
     conn = sqlite3.connect(str(project / ".story" / "story.db"))
     try:
-        return json.loads(conn.execute(
-            "SELECT extra FROM entities WHERE id=?", (entity_id,)).fetchone()[0] or "{}")
+        return json.loads(
+            conn.execute("SELECT extra FROM entities WHERE id=?", (entity_id,)).fetchone()[0]
+            or "{}"
+        )
     finally:
         conn.close()
 
@@ -76,8 +78,7 @@ class TestColumnMap:
 
     def test_project_logline_lands_in_the_column(self, proj):
         p, _ = proj
-        assert _edit(p, "project", "ignored",
-                     {"logline": "A NEW logline."})["success"] is True
+        assert _edit(p, "project", "ignored", {"logline": "A NEW logline."})["success"] is True
         assert _col(p, "save-the-children", "one_sentence") == "A NEW logline."
 
     def test_project_logline_does_not_leak_into_extra(self, proj):
@@ -88,15 +89,24 @@ class TestColumnMap:
     def test_retrieve_sees_the_new_logline(self, proj):
         p, vault = proj
         _edit(p, "project", "ignored", {"logline": "A NEW logline."})
-        r = json.loads(retrieve_handler(
-            {"project": "save-the-children", "entity_type": "project", "id": ["stc"],
-             "fields": ["logline"]}, root_path=str(vault)))
+        r = json.loads(
+            retrieve_handler(
+                {
+                    "project": "save-the-children",
+                    "entity_type": "project",
+                    "id": ["stc"],
+                    "fields": ["logline"],
+                },
+                root_path=str(vault),
+            )
+        )
         assert r["entities"][0]["fields"]["logline"] == "A NEW logline."
 
     def test_no_local_map_remains(self):
         """The duplication is the bug; a test that only checks behaviour can
         regress to a second copy without noticing."""
         from white_words.scriptwriting.core import writes
+
         assert not hasattr(writes, "ENTITY_COLUMN_MAP")
 
     def test_other_types_still_write_their_columns(self, proj):
@@ -128,11 +138,9 @@ class TestPreviews:
 
     def test_preview_covers_sections_and_extra(self, proj):
         p, _ = proj
-        r = current_values(p, "character", "kael",
-                           {"Background": "New voice."})
+        r = current_values(p, "character", "kael", {"Background": "New voice."})
         stored = {c["field"]: c["stored_in"] for c in r["changes"]}
         assert stored["Background"] == "section"
-
 
     def test_delete_preview_deletes_nothing(self, proj):
         """The refusal is the preview, so this is the same call as the
@@ -190,7 +198,8 @@ class TestDeleteGuard:
         try:
             dangling = conn.execute(
                 "SELECT COUNT(*) FROM live_relations WHERE from_id='central-room-day' "
-                "OR to_id='central-room-day'").fetchone()[0]
+                "OR to_id='central-room-day'"
+            ).fetchone()[0]
         finally:
             conn.close()
         assert dangling == 0

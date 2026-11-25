@@ -13,6 +13,7 @@ def test_precedence_cli_over_env_and_file(tmp_path, monkeypatch):
     monkeypatch.setenv("WHITE_WORDS_PORT", "8888")
     # point config file location by monkeypatching _config_file
     import white_words.scriptwriting.app.config as c
+
     monkeypatch.setattr(c, "_config_file", lambda: cfgfile)
     cfg = load_config(cli_root="/from/cli", cli_port=7777)
     assert str(cfg.root) == "/from/cli"
@@ -24,6 +25,7 @@ def test_env_over_file(tmp_path, monkeypatch):
     cfgfile.write_text('[white_words]\nroot = "/from/file"\n')
     monkeypatch.setenv("WHITE_WORDS_ROOT", "/from/env")
     import white_words.scriptwriting.app.config as c
+
     monkeypatch.setattr(c, "_config_file", lambda: cfgfile)
     cfg = load_config()
     assert str(cfg.root) == "/from/env"

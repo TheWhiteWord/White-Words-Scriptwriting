@@ -9,6 +9,7 @@ in Phase 1 (adding `scene_beats` refs to the write path) is not regressed
 by a later refactor. Uses `plot.characters` (ref: character) as the
 concrete case since `scene_beats` schema does not exist yet.
 """
+
 import json
 
 import pytest
@@ -36,9 +37,11 @@ def test_check_references_id_only_lookup(fixture_path):
 
 # ── T2.1: unfilled reporting for the scene's computed scene_beats field ──
 
+
 def _make_project(tmp_path):
     """Create a minimal project with acts/sequences/scenes folders."""
     from pathlib import Path
+
     project_path = Path(tmp_path) / "test-project"
     project_path.mkdir()
     (project_path / "characters").mkdir(parents=True)
@@ -56,15 +59,24 @@ def _make_project(tmp_path):
 def _make_scene(project_path, scene_id, status, dramatic_role):
     """Create a scene with the given status and dramatic_role."""
     writes.create_entity(project_path, "act", f"act-{scene_id}", {"title": f"Act {scene_id}"})
-    writes.create_entity(project_path, "sequence", f"seq-{scene_id}",
-                        {"title": f"Seq {scene_id}", "act_id": f"act-{scene_id}"})
-    writes.create_entity(project_path, "scene", scene_id, {
-        "title": f"Scene {scene_id}",
-        "status": status,
-        "dramatic_role": dramatic_role,
-        "sequence_id": f"seq-{scene_id}",
-        "act_id": f"act-{scene_id}",
-    })
+    writes.create_entity(
+        project_path,
+        "sequence",
+        f"seq-{scene_id}",
+        {"title": f"Seq {scene_id}", "act_id": f"act-{scene_id}"},
+    )
+    writes.create_entity(
+        project_path,
+        "scene",
+        scene_id,
+        {
+            "title": f"Scene {scene_id}",
+            "status": status,
+            "dramatic_role": dramatic_role,
+            "sequence_id": f"seq-{scene_id}",
+            "act_id": f"act-{scene_id}",
+        },
+    )
 
 
 def test_unfilled_reports_scene_beats_for_drafted_plot_role_scene(tmp_path):
@@ -111,10 +123,15 @@ def test_unfilled_not_reported_when_scene_beats_exists(tmp_path):
     """A scene with a scene_beats record is not reported."""
     p = _make_project(tmp_path)
     _make_scene(p, "has-beats", "drafted", "plot_role")
-    writes.create_entity(p, "scene_beats", "has-beats-beats", {
-        "scene": "has-beats",
-        "beats": [{"action": {"surface": "test"}, "reaction": {"surface": "test"}}],
-    })
+    writes.create_entity(
+        p,
+        "scene_beats",
+        "has-beats-beats",
+        {
+            "scene": "has-beats",
+            "beats": [{"action": {"surface": "test"}, "reaction": {"surface": "test"}}],
+        },
+    )
     unfilled = get_unfilled_map(p)
     assert "has-beats" not in unfilled.get("scene_beats", [])
 
@@ -129,46 +146,71 @@ class TestRetrieveSceneBeats:
         """Create a scene + scene_beats with nested beats and true_character."""
         writes.create_entity(p, "character", "t3-alice", {"name": "Alice"})
         writes.create_entity(p, "act", "t3-act", {"title": "Act I"})
-        writes.create_entity(p, "sequence", "t3-seq",
-                            {"title": "Seq 1", "act_id": "t3-act"})
-        writes.create_entity(p, "scene", "t3-scene", {
-            "title": "Scene 1", "sequence_id": "t3-seq", "act_id": "t3-act",
-        })
-        writes.create_entity(p, "scene_beats", "t3-scene-beats", {
-            "scene": "t3-scene",
-            "driver": "t3-alice",
-            "scene_objective": "Alice wants the truth",
-            "turning_point": "Alice learns the secret",
-            "true_character": [
-                {"character": "t3-alice", "dilemma": "Trust vs. safety",
-                 "choice_reveals": "She chooses trust"}
-            ],
-            "beats": [
-                {
-                    "action": {"by": "t3-alice", "surface": "Asks about the door",
-                               "subtext": "She already knows"},
-                    "reaction": {"by": "t3-alice", "surface": "Silence",
-                                 "subtext": "He is hiding something"},
-                    "gap": "She knows he is lying",
-                }
-            ],
-            "changes": [{"entity": "t3-alice", "change": "Now suspicious"}],
-        }, sections={
-            "Notes": "The scene needs more subtext in the middle.",
-        })
+        writes.create_entity(p, "sequence", "t3-seq", {"title": "Seq 1", "act_id": "t3-act"})
+        writes.create_entity(
+            p,
+            "scene",
+            "t3-scene",
+            {
+                "title": "Scene 1",
+                "sequence_id": "t3-seq",
+                "act_id": "t3-act",
+            },
+        )
+        writes.create_entity(
+            p,
+            "scene_beats",
+            "t3-scene-beats",
+            {
+                "scene": "t3-scene",
+                "driver": "t3-alice",
+                "scene_objective": "Alice wants the truth",
+                "turning_point": "Alice learns the secret",
+                "true_character": [
+                    {
+                        "character": "t3-alice",
+                        "dilemma": "Trust vs. safety",
+                        "choice_reveals": "She chooses trust",
+                    }
+                ],
+                "beats": [
+                    {
+                        "action": {
+                            "by": "t3-alice",
+                            "surface": "Asks about the door",
+                            "subtext": "She already knows",
+                        },
+                        "reaction": {
+                            "by": "t3-alice",
+                            "surface": "Silence",
+                            "subtext": "He is hiding something",
+                        },
+                        "gap": "She knows he is lying",
+                    }
+                ],
+                "changes": [{"entity": "t3-alice", "change": "Now suspicious"}],
+            },
+            sections={
+                "Notes": "The scene needs more subtext in the middle.",
+            },
+        )
 
     def test_retrieve_returns_nested_beats_and_true_character(self, fixture_path):
         """The nested shape survives a round trip through story_retrieve."""
         p = fixture_path
         self._make_scene_beats(p)
 
-        result = json.loads(retrieve_handler({
-            "project": str(p),
-            "entity_type": "scene_beats",
-            "id": ["t3-scene-beats"],
-            "fields": ["all"],
-            "sections": ["all"],
-        }))
+        result = json.loads(
+            retrieve_handler(
+                {
+                    "project": str(p),
+                    "entity_type": "scene_beats",
+                    "id": ["t3-scene-beats"],
+                    "fields": ["all"],
+                    "sections": ["all"],
+                }
+            )
+        )
 
         assert result["entities"], f"Entity not found: {result}"
         entity = result["entities"][0]
@@ -217,28 +259,43 @@ class TestSceneComputedFields:
     def _make_scene_with_beats(self, p):
         writes.create_entity(p, "character", "t3-alice", {"name": "Alice"})
         writes.create_entity(p, "act", "t3-act", {"title": "Act I"})
-        writes.create_entity(p, "sequence", "t3-seq",
-                            {"title": "Seq 1", "act_id": "t3-act"})
-        writes.create_entity(p, "scene", "t3-scene", {
-            "title": "Scene 1", "sequence_id": "t3-seq", "act_id": "t3-act",
-        })
-        writes.create_entity(p, "scene_beats", "t3-scene-beats", {
-            "scene": "t3-scene",
-            "turning_point": "The moment of change",
-            "beats": [{"action": {"surface": "test"}, "reaction": {"surface": "test"}}],
-        })
+        writes.create_entity(p, "sequence", "t3-seq", {"title": "Seq 1", "act_id": "t3-act"})
+        writes.create_entity(
+            p,
+            "scene",
+            "t3-scene",
+            {
+                "title": "Scene 1",
+                "sequence_id": "t3-seq",
+                "act_id": "t3-act",
+            },
+        )
+        writes.create_entity(
+            p,
+            "scene_beats",
+            "t3-scene-beats",
+            {
+                "scene": "t3-scene",
+                "turning_point": "The moment of change",
+                "beats": [{"action": {"surface": "test"}, "reaction": {"surface": "test"}}],
+            },
+        )
 
     def test_retrieve_scene_returns_computed_fields(self, fixture_path):
         """story_retrieve on a scene returns turning_point and the scene_beats POINTER."""
         p = fixture_path
         self._make_scene_with_beats(p)
 
-        result = json.loads(retrieve_handler({
-            "project": str(p),
-            "entity_type": "scene",
-            "id": ["t3-scene"],
-            "fields": ["turning_point", "scene_beats"],
-        }))
+        result = json.loads(
+            retrieve_handler(
+                {
+                    "project": str(p),
+                    "entity_type": "scene",
+                    "id": ["t3-scene"],
+                    "fields": ["turning_point", "scene_beats"],
+                }
+            )
+        )
 
         entity = result["entities"][0]
         assert entity["fields"]["turning_point"] == "The moment of change"
@@ -251,18 +308,28 @@ class TestSceneComputedFields:
         """A scene with no record returns an empty pointer, not a record."""
         p = fixture_path
         writes.create_entity(p, "act", "t3-act", {"title": "Act I"})
-        writes.create_entity(p, "sequence", "t3-seq",
-                            {"title": "Seq 1", "act_id": "t3-act"})
-        writes.create_entity(p, "scene", "t3-scene", {
-            "title": "Scene 1", "sequence_id": "t3-seq", "act_id": "t3-act",
-        })
+        writes.create_entity(p, "sequence", "t3-seq", {"title": "Seq 1", "act_id": "t3-act"})
+        writes.create_entity(
+            p,
+            "scene",
+            "t3-scene",
+            {
+                "title": "Scene 1",
+                "sequence_id": "t3-seq",
+                "act_id": "t3-act",
+            },
+        )
 
-        result = json.loads(retrieve_handler({
-            "project": str(p),
-            "entity_type": "scene",
-            "id": ["t3-scene"],
-            "fields": ["scene_beats"],
-        }))
+        result = json.loads(
+            retrieve_handler(
+                {
+                    "project": str(p),
+                    "entity_type": "scene",
+                    "id": ["t3-scene"],
+                    "fields": ["scene_beats"],
+                }
+            )
+        )
 
         assert result["entities"][0]["fields"]["scene_beats"] == ""
 
@@ -271,15 +338,27 @@ class TestSceneComputedFields:
         p = fixture_path
         self._make_scene_with_beats(p)
 
-        scene = json.loads(retrieve_handler({
-            "project": str(p), "entity_type": "scene",
-            "id": ["t3-scene"], "fields": ["scene_beats"],
-        }))["entities"][0]["fields"]["scene_beats"]
+        scene = json.loads(
+            retrieve_handler(
+                {
+                    "project": str(p),
+                    "entity_type": "scene",
+                    "id": ["t3-scene"],
+                    "fields": ["scene_beats"],
+                }
+            )
+        )["entities"][0]["fields"]["scene_beats"]
 
-        record = json.loads(retrieve_handler({
-            "project": str(p), "entity_type": "scene_beats",
-            "id": [scene], "fields": ["all"],
-        }))["entities"][0]
+        record = json.loads(
+            retrieve_handler(
+                {
+                    "project": str(p),
+                    "entity_type": "scene_beats",
+                    "id": [scene],
+                    "fields": ["all"],
+                }
+            )
+        )["entities"][0]
         assert record["id"] == scene
         assert record["fields"]["turning_point"] == "The moment of change"
 
@@ -288,35 +367,50 @@ class TestSceneComputedFields:
         p = fixture_path
         self._make_scene_with_beats(p)
 
-        result = draft_stage(p, [
-            {"op": "edit", "entity_type": "scene", "entity_id": "t3-scene",
-             "data": {"turning_point": "Fake turning point"},
-             "summary": "Try to set turning_point"},
-        ], summary="test")
+        result = draft_stage(
+            p,
+            [
+                {
+                    "op": "edit",
+                    "entity_type": "scene",
+                    "entity_id": "t3-scene",
+                    "data": {"turning_point": "Fake turning point"},
+                    "summary": "Try to set turning_point",
+                },
+            ],
+            summary="test",
+        )
 
         assert result["success"] is True
         assert result["validation"]
-        assert any("turning_point" in v and "read-only" in v
-                    for v in result["validation"])
+        assert any("turning_point" in v and "read-only" in v for v in result["validation"])
 
     def test_draft_refuses_scene_beats_computed_field(self, fixture_path):
         """story_draft with scene_beats in data refuses."""
         p = fixture_path
         self._make_scene_with_beats(p)
 
-        result = draft_stage(p, [
-            {"op": "edit", "entity_type": "scene", "entity_id": "t3-scene",
-             "data": {"scene_beats": {"id": "fake"}},
-             "summary": "Try to set scene_beats"},
-        ], summary="test")
+        result = draft_stage(
+            p,
+            [
+                {
+                    "op": "edit",
+                    "entity_type": "scene",
+                    "entity_id": "t3-scene",
+                    "data": {"scene_beats": {"id": "fake"}},
+                    "summary": "Try to set scene_beats",
+                },
+            ],
+            summary="test",
+        )
 
         assert result["success"] is True
         assert result["validation"]
-        assert any("scene_beats" in v and "read-only" in v
-                    for v in result["validation"])
+        assert any("scene_beats" in v and "read-only" in v for v in result["validation"])
 
 
 # ── T3.3: story_search reaches scene_beats prose ─────────────────────────────
+
 
 class TestBeatShape:
     """Issue 3 + 5 — the beat is action, reaction, gap; `risk` is gone and
@@ -325,30 +419,46 @@ class TestBeatShape:
     def _parents(self, p, slug="shape"):
         writes.create_entity(p, "character", "shape-alice", {"name": "Alice"})
         writes.create_entity(p, "act", "shape-act", {"title": "Act I"})
-        writes.create_entity(p, "sequence", "shape-seq",
-                             {"title": "Seq", "act_id": "shape-act"})
-        writes.create_entity(p, "scene", slug, {
-            "title": "Scene", "sequence_id": "shape-seq", "act_id": "shape-act"})
+        writes.create_entity(p, "sequence", "shape-seq", {"title": "Seq", "act_id": "shape-act"})
+        writes.create_entity(
+            p, "scene", slug, {"title": "Scene", "sequence_id": "shape-seq", "act_id": "shape-act"}
+        )
         return slug
 
     def test_the_beat_has_exactly_action_reaction_and_gap(self, fixture_path):
         p = fixture_path
         slug = self._parents(p)
-        writes.create_entity(p, "scene_beats", f"{slug}-beats", {
-            "scene": slug,
-            "beats": [{"action": {"surface": "Asks"},
-                       "reaction": {"surface": "Silence"},
-                       "gap": "She knows he is lying"}],
-        })
-        fields = json.loads(retrieve_handler({
-            "project": str(p), "entity_type": "scene_beats",
-            "id": [f"{slug}-beats"], "fields": ["all"],
-        }))["entities"][0]["fields"]
+        writes.create_entity(
+            p,
+            "scene_beats",
+            f"{slug}-beats",
+            {
+                "scene": slug,
+                "beats": [
+                    {
+                        "action": {"surface": "Asks"},
+                        "reaction": {"surface": "Silence"},
+                        "gap": "She knows he is lying",
+                    }
+                ],
+            },
+        )
+        fields = json.loads(
+            retrieve_handler(
+                {
+                    "project": str(p),
+                    "entity_type": "scene_beats",
+                    "id": [f"{slug}-beats"],
+                    "fields": ["all"],
+                }
+            )
+        )["entities"][0]["fields"]
         assert set(fields["beats"][0]) == {"action", "reaction", "gap"}
 
     def test_risk_is_not_a_field_any_more(self, fixture_path):
         """The retired field must not be described, and must not be writable."""
         from white_words.scriptwriting.tools.story_describe import handler as describe_handler
+
         schema = json.loads(describe_handler({"entity_type": "scene_beats"}))
         beat = schema["entity_schemas"]["scene_beats"]["beats"]["sub_fields"]
         assert "risk" not in beat
@@ -357,37 +467,57 @@ class TestBeatShape:
     def test_changes_lives_at_the_top_level(self, fixture_path):
         p = fixture_path
         slug = self._parents(p)
-        writes.create_entity(p, "scene_beats", f"{slug}-beats", {
-            "scene": slug,
-            "beats": [{"action": {"surface": "Asks"},
-                       "reaction": {"surface": "Silence"},
-                       "gap": "x"}],
-            "changes": [{"entity": "shape-alice", "change": "Now suspicious"}],
-        })
-        fields = json.loads(retrieve_handler({
-            "project": str(p), "entity_type": "scene_beats",
-            "id": [f"{slug}-beats"], "fields": ["all"],
-        }))["entities"][0]["fields"]
-        assert fields["changes"] == [
-            {"entity": "shape-alice", "change": "Now suspicious"}]
+        writes.create_entity(
+            p,
+            "scene_beats",
+            f"{slug}-beats",
+            {
+                "scene": slug,
+                "beats": [
+                    {"action": {"surface": "Asks"}, "reaction": {"surface": "Silence"}, "gap": "x"}
+                ],
+                "changes": [{"entity": "shape-alice", "change": "Now suspicious"}],
+            },
+        )
+        fields = json.loads(
+            retrieve_handler(
+                {
+                    "project": str(p),
+                    "entity_type": "scene_beats",
+                    "id": [f"{slug}-beats"],
+                    "fields": ["all"],
+                }
+            )
+        )["entities"][0]["fields"]
+        assert fields["changes"] == [{"entity": "shape-alice", "change": "Now suspicious"}]
 
     def test_a_changes_entity_must_resolve(self, fixture_path):
         """`changes[].entity` is checked where the field now lives."""
         p = fixture_path
         slug = self._parents(p)
         with pytest.raises(ValueError, match="changes\\[0\\].entity"):
-            writes.create_entity(p, "scene_beats", f"{slug}-beats", {
-                "scene": slug,
-                "beats": [{"action": {"surface": "Asks"},
-                           "reaction": {"surface": "Silence"},
-                           "gap": "x"}],
-                "changes": [{"entity": "ghost-entity", "change": "x"}],
-            })
+            writes.create_entity(
+                p,
+                "scene_beats",
+                f"{slug}-beats",
+                {
+                    "scene": slug,
+                    "beats": [
+                        {
+                            "action": {"surface": "Asks"},
+                            "reaction": {"surface": "Silence"},
+                            "gap": "x",
+                        }
+                    ],
+                    "changes": [{"entity": "ghost-entity", "change": "x"}],
+                },
+            )
 
     def test_effects_stay_on_the_scene(self, fixture_path):
         """`changes` is the state of any entity; `effects` still ties a value
         shift to a plot protagonist. Neither replaces the other."""
         from white_words.scriptwriting.tools.story_describe import handler as describe_handler
+
         scene = json.loads(describe_handler({"entity_type": "scene"}))
         effects = scene["entity_schemas"]["scene"]["value_turns"]["sub_fields"]["effects"]
         assert "conflict_level" in effects["sub_fields"]["levels"]["sub_fields"]
@@ -401,22 +531,38 @@ class TestSearchSceneBeats:
         p = fixture_path
         writes.create_entity(p, "character", "t3-alice", {"name": "Alice"})
         writes.create_entity(p, "act", "t3-act", {"title": "Act I"})
-        writes.create_entity(p, "sequence", "t3-seq",
-                            {"title": "Seq 1", "act_id": "t3-act"})
-        writes.create_entity(p, "scene", "t3-scene", {
-            "title": "Scene 1", "sequence_id": "t3-seq", "act_id": "t3-act",
-        })
-        writes.create_entity(p, "scene_beats", "t3-scene-beats", {
-            "scene": "t3-scene",
-            "beats": [{"action": {"surface": "test"}, "reaction": {"surface": "test"}}],
-        }, sections={
-            "Notes": "The zorblatt dialogue needs tightening.",
-        })
+        writes.create_entity(p, "sequence", "t3-seq", {"title": "Seq 1", "act_id": "t3-act"})
+        writes.create_entity(
+            p,
+            "scene",
+            "t3-scene",
+            {
+                "title": "Scene 1",
+                "sequence_id": "t3-seq",
+                "act_id": "t3-act",
+            },
+        )
+        writes.create_entity(
+            p,
+            "scene_beats",
+            "t3-scene-beats",
+            {
+                "scene": "t3-scene",
+                "beats": [{"action": {"surface": "test"}, "reaction": {"surface": "test"}}],
+            },
+            sections={
+                "Notes": "The zorblatt dialogue needs tightening.",
+            },
+        )
 
-        result = json.loads(search_handler({
-            "project": str(p),
-            "query": "zorblatt",
-        }))
+        result = json.loads(
+            search_handler(
+                {
+                    "project": str(p),
+                    "query": "zorblatt",
+                }
+            )
+        )
 
         assert result["total"] > 0
         entity_ids = [r["entity_id"] for r in result["results"]]
@@ -438,23 +584,39 @@ class TestBeatObjectShape:
     def _parents(self, p, slug="objshape"):
         writes.create_entity(p, "character", "obj-alice", {"name": "Alice"})
         writes.create_entity(p, "act", "obj-act", {"title": "Act I"})
-        writes.create_entity(p, "sequence", "obj-seq",
-                             {"title": "Seq", "act_id": "obj-act"})
-        writes.create_entity(p, "scene", slug, {
-            "title": "Scene", "sequence_id": "obj-seq", "act_id": "obj-act"})
+        writes.create_entity(p, "sequence", "obj-seq", {"title": "Seq", "act_id": "obj-act"})
+        writes.create_entity(
+            p, "scene", slug, {"title": "Scene", "sequence_id": "obj-seq", "act_id": "obj-act"}
+        )
         return slug
 
     def _op(self, slug):
-        return [{"op": "create", "type": "scene_beats", "id": f"{slug}-beats",
-                 "summary": "beats",
-                 "frontmatter": {
-                     "scene": slug,
-                     "beats": [{
-                         "action": {"by": "obj-alice", "surface": "Asks",
-                                    "subtext": "pressing for the answer"},
-                         "reaction": {"by": "obj-alice", "surface": "Silence",
-                                      "subtext": "withholding it"},
-                         "gap": "Expects the answer; gets none."}]}}]
+        return [
+            {
+                "op": "create",
+                "type": "scene_beats",
+                "id": f"{slug}-beats",
+                "summary": "beats",
+                "frontmatter": {
+                    "scene": slug,
+                    "beats": [
+                        {
+                            "action": {
+                                "by": "obj-alice",
+                                "surface": "Asks",
+                                "subtext": "pressing for the answer",
+                            },
+                            "reaction": {
+                                "by": "obj-alice",
+                                "surface": "Silence",
+                                "subtext": "withholding it",
+                            },
+                            "gap": "Expects the answer; gets none.",
+                        }
+                    ],
+                },
+            }
+        ]
 
     def test_a_well_formed_beat_stages_clean(self, fixture_path):
         """The shape the schema declares must produce no findings."""
@@ -465,8 +627,9 @@ class TestBeatObjectShape:
     def test_the_write_path_accepts_the_same_record(self, fixture_path):
         """The two write paths must agree about the shape the schema declares."""
         slug = self._parents(fixture_path)
-        writes.create_entity(fixture_path, "scene_beats", f"{slug}-beats",
-                             self._op(slug)[0]["frontmatter"])
+        writes.create_entity(
+            fixture_path, "scene_beats", f"{slug}-beats", self._op(slug)[0]["frontmatter"]
+        )
 
     def test_a_wrong_type_inside_a_fixed_key_object_is_still_reported(self, fixture_path):
         """The fix narrows the reading; it must not stop validating the values."""
@@ -474,15 +637,17 @@ class TestBeatObjectShape:
         op = self._op(slug)
         op[0]["frontmatter"]["beats"][0]["action"]["surface"] = 7
         result = draft_stage(fixture_path, op)
-        assert any("action.surface" in v and "int" in v
-                   for v in result["validation"])
+        assert any("action.surface" in v and "int" in v for v in result["validation"])
 
     def test_a_declared_map_is_still_validated_per_value(self, fixture_path):
         """`keyed: True` keeps its own reading: the keys are entities."""
         from white_words.scriptwriting.core.entity import validate_entity
-        warnings = validate_entity("relationship", {
-            "characters": ["obj-alice", "obj-alice"],
-            "perspectives": {"obj-alice": {"strength": "high"}},
-        })
-        assert any("perspectives.obj-alice.strength must be a number" in w
-                   for w in warnings)
+
+        warnings = validate_entity(
+            "relationship",
+            {
+                "characters": ["obj-alice", "obj-alice"],
+                "perspectives": {"obj-alice": {"strength": "high"}},
+            },
+        )
+        assert any("perspectives.obj-alice.strength must be a number" in w for w in warnings)

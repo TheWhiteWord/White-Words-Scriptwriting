@@ -13,6 +13,7 @@ Two defects worth pinning:
 The second point is also why a rejected call must leave nothing behind: a
 half-made entity is worse than no entity, because the next call finds it there.
 """
+
 import json
 import sqlite3
 
@@ -35,14 +36,18 @@ def _project(vault):
 
 
 def _create(vault, entity_type, slug, frontmatter=None, sections=None):
-    return create_entity(_project(vault), entity_type, slug,
-                         frontmatter if frontmatter is not None else {}, sections)
+    return create_entity(
+        _project(vault), entity_type, slug, frontmatter if frontmatter is not None else {}, sections
+    )
 
 
 def _sections(vault, entity_type, entity_id):
-    r = json.loads(retrieve_handler(
-        {"project": "stc", "entity_type": entity_type, "id": [entity_id],
-         "sections": ["all"]}, root_path=str(vault)))
+    r = json.loads(
+        retrieve_handler(
+            {"project": "stc", "entity_type": entity_type, "id": [entity_id], "sections": ["all"]},
+            root_path=str(vault),
+        )
+    )
     return r["entities"][0]["sections"]
 
 
@@ -56,9 +61,13 @@ def _exists(vault, entity_id):
 
 class TestSectionsAtCreate:
     def test_prose_is_written(self, vault):
-        _create(vault, "character", "nova",
-                {"name": "Nova", "one_sentence": "X"},
-                {"Identity": "A courier who talks too much.", "Notes": "Loves rain."})
+        _create(
+            vault,
+            "character",
+            "nova",
+            {"name": "Nova", "one_sentence": "X"},
+            {"Identity": "A courier who talks too much.", "Notes": "Loves rain."},
+        )
         got = _sections(vault, "character", "nova")
         assert got["Identity"] == "A courier who talks too much."
         assert got["Notes"] == "Loves rain."
@@ -77,8 +86,13 @@ class TestSectionsAtCreate:
         _create(vault, "act", "act-1", {"title": "Act One"})
         _create(vault, "sequence", "seq-1", {"title": "Seq One", "act_id": "act-1"})
         with pytest.raises(ValueError, match="closed"):
-            _create(vault, "scene", "s1", {"title": "S1", "sequence_id": "seq-1"},
-                    {"Cold Open": "Went straight to it."})
+            _create(
+                vault,
+                "scene",
+                "s1",
+                {"title": "S1", "sequence_id": "seq-1"},
+                {"Cold Open": "Went straight to it."},
+            )
         assert not _exists(vault, "s1"), "a rejected call must not leave a half-made entity"
 
     def test_no_sections_argument_still_works(self, vault):
@@ -107,8 +121,7 @@ class TestUnknownType:
 
     def test_valid_types_still_pass(self, vault):
         for entity_type in ("character", "world", "location", "plot", "relationship"):
-            assert _create(vault, entity_type, f"e-{entity_type}",
-                           {"name": "N"})["success"] is True
+            assert _create(vault, entity_type, f"e-{entity_type}", {"name": "N"})["success"] is True
 
 
 class TestUnknownField:
@@ -121,9 +134,12 @@ class TestUnknownField:
 
     def test_nested_goals_is_rejected(self, vault):
         with pytest.raises(ValueError, match="flat"):
-            _create(vault, "character", "nested",
-                    {"name": "N", "one_sentence": "X",
-                     "goals": {"short": "Stay.", "long": "Survive."}})
+            _create(
+                vault,
+                "character",
+                "nested",
+                {"name": "N", "one_sentence": "X", "goals": {"short": "Stay.", "long": "Survive."}},
+            )
         assert not _exists(vault, "nested"), "a rejected call must not leave a half-made entity"
 
     def test_error_names_the_offending_key_and_the_flat_ones(self, vault):
@@ -134,14 +150,25 @@ class TestUnknownField:
         assert "goals_short" in message and "goals_long" in message
 
     def test_flat_goals_are_stored(self, vault):
-        _create(vault, "character", "flat",
-                {"name": "F", "one_sentence": "X",
-                 "goals_short": "Stay.", "goals_long": "Survive."})
+        _create(
+            vault,
+            "character",
+            "flat",
+            {"name": "F", "one_sentence": "X", "goals_short": "Stay.", "goals_long": "Survive."},
+        )
         sections = _sections(vault, "character", "flat")
         assert sections  # the entity exists and reads back
-        r = json.loads(retrieve_handler(
-            {"project": "stc", "entity_type": "character", "id": ["flat"],
-             "fields": ["goals_short", "goals_long"]}, root_path=str(vault)))
+        r = json.loads(
+            retrieve_handler(
+                {
+                    "project": "stc",
+                    "entity_type": "character",
+                    "id": ["flat"],
+                    "fields": ["goals_short", "goals_long"],
+                },
+                root_path=str(vault),
+            )
+        )
         fields = r["entities"][0]["fields"]
         assert fields["goals_short"] == "Stay."
         assert fields["goals_long"] == "Survive."
@@ -150,6 +177,7 @@ class TestUnknownField:
         """The description is what an agent reads before writing. It once said
         "nested goals.short also accepted", which nothing implemented."""
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+
         for field in ("goals_short", "goals_long"):
             assert "nested" not in ENTITY_SCHEMAS["character"][field]["description"]
 
@@ -157,6 +185,7 @@ class TestUnknownField:
         """A guard that rejects real fields is worse than no guard."""
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
         from white_words.scriptwriting.core.entity import ENTITY_COLUMN_MAP, relation_fields
+
         rejected = []
         for entity_type, schema in ENTITY_SCHEMAS.items():
             if entity_type == "project":
@@ -210,7 +239,7 @@ class TestIdUniqueness:
         barrier = threading.Barrier(2)
 
         def create():
-            barrier.wait()          # both past the start line together
+            barrier.wait()  # both past the start line together
             try:
                 _create(vault, "character", "kael", {"name": "K"})
                 results.append("ok")

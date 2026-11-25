@@ -1,4 +1,5 @@
 """Launcher CLI for the standalone app."""
+
 from __future__ import annotations
 
 import argparse
@@ -22,10 +23,12 @@ def is_healthy(port: int) -> bool:
 
 def main(argv=None):
     import sys
+
     if argv is None:
         argv = sys.argv[1:]
     if argv and argv[0] == "hermes":
         from white_words.scriptwriting.adapters.hermes.setup import setup, status
+
         sub = argv[1:2]
         rest = argv[2:]
         if sub and sub[0] == "status":
@@ -37,6 +40,7 @@ def main(argv=None):
         a = parser.parse_args(argv[1:])
         config = load_config(cli_root=a.root)
         from white_words.scriptwriting.core.writes import create_project
+
         dest = config.root / "projects" / "demo"
         if dest.exists():
             print(f"Demo already exists at {dest}")
@@ -50,15 +54,23 @@ def main(argv=None):
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--no-open", action="store_true")
     parser.add_argument("--reload", action="store_true")
-    parser.add_argument("--install-desktop", action="store_true",
-                        help="Add a launcher entry (and icon) to the desktop")
-    parser.add_argument("--uninstall-desktop", action="store_true",
-                        help="Remove the launcher entry and icon")
-    parser.add_argument("--no-idle-exit", action="store_true",
-                        help="Keep the server running after the last browser tab closes")
+    parser.add_argument(
+        "--install-desktop",
+        action="store_true",
+        help="Add a launcher entry (and icon) to the desktop",
+    )
+    parser.add_argument(
+        "--uninstall-desktop", action="store_true", help="Remove the launcher entry and icon"
+    )
+    parser.add_argument(
+        "--no-idle-exit",
+        action="store_true",
+        help="Keep the server running after the last browser tab closes",
+    )
     args = parser.parse_args(argv)
 
     from white_words.scriptwriting.app import desktop
+
     if args.install_desktop:
         return desktop.install()
     if args.uninstall_desktop:
@@ -96,14 +108,17 @@ def main(argv=None):
     url = f"http://127.0.0.1:{config.port}"
     print(f"Serving at {url}")
     if config.open_browser:
+
         def opener():
             for _ in range(50):
                 if is_healthy(config.port):
                     webbrowser.open(url)
                     return
                 time.sleep(0.1)
+
         threading.Thread(target=opener, daemon=True).start()
     import uvicorn
+
     uvicorn.run(app, host="127.0.0.1", port=config.port, reload=args.reload)
     return 0
 

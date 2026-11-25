@@ -7,6 +7,7 @@ back, which stopped nobody. Now the agent's `story_admin(action="purge")` only
 stages a draft; the person approves it on the same card as any other change, and
 approving runs `core.trash.purge_deleted`. Until then nothing is removed.
 """
+
 import json
 import sqlite3
 
@@ -36,8 +37,7 @@ def _exists(project, entity_id):
 
 def _age(project, days_ago=90):
     conn = sqlite3.connect(str(project / ".story" / "story.db"))
-    conn.execute("UPDATE entities SET deleted_at=? WHERE is_deleted=1",
-                 (f"2020-01-01T00:00:00",))
+    conn.execute("UPDATE entities SET deleted_at=? WHERE is_deleted=1", (f"2020-01-01T00:00:00",))
     conn.commit()
     conn.close()
 
@@ -52,6 +52,7 @@ def trashed(fixture_path):
 
 # ─── the agent can only propose ───
 
+
 class TestTheAgentOnlyProposes:
     def test_nothing_is_removed(self, trashed):
         out = _admin(trashed, action="purge", target=TARGET)
@@ -63,8 +64,9 @@ class TestTheAgentOnlyProposes:
         assert out["purged"] is False and _exists(trashed, "kael")
 
     def test_the_old_typed_string_is_not_a_way_around_it(self, trashed):
-        out = _admin(trashed, action="purge", target=TARGET,
-                     purge_confirm="DELETE save-the-children")
+        out = _admin(
+            trashed, action="purge", target=TARGET, purge_confirm="DELETE save-the-children"
+        )
         assert out["purged"] is False and _exists(trashed, "kael")
 
     def test_nothing_is_handed_over_to_echo_back(self, trashed):
@@ -89,16 +91,25 @@ class TestTheAgentOnlyProposes:
 
 # ─── what the person sees ───
 
+
 class TestTheApprovalCard:
     def _card(self, project, **args):
         out = _admin(project, action="purge", **args)
-        return drafts.describe_ops(project, [{"op": "purge", "summary": "s", **{
-            k: v for k, v in args.items() if k in ("target", "older_than_days")}}])[0], out
+        return drafts.describe_ops(
+            project,
+            [
+                {
+                    "op": "purge",
+                    "summary": "s",
+                    **{k: v for k, v in args.items() if k in ("target", "older_than_days")},
+                }
+            ],
+        )[0], out
 
     def test_it_is_the_existing_delete_card_marked_irreversible(self, trashed):
         card, _ = self._card(trashed, target=TARGET)
-        assert card["kind"] == "delete"          # the frontend's card for removals
-        assert card["reversible"] is False        # which then says "This cannot be undone."
+        assert card["kind"] == "delete"  # the frontend's card for removals
+        assert card["reversible"] is False  # which then says "This cannot be undone."
 
     def test_it_names_what_will_go(self, trashed):
         card, _ = self._card(trashed, target=TARGET)
@@ -120,8 +131,9 @@ class TestTheApprovalCard:
         """Kael is alive: purge only takes what is already in the trash."""
         out = _admin(fixture_path, action="purge", target=TARGET)
         assert out["dry_run"]["status"] != "clean"
-        card = drafts.describe_ops(fixture_path, [{"op": "purge", "summary": "s",
-                                                   "target": TARGET}])[0]
+        card = drafts.describe_ops(
+            fixture_path, [{"op": "purge", "summary": "s", "target": TARGET}]
+        )[0]
         assert "refused" in card["label"]
 
     def test_the_card_and_the_purge_agree_on_the_set(self, fixture_path):
@@ -140,6 +152,7 @@ class TestTheApprovalCard:
 
 # ─── approving ───
 
+
 class TestApproving:
     def test_approval_removes_it_for_good_and_takes_a_backup(self, trashed):
         out = _admin(trashed, action="purge", target=TARGET)
@@ -151,9 +164,12 @@ class TestApproving:
 
     def test_it_is_still_restorable_until_then(self, trashed):
         _admin(trashed, action="purge", target=TARGET)
-        res = json.loads(admin({"action": "restore", "project": str(trashed),
-                                "target": TARGET, "summary": "t"},
-                               root_path=str(trashed.parent)))
+        res = json.loads(
+            admin(
+                {"action": "restore", "project": str(trashed), "target": TARGET, "summary": "t"},
+                root_path=str(trashed.parent),
+            )
+        )
         assert res["success"] is True
 
     def test_rejecting_removes_nothing(self, trashed):
@@ -162,13 +178,13 @@ class TestApproving:
         assert _exists(trashed, "kael")
 
     def test_the_age_floor_holds_after_approval(self, fixture_path):
-        delete_entity(fixture_path, "character", "kael", "t", True)   # just now
+        delete_entity(fixture_path, "character", "kael", "t", True)  # just now
         out = _admin(fixture_path, action="purge")
         drafts.commit(fixture_path, out["draft_id"])
         assert _exists(fixture_path, "kael")
 
     def test_approving_a_refused_purge_removes_nothing_and_says_so(self, fixture_path):
-        out = _admin(fixture_path, action="purge", target=TARGET)   # Kael is alive
+        out = _admin(fixture_path, action="purge", target=TARGET)  # Kael is alive
         report = drafts.commit(fixture_path, out["draft_id"])
         assert _exists(fixture_path, "kael")
         assert report["success"] is False and report["committed"] == []
@@ -183,10 +199,16 @@ class TestApproving:
 
 # ─── a purge is never a side effect ───
 
+
 class TestAPurgeStandsAlone:
     PURGE = {"op": "purge", "summary": "remove old items"}
-    EDIT = {"op": "edit", "entity_type": "character", "entity_id": "mira",
-            "data": {"status": "written"}, "summary": "e"}
+    EDIT = {
+        "op": "edit",
+        "entity_type": "character",
+        "entity_id": "mira",
+        "data": {"status": "written"},
+        "summary": "e",
+    }
 
     def test_it_cannot_be_bundled_with_another_change(self, trashed):
         with pytest.raises(drafts.DraftError, match="on its own"):
@@ -200,35 +222,63 @@ class TestAPurgeStandsAlone:
     def test_alone_it_is_fine(self):
         assert drafts.validate_ops([self.PURGE])
 
-    @pytest.mark.parametrize("bad", [
-        {"target": {"entity_type": "character"}}, {"target": "kael"},
-        {"older_than_days": -1}, {"older_than_days": "30"}, {"older_than_days": True},
-    ])
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            {"target": {"entity_type": "character"}},
+            {"target": "kael"},
+            {"older_than_days": -1},
+            {"older_than_days": "30"},
+            {"older_than_days": True},
+        ],
+    )
     def test_a_malformed_purge_is_refused_at_stage(self, bad):
         with pytest.raises(drafts.DraftError):
             drafts.validate_ops([{**self.PURGE, **bad}])
 
     def test_the_draft_tool_can_stage_it_too_and_it_still_waits(self, trashed):
-        out = json.loads(draft_tool({"action": "stage", "project": str(trashed),
-                                     "ops": [{**self.PURGE, "target": TARGET}]},
-                                    root_path=str(trashed.parent)))
+        out = json.loads(
+            draft_tool(
+                {
+                    "action": "stage",
+                    "project": str(trashed),
+                    "ops": [{**self.PURGE, "target": TARGET}],
+                },
+                root_path=str(trashed.parent),
+            )
+        )
         assert out.get("success"), out
         assert _exists(trashed, "kael")
 
     def test_restaging_a_purge_draft_does_not_break_the_diff(self, trashed):
         first = _admin(trashed, action="purge", target=TARGET)
-        again = drafts.stage(trashed, [{**self.PURGE, "target": TARGET}],
-                             draft_id=first["draft_id"])
+        again = drafts.stage(
+            trashed, [{**self.PURGE, "target": TARGET}], draft_id=first["draft_id"]
+        )
         assert again["restaged"] is True
 
 
 # ─── the reversible deletes ask for nothing ───
 
+
 def test_deleting_an_entity_through_a_draft_is_still_one_step_for_the_person(fixture_path):
     """The person's approval of the draft IS the confirmation; nothing typed."""
-    out = drafts.stage(fixture_path, [{"op": "delete", "entity_type": "character",
-                                       "entity_id": "kael", "summary": "d"}])
+    out = drafts.stage(
+        fixture_path,
+        [{"op": "delete", "entity_type": "character", "entity_id": "kael", "summary": "d"}],
+    )
     assert drafts.commit(fixture_path, out["draft_id"])["committed"]
-    assert json.loads(admin({"action": "restore", "project": str(fixture_path),
-                             "target": TARGET, "summary": "t"},
-                            root_path=str(fixture_path.parent)))["success"] is True
+    assert (
+        json.loads(
+            admin(
+                {
+                    "action": "restore",
+                    "project": str(fixture_path),
+                    "target": TARGET,
+                    "summary": "t",
+                },
+                root_path=str(fixture_path.parent),
+            )
+        )["success"]
+        is True
+    )

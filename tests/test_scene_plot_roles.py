@@ -17,6 +17,7 @@ The rows are hidden while the plot is dead, by the `live_relations` view that
 every reader uses, and they come back with it on `restore` (TestDelete). They
 used to be deleted by a sweep in `delete_entity`, which made restore lossy.
 """
+
 import json
 import shutil
 import sqlite3
@@ -28,7 +29,12 @@ REPO = Path(__file__).resolve().parents[1]
 
 
 from white_words.scriptwriting.core.constants import PLOT_ROLES, UNIQUE_PLOT_ROLES
-from white_words.scriptwriting.core.writes import create_entity, create_project, delete_entity, edit_entity
+from white_words.scriptwriting.core.writes import (
+    create_entity,
+    create_project,
+    delete_entity,
+    edit_entity,
+)
 
 
 @pytest.fixture
@@ -38,8 +44,7 @@ def vault(tmp_path):
     (v / "projects").mkdir(parents=True)
     assert create_project("stc", {"name": "STC", "logline": "L"}, v)["success"] is True
     project = v / "projects" / "stc"
-    for slug, name in (("the-resistance", "The Resistance"),
-                       ("the-betrayal", "The Betrayal")):
+    for slug, name in (("the-resistance", "The Resistance"), ("the-betrayal", "The Betrayal")):
         create_entity(project, "plot", slug, {"name": name, "one_sentence": "x"})
     for i in range(1, 4):
         create_entity(project, "scene", f"s{i}", {"title": f"S{i}", "order": i})
@@ -48,10 +53,10 @@ def vault(tmp_path):
 
 def rows(project, kind=None):
     conn = sqlite3.connect(str(Path(project) / ".story" / "story.db"))
-    sql = "SELECT from_id, to_id, kind, note, \"order\" FROM relations"
+    sql = 'SELECT from_id, to_id, kind, note, "order" FROM relations'
     if kind:
         sql += f" WHERE kind='{kind}'"
-    out = conn.execute(sql + " ORDER BY \"order\"").fetchall()
+    out = conn.execute(sql + ' ORDER BY "order"').fetchall()
     conn.close()
     return out
 
@@ -64,55 +69,76 @@ class TestWriting:
     def test_create_writes_one_row_per_entry(self, vault):
         """`from_id` is the PLOT and `to_id` the scene: the direction every
         existing reader keys off, unchanged. Only the writer moved."""
-        create_entity(vault, "scene", "s4", {
-            "title": "S4", "order": 4,
-            "plot_roles": [{"plot": "the-resistance", "role": "setup",
-                            "description": "the door was never locked"}]})
-        assert ("the-resistance", "s4", "plot_setup",
-                "the door was never locked", 1) in rows(vault, "plot_setup")
+        create_entity(
+            vault,
+            "scene",
+            "s4",
+            {
+                "title": "S4",
+                "order": 4,
+                "plot_roles": [
+                    {
+                        "plot": "the-resistance",
+                        "role": "setup",
+                        "description": "the door was never locked",
+                    }
+                ],
+            },
+        )
+        assert ("the-resistance", "s4", "plot_setup", "the door was never locked", 1) in rows(
+            vault, "plot_setup"
+        )
 
     def test_edit_writes_one_row_per_entry(self, vault):
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "crisis",
-                                   "description": "d"}])
+        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "crisis", "description": "d"}])
         assert ("the-resistance", "s1", "plot_crisis", "d", 1) in rows(vault, "plot_crisis")
 
     def test_every_role_reaches_its_own_kind(self, vault):
         """All six, not the two the old dict→row unwrap happened to handle."""
         for i, role in enumerate(PLOT_ROLES, 4):
             create_entity(vault, "scene", f"s{i}", {"title": f"S{i}", "order": i})
-            write_roles(vault, f"s{i}",
-                        [{"plot": "the-resistance", "role": role,
-                          "description": role}])
-        assert sorted(r[2] for r in rows(vault) if r[2].startswith("plot_")) == \
-            sorted(f"plot_{r}" for r in PLOT_ROLES)
+            write_roles(
+                vault, f"s{i}", [{"plot": "the-resistance", "role": role, "description": role}]
+            )
+        assert sorted(r[2] for r in rows(vault) if r[2].startswith("plot_")) == sorted(
+            f"plot_{r}" for r in PLOT_ROLES
+        )
 
     def test_one_scene_two_plots_different_roles(self, vault):
         """The shape that is the reason `plot_roles` is a list of entries
         naming their own plot: a scene can be a climax for one plot and a
         complication for another."""
-        write_roles(vault, "s1", [
-            {"plot": "the-resistance", "role": "climax", "description": "a"},
-            {"plot": "the-betrayal", "role": "complication", "description": "b"},
-        ])
+        write_roles(
+            vault,
+            "s1",
+            [
+                {"plot": "the-resistance", "role": "climax", "description": "a"},
+                {"plot": "the-betrayal", "role": "complication", "description": "b"},
+            ],
+        )
         got = {(r[0], r[2]) for r in rows(vault) if r[2].startswith("plot_")}
-        assert got == {("the-resistance", "plot_climax"),
-                       ("the-betrayal", "plot_complication")}
+        assert got == {("the-resistance", "plot_climax"), ("the-betrayal", "plot_complication")}
 
     def test_editing_replaces_the_rows_wholesale(self, vault):
         """Delete-then-reinsert, not merge: a removed entry leaves no row."""
-        write_roles(vault, "s1", [
-            {"plot": "the-resistance", "role": "setup", "description": "keep"},
-            {"plot": "the-betrayal", "role": "climax", "description": "drop"},
-        ])
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
-                                   "description": "keep"}])
+        write_roles(
+            vault,
+            "s1",
+            [
+                {"plot": "the-resistance", "role": "setup", "description": "keep"},
+                {"plot": "the-betrayal", "role": "climax", "description": "drop"},
+            ],
+        )
+        write_roles(
+            vault, "s1", [{"plot": "the-resistance", "role": "setup", "description": "keep"}]
+        )
         got = rows(vault)
         assert [r for r in got if r[1] == "s1"] == [
-            ("the-resistance", "s1", "plot_setup", "keep", 1)]
+            ("the-resistance", "s1", "plot_setup", "keep", 1)
+        ]
 
     def test_clearing_plot_roles_removes_every_row(self, vault):
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
-                                   "description": "d"}])
+        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup", "description": "d"}])
         write_roles(vault, "s1", [])
         assert [r for r in rows(vault) if r[2].startswith("plot_")] == []
 
@@ -121,61 +147,86 @@ class TestThePlotSideIsReadOnly:
     def test_a_plot_edit_cannot_write_a_role(self, vault):
         """The field is computed, so the edit is reported and dropped — not
         written. Before this, the same call wrote a row."""
-        res = edit_entity(vault, "plot", "the-resistance",
-                          {"setups": [{"scene_id": "s1", "description": "d"}]},
-                          "set up")
+        res = edit_entity(
+            vault,
+            "plot",
+            "the-resistance",
+            {"setups": [{"scene_id": "s1", "description": "d"}]},
+            "set up",
+        )
         assert "setups" in res["skipped_read_only"]
         assert [r for r in rows(vault) if r[2].startswith("plot_")] == []
 
     def test_a_plot_create_cannot_write_a_role(self, vault):
-        create_entity(vault, "plot", "the-betrayal-2",
-                      {"name": "B2", "one_sentence": "x",
-                       "crisis": [{"scene_id": "s1", "description": "d"}]})
+        create_entity(
+            vault,
+            "plot",
+            "the-betrayal-2",
+            {"name": "B2", "one_sentence": "x", "crisis": [{"scene_id": "s1", "description": "d"}]},
+        )
         assert [r for r in rows(vault) if r[2].startswith("plot_")] == []
 
     def test_the_plot_reads_back_what_the_scene_wrote(self, vault):
         """Same rows, other direction — so nothing downstream had to change."""
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
-                                   "description": "the door"}])
+        write_roles(
+            vault, "s1", [{"plot": "the-resistance", "role": "setup", "description": "the door"}]
+        )
         from white_words.scriptwriting.core.db import get_dashboard_data
-        plot = next(p for p in get_dashboard_data(vault)["story_data"]["plots"]
-                    if p["id"] == "the-resistance")
+
+        plot = next(
+            p
+            for p in get_dashboard_data(vault)["story_data"]["plots"]
+            if p["id"] == "the-resistance"
+        )
         assert plot["setups"] == [{"scene_id": "s1", "description": "the door"}]
 
 
 class TestValidation:
     def test_a_missing_plot_is_refused_by_name(self, vault):
         with pytest.raises(ValueError, match="Plot not found: no-such-plot"):
-            write_roles(vault, "s1", [{"plot": "no-such-plot", "role": "setup",
-                                       "description": "d"}])
+            write_roles(
+                vault, "s1", [{"plot": "no-such-plot", "role": "setup", "description": "d"}]
+            )
 
     def test_a_missing_plot_on_create_is_refused(self, vault):
         with pytest.raises(ValueError, match="Plot not found: no-such-plot"):
-            create_entity(vault, "scene", "s9", {
-                "title": "S9", "order": 9,
-                "plot_roles": [{"plot": "no-such-plot", "role": "setup",
-                                "description": "d"}]})
+            create_entity(
+                vault,
+                "scene",
+                "s9",
+                {
+                    "title": "S9",
+                    "order": 9,
+                    "plot_roles": [{"plot": "no-such-plot", "role": "setup", "description": "d"}],
+                },
+            )
 
     def test_a_role_outside_the_six_is_refused(self, vault):
         """`transition` and `non-event` are scene beats, not plot roles."""
         with pytest.raises(ValueError, match="Invalid plot role: transition"):
-            write_roles(vault, "s1", [{"plot": "the-resistance",
-                                       "role": "transition", "description": "d"}])
+            write_roles(
+                vault, "s1", [{"plot": "the-resistance", "role": "transition", "description": "d"}]
+            )
 
     def test_the_message_lists_the_valid_roles(self, vault):
         with pytest.raises(ValueError) as e:
-            write_roles(vault, "s1", [{"plot": "the-resistance", "role": "nope",
-                                       "description": "d"}])
+            write_roles(
+                vault, "s1", [{"plot": "the-resistance", "role": "nope", "description": "d"}]
+            )
         for role in PLOT_ROLES:
             assert role in str(e.value)
 
     def test_one_plot_two_roles_writes_two_rows(self, vault):
         """The shape the manual form used to refuse: a scene can be a setup and
         a complication in the SAME plot, and both rows land."""
-        write_roles(vault, "s1", [
-            {"plot": "the-resistance", "role": "setup", "description": "a"},
-            {"plot": "the-resistance", "role": "complication", "description": "b"},
-        ])
+        write_roles(
+            vault,
+            "s1",
+            [
+                {"plot": "the-resistance", "role": "setup", "description": "a"},
+                {"plot": "the-resistance", "role": "complication", "description": "b"},
+            ],
+        )
         assert [r for r in rows(vault) if r[1] == "s1"] == [
             ("the-resistance", "s1", "plot_setup", "a", 1),
             ("the-resistance", "s1", "plot_complication", "b", 2),
@@ -185,32 +236,33 @@ class TestValidation:
         """The `relations` primary key would raise a bare IntegrityError; the
         author gets a message naming the pair instead."""
         with pytest.raises(ValueError, match="Duplicate plot role: the-resistance / climax"):
-            write_roles(vault, "s1", [
-                {"plot": "the-resistance", "role": "climax", "description": "a"},
-                {"plot": "the-resistance", "role": "climax", "description": "b"}])
+            write_roles(
+                vault,
+                "s1",
+                [
+                    {"plot": "the-resistance", "role": "climax", "description": "a"},
+                    {"plot": "the-resistance", "role": "climax", "description": "b"},
+                ],
+            )
 
     @pytest.mark.parametrize("role", UNIQUE_PLOT_ROLES)
     def test_a_singular_role_belongs_to_one_scene_per_plot(self, vault, role):
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": role,
-                                   "description": "d"}])
+        write_roles(vault, "s1", [{"plot": "the-resistance", "role": role, "description": "d"}])
         with pytest.raises(ValueError, match=f"already has its {role} on scene 's1'"):
-            write_roles(vault, "s2", [{"plot": "the-resistance", "role": role,
-                                       "description": "d"}])
+            write_roles(vault, "s2", [{"plot": "the-resistance", "role": role, "description": "d"}])
 
     def test_the_same_singular_role_in_another_plot_is_allowed(self, vault):
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "climax",
-                                   "description": "a"}])
-        write_roles(vault, "s2", [{"plot": "the-betrayal", "role": "climax",
-                                   "description": "b"}])
+        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "climax", "description": "a"}])
+        write_roles(vault, "s2", [{"plot": "the-betrayal", "role": "climax", "description": "b"}])
         got = {(r[0], r[1], r[2]) for r in rows(vault) if r[2] == "plot_climax"}
-        assert got == {("the-resistance", "s1", "plot_climax"),
-                       ("the-betrayal", "s2", "plot_climax")}
+        assert got == {
+            ("the-resistance", "s1", "plot_climax"),
+            ("the-betrayal", "s2", "plot_climax"),
+        }
 
     def test_a_second_setup_on_another_scene_is_allowed(self, vault):
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
-                                   "description": "a"}])
-        write_roles(vault, "s2", [{"plot": "the-resistance", "role": "setup",
-                                   "description": "b"}])
+        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup", "description": "a"}])
+        write_roles(vault, "s2", [{"plot": "the-resistance", "role": "setup", "description": "b"}])
         assert len([r for r in rows(vault) if r[2] == "plot_setup"]) == 2
 
     def test_resaving_a_scene_with_its_own_roles_is_allowed(self, vault):
@@ -220,20 +272,27 @@ class TestValidation:
         write_roles(vault, "s1", entries)
         write_roles(vault, "s1", entries)
         assert [r for r in rows(vault) if r[2] == "plot_climax"] == [
-            ("the-resistance", "s1", "plot_climax", "a", 1)]
+            ("the-resistance", "s1", "plot_climax", "a", 1)
+        ]
 
     def test_a_refused_edit_writes_nothing(self, vault):
-        write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
-                                   "description": "original"}])
+        write_roles(
+            vault, "s1", [{"plot": "the-resistance", "role": "setup", "description": "original"}]
+        )
         with pytest.raises(ValueError):
-            write_roles(vault, "s1", [{"plot": "the-resistance", "role": "setup",
-                                       "description": "changed"},
-                                      {"plot": "ghost", "role": "climax",
-                                       "description": "d"}])
+            write_roles(
+                vault,
+                "s1",
+                [
+                    {"plot": "the-resistance", "role": "setup", "description": "changed"},
+                    {"plot": "ghost", "role": "climax", "description": "d"},
+                ],
+            )
         # The delete runs inside the transaction, and the refusal aborts it —
         # so the original row is still there, not gone.
         assert [r for r in rows(vault) if r[1] == "s1"] == [
-            ("the-resistance", "s1", "plot_setup", "original", 1)]
+            ("the-resistance", "s1", "plot_setup", "original", 1)
+        ]
 
 
 class TestDelete:
@@ -249,7 +308,8 @@ class TestDelete:
         try:
             return conn.execute(
                 "SELECT from_id, to_id, kind FROM live_relations "
-                "WHERE kind LIKE 'plot\\_%' ESCAPE '\\'").fetchall()
+                "WHERE kind LIKE 'plot\\_%' ESCAPE '\\'"
+            ).fetchall()
         finally:
             conn.close()
 
@@ -262,6 +322,7 @@ class TestDelete:
     def test_a_deleted_plot_role_is_unreachable_while_the_plot_is_dead(self, vault):
         """Seen from the scene side, which is where the role is written."""
         from white_words.scriptwriting.core.manual_entities import load_entity
+
         write_roles(vault, "s1", [self.ROLE])
         assert load_entity(vault, "scene", "s1")["values"]["plot_roles"]
         delete_entity(vault, "plot", "the-resistance", "cut it", confirm=True)
@@ -271,12 +332,18 @@ class TestDelete:
         """Restore is exact for roles now: the rows were never removed."""
         from white_words.scriptwriting.core.db import get_dashboard_data
         from white_words.scriptwriting.tools.story_admin import _restore_entity
+
         write_roles(vault, "s1", [self.ROLE])
         delete_entity(vault, "plot", "the-resistance", "cut it", confirm=True)
-        _restore_entity({"target": {"entity_type": "plot", "id": "the-resistance"},
-                         "summary": "put it back"}, vault)
-        plot = next(p for p in get_dashboard_data(vault)["story_data"]["plots"]
-                    if p["id"] == "the-resistance")
+        _restore_entity(
+            {"target": {"entity_type": "plot", "id": "the-resistance"}, "summary": "put it back"},
+            vault,
+        )
+        plot = next(
+            p
+            for p in get_dashboard_data(vault)["story_data"]["plots"]
+            if p["id"] == "the-resistance"
+        )
         assert len(plot["setups"]) == 1
         assert self._visible_plot_rows(vault) == [("the-resistance", "s1", "plot_setup")]
 
@@ -303,10 +370,15 @@ class TestExportRoundTrip:
         project = root / "projects" / "stc"
         shutil.copytree(REPO / "tests" / "fixtures" / "save-the-children", project)
         import white_words.scriptwriting.core.config
-        monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
-                            lambda: {"root_path": str(root)})
+
+        monkeypatch.setattr(
+            white_words.scriptwriting.core.config,
+            "load_plugin_config",
+            lambda: {"root_path": str(root)},
+        )
         from white_words.scriptwriting.tools.story_import import handler as import_handler
         from white_words.scriptwriting.tools.story_export import handler as export_handler
+
         import_handler({"project": "stc", "confirm": True}, root_path=str(root))
         export_handler({"project": "stc", "root_path": str(root)})
         return project
@@ -314,8 +386,9 @@ class TestExportRoundTrip:
     def _plot_roles(self, project, scene):
         conn = sqlite3.connect(str(Path(project) / ".story" / "story.db"))
         out = conn.execute(
-            'SELECT from_id, kind, note FROM relations '
-            "WHERE to_id=? AND kind LIKE 'plot_%' ORDER BY \"order\"", (scene,)
+            "SELECT from_id, kind, note FROM relations "
+            "WHERE to_id=? AND kind LIKE 'plot_%' ORDER BY \"order\"",
+            (scene,),
         ).fetchall()
         conn.close()
         return out
@@ -328,9 +401,17 @@ class TestExportRoundTrip:
 
     def test_the_plot_note_no_longer_carries_the_six_fields(self, round_tripped):
         text = (round_tripped / "plots" / "The Resistance.md").read_text()
-        for field in ("setups", "inciting_incident", "crisis", "climax", "complications", "resolutions"):
-            assert f"\n{field}:" not in text, \
+        for field in (
+            "setups",
+            "inciting_incident",
+            "crisis",
+            "climax",
+            "complications",
+            "resolutions",
+        ):
+            assert f"\n{field}:" not in text, (
                 f"the plot note still emits the computed field {field}"
+            )
 
     def test_reimport_keeps_every_role(self, round_tripped, tmp_path, monkeypatch):
         """Export → import: the rows have to be identical, or the fact is being
@@ -339,22 +420,30 @@ class TestExportRoundTrip:
         assert before, "the fixture's scene has no role to begin with"
 
         import white_words.scriptwriting.core.config
+
         root2 = tmp_path / "root2"
         project2 = root2 / "projects" / "stc"
         shutil.copytree(round_tripped, project2)
-        monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
-                            lambda: {"root_path": str(root2)})
+        monkeypatch.setattr(
+            white_words.scriptwriting.core.config,
+            "load_plugin_config",
+            lambda: {"root_path": str(root2)},
+        )
         from white_words.scriptwriting.tools.story_import import handler as import_handler
+
         import_handler({"project": "stc", "confirm": True}, root_path=str(root2))
         assert self._plot_roles(project2, "central-room-day") == before
 
-    def test_the_surviving_role_is_on_the_plot_side_too(self, round_tripped,
-                                                        tmp_path, monkeypatch):
+    def test_the_surviving_role_is_on_the_plot_side_too(self, round_tripped, tmp_path, monkeypatch):
         """The round trip has to be invisible from the plot's side as well —
         that is what makes it a round trip rather than a relocation."""
         from white_words.scriptwriting.core.db import get_dashboard_data
-        plot = next(p for p in get_dashboard_data(round_tripped)["story_data"]["plots"]
-                    if p["id"] == "the-resistance")
+
+        plot = next(
+            p
+            for p in get_dashboard_data(round_tripped)["story_data"]["plots"]
+            if p["id"] == "the-resistance"
+        )
         assert plot["climax"], "the plot reads empty after export → import"
         assert plot["inciting_incident"], "the plot reads empty after export → import"
 
@@ -362,12 +451,22 @@ class TestExportRoundTrip:
 class TestSchema:
     def test_the_plot_role_fields_are_computed(self):
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
-        for field in ("setups", "inciting_incident", "complications", "crisis", "climax", "resolutions"):
-            assert ENTITY_SCHEMAS["plot"][field]["computed"] is True, \
+
+        for field in (
+            "setups",
+            "inciting_incident",
+            "complications",
+            "crisis",
+            "climax",
+            "resolutions",
+        ):
+            assert ENTITY_SCHEMAS["plot"][field]["computed"] is True, (
                 f"plot.{field} is still writable"
+            )
 
     def test_plot_roles_is_a_scene_field_with_the_right_shape(self):
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+
         field = ENTITY_SCHEMAS["scene"]["plot_roles"]
         assert field["type"] == "list"
         assert not field.get("computed"), "the write side cannot be computed"
@@ -377,6 +476,7 @@ class TestSchema:
         """The read side shows the shape; this is the write side catching it
         when the display is not consulted. See test_write_shape.py."""
         from white_words.scriptwriting.core.entity import validate_entity
+
         warnings = validate_entity("scene", {"plot_roles": "the first scene"})
         assert any("plot_roles must be a list" in w for w in warnings), warnings
         assert any("plot, role, description" in w for w in warnings), warnings
@@ -388,8 +488,10 @@ class TestSchema:
         that is not duplication: it raises, and the shape validator warns.
         """
         from white_words.scriptwriting.core.entity import validate_entity
-        warnings = validate_entity("scene", {
-            "plot_roles": [{"plot": "p", "role": "transition", "description": "d"}]})
+
+        warnings = validate_entity(
+            "scene", {"plot_roles": [{"plot": "p", "role": "transition", "description": "d"}]}
+        )
         assert any("role" in w and "one of" in w for w in warnings), warnings
 
 
@@ -398,22 +500,28 @@ class TestImport:
     whole pass — so the validator must read the connection it is given, or a
     role taken by a scene imported earlier in the same pass goes unnoticed."""
 
-    def test_a_second_scene_taking_the_first_ones_climax_is_refused(
-            self, tmp_path, monkeypatch):
+    def test_a_second_scene_taking_the_first_ones_climax_is_refused(self, tmp_path, monkeypatch):
         root = tmp_path / "root"
         project = root / "projects" / "stc"
         (project / "plots").mkdir(parents=True)
         (project / "scenes").mkdir(parents=True)
         (project / "project.md").write_text("---\nname: STC\nlogline: L\n---\n")
         (project / "plots" / "The Resistance.md").write_text(
-            "---\nid: the-resistance\nname: The Resistance\n---\n")
+            "---\nid: the-resistance\nname: The Resistance\n---\n"
+        )
         for i in (1, 2):
             (project / "scenes" / f"S{i}.md").write_text(
                 f"---\nid: s{i}\ntitle: S{i}\nplot_roles:\n"
-                "  - plot: the-resistance\n    role: climax\n    description: d\n---\n")
+                "  - plot: the-resistance\n    role: climax\n    description: d\n---\n"
+            )
         import white_words.scriptwriting.core.config
-        monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
-                            lambda: {"root_path": str(root)})
+
+        monkeypatch.setattr(
+            white_words.scriptwriting.core.config,
+            "load_plugin_config",
+            lambda: {"root_path": str(root)},
+        )
         from white_words.scriptwriting.tools.story_import import handler
+
         out = json.loads(handler({"project": "stc", "confirm": True}, root_path=str(root)))
         assert "already has its climax on scene 's1'" in out["error"], out

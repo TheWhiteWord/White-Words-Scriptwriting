@@ -10,6 +10,7 @@ comparison by hours. `core/clock.py` now produces every stored stamp as
 
 The conversion of stamps already on disk is tested in test_utc_conversion.py.
 """
+
 import json
 import os
 import re
@@ -32,7 +33,7 @@ STAMP = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+00:00$")
 STAMP_US = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}\+00:00$")
 SRC = Path(__file__).resolve().parent.parent / "src" / "white_words" / "scriptwriting"
 
-SCENE = "central-room-day"            # has a beats child
+SCENE = "central-room-day"  # has a beats child
 
 
 @contextmanager
@@ -61,6 +62,7 @@ def _rows(project, sql, *args):
 
 # ─── the helper ───
 
+
 def test_now_iso_is_one_fixed_shape(monkeypatch):
     assert STAMP.match(clock.now_iso())
     assert STAMP_US.match(clock.now_iso("microseconds"))
@@ -88,23 +90,28 @@ def test_now_iso_does_not_depend_on_the_machines_timezone(zone):
 def test_ago_iso_is_a_stamp_in_the_same_format():
     now, ago = clock.now_iso(), clock.ago_iso(30)
     assert STAMP.match(ago)
-    assert ago < now                                   # as text, so as time
+    assert ago < now  # as text, so as time
     gap = clock.parse(now) - clock.parse(ago)
     assert abs(gap - timedelta(days=30)) < timedelta(seconds=10)
 
 
 def test_parse_reads_an_aware_stamp():
-    assert clock.parse("2026-11-20T09:15:00+00:00") == datetime(2026, 11, 20, 9, 15, tzinfo=timezone.utc)
+    assert clock.parse("2026-11-20T09:15:00+00:00") == datetime(
+        2026, 11, 20, 9, 15, tzinfo=timezone.utc
+    )
     assert clock.parse("2026-11-20T09:15:00+02:00").utcoffset() == timedelta(hours=2)
     assert clock.parse("2026-11-20T09:15:00Z").utcoffset() == timedelta(0)
 
 
-@pytest.mark.parametrize("bad,why", [
-    ("2026-11-20T09:15:00", "naive"),          # unconverted data, not a format to tolerate
-    ("2026-11-20", "naive"),
-    ("not a time", "Invalid isoformat"),
-    ("", "Invalid isoformat"),
-])
+@pytest.mark.parametrize(
+    "bad,why",
+    [
+        ("2026-11-20T09:15:00", "naive"),  # unconverted data, not a format to tolerate
+        ("2026-11-20", "naive"),
+        ("not a time", "Invalid isoformat"),
+        ("", "Invalid isoformat"),
+    ],
+)
 def test_parse_refuses_what_is_not_an_aware_stamp(bad, why):
     with pytest.raises(ValueError, match=why):
         clock.parse(bad)
@@ -112,11 +119,13 @@ def test_parse_refuses_what_is_not_an_aware_stamp(bad, why):
 
 # ─── every stored stamp comes from it ───
 
+
 def test_a_delete_stamps_the_whole_delete_with_one_utc_stamp(fixture_path):
     delete_entity(fixture_path, "scene", SCENE, "t", True)
-    stamps = {r[0] for r in _rows(fixture_path,
-              "SELECT deleted_at FROM entities WHERE is_deleted=1")}
-    assert len(stamps) == 1                            # parent and children: "deleted together"
+    stamps = {
+        r[0] for r in _rows(fixture_path, "SELECT deleted_at FROM entities WHERE is_deleted=1")
+    }
+    assert len(stamps) == 1  # parent and children: "deleted together"
     assert STAMP.match(stamps.pop())
     assert len(_rows(fixture_path, "SELECT 1 FROM entities WHERE is_deleted=1")) > 1
 
@@ -129,8 +138,16 @@ def test_an_overwritten_section_is_kept_with_a_utc_stamp(fixture_path):
 
 
 def test_a_staged_draft_is_stamped_utc_and_a_restage_keeps_it(fixture_path):
-    op = [{"op": "create", "type": "character", "id": "newchar",
-           "frontmatter": {"name": "New"}, "sections": {}, "summary": "n"}]
+    op = [
+        {
+            "op": "create",
+            "type": "character",
+            "id": "newchar",
+            "frontmatter": {"name": "New"},
+            "sections": {},
+            "summary": "n",
+        }
+    ]
     draft_id = drafts.stage(fixture_path, op, "a")["draft_id"]
     first = _rows(fixture_path, "SELECT created_at FROM drafts WHERE id=?", draft_id)[0][0]
     assert STAMP.match(first)
@@ -141,9 +158,8 @@ def test_a_staged_draft_is_stamped_utc_and_a_restage_keeps_it(fixture_path):
 def test_a_deleted_project_is_stamped_utc_with_full_precision(tmp_path):
     root = tmp_path / "root"
     (root / "projects" / "demo" / ".story").mkdir(parents=True)
-    db.get_db(root / "projects" / "demo").close()          # a project has a database
-    out = json.loads(admin({"action": "delete_project", "project": "demo"},
-                                         root_path=str(root)))
+    db.get_db(root / "projects" / "demo").close()  # a project has a database
+    out = json.loads(admin({"action": "delete_project", "project": "demo"}, root_path=str(root)))
     meta = (root / ".story-trash" / out["trash_id"] / "deleted.json").read_text()
     stamp = json.loads(meta)["deleted_at"]
     # Microseconds on purpose: two deletes in one second must still sort newest-first.
@@ -151,6 +167,7 @@ def test_a_deleted_project_is_stamped_utc_with_full_precision(tmp_path):
 
 
 # ─── the point of T7: the machine's zone no longer matters ───
+
 
 def test_a_zone_change_cannot_make_a_fresh_delete_look_too_old(fixture_path):
     """Deleted on a machine at UTC+14, then the machine moves to UTC-11. As naive
@@ -197,8 +214,11 @@ def test_receipts_are_pruned_on_utc_stamps(fixture_path):
     def row(slug, **delta):
         stamp = (datetime.now(timezone.utc) - timedelta(**delta)).isoformat(timespec="seconds")
         conn = sqlite3.connect(str(fixture_path / ".story" / "story.db"))
-        conn.execute("INSERT INTO drafts (id, ops, summary, created_at, status) "
-                     "VALUES (?, '[]', 's', ?, 'committed')", (slug, stamp))
+        conn.execute(
+            "INSERT INTO drafts (id, ops, summary, created_at, status) "
+            "VALUES (?, '[]', 's', ?, 'committed')",
+            (slug, stamp),
+        )
         conn.commit()
         conn.close()
 
@@ -206,8 +226,16 @@ def test_receipts_are_pruned_on_utc_stamps(fixture_path):
     # ahead of UTC (see the age-floor test above for why).
     row("old-receipt", days=30, hours=5)
     row("recent-receipt", days=30, hours=-5)
-    op = [{"op": "create", "type": "character", "id": "newchar",
-           "frontmatter": {"name": "New"}, "sections": {}, "summary": "n"}]
+    op = [
+        {
+            "op": "create",
+            "type": "character",
+            "id": "newchar",
+            "frontmatter": {"name": "New"},
+            "sections": {},
+            "summary": "n",
+        }
+    ]
     draft_id = drafts.stage(fixture_path, op, "a")["draft_id"]
     with machine_timezone("Pacific/Kiritimati"):
         assert drafts.commit(fixture_path, draft_id)["success"] is True
@@ -219,15 +247,24 @@ def test_receipts_are_pruned_on_utc_stamps(fixture_path):
 
 # ─── guards against drifting back ───
 
+
 def test_every_timestamp_column_in_the_schema_is_a_listed_stamp(tmp_path):
     """A new `*_at` column must be added to `clock.STORED_STAMPS` — which is the
     list the one-off conversion walks — or this fails."""
     conn = db.get_db(tmp_path)
     try:
-        tables = [r[0] for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
-        found = {(t, c[1]) for t in tables
-                 for c in conn.execute(f"PRAGMA table_info({t})") if c[1].endswith("_at")}
+        tables = [
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            )
+        ]
+        found = {
+            (t, c[1])
+            for t in tables
+            for c in conn.execute(f"PRAGMA table_info({t})")
+            if c[1].endswith("_at")
+        }
     finally:
         conn.close()
     assert found == set(clock.STORED_STAMPS)
@@ -255,9 +292,11 @@ def test_no_stored_stamp_is_made_outside_the_clock():
         for pat in ("datetime.now(", "datetime.utcnow(", ".isoformat("):
             if pat in text:
                 offenders.append(f"{rel}: {pat}")
-    assert not offenders, ("stored stamps come from core/clock.py; if this is a file name "
-                           "or identifier, add the file to LOCAL_TIME_ALLOWED with the reason: "
-                           f"{offenders}")
+    assert not offenders, (
+        "stored stamps come from core/clock.py; if this is a file name "
+        "or identifier, add the file to LOCAL_TIME_ALLOWED with the reason: "
+        f"{offenders}"
+    )
 
 
 def test_the_allowed_files_still_need_their_exemption():

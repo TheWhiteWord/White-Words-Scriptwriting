@@ -19,6 +19,7 @@ of a schema, so nothing is shortened. When several tool calls land in one turn,
 a host spills the largest first; asking for the types you need keeps this
 answer from being that one.
 """
+
 import json
 
 from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
@@ -145,10 +146,10 @@ def _entity_schemas(entity_types: list) -> dict:
         fields["sections"] = {
             "type": "list",
             "description": "The standard body sections for this entity type, in order. "
-                           "A CLOSED SET — story_draft rejects any section name not on "
-                           "this list, so use these names rather than inventing one. "
-                           "Created empty with the entity; write prose into them "
-                           "through a story_draft edit op.",
+            "A CLOSED SET — story_draft rejects any section name not on "
+            "this list, so use these names rather than inventing one. "
+            "Created empty with the entity; write prose into them "
+            "through a story_draft edit op.",
             "standard_sections": standard_sections(entity_type),
         }
         out[entity_type] = fields
@@ -158,27 +159,27 @@ def _entity_schemas(entity_types: list) -> dict:
 SCHEMA = {
     "name": "story_describe",
     "description": "List what an entity type expects: its fields, with types, defaults and "
-                   "descriptions, and its standard body sections. "
-                   "Call this before creating an entity or asking the user about one, so you know "
-                   "which questions are worth asking and which fields are still empty. "
-                   "These are the field names to pass to story_draft, and the ones story_load "
-                   "returns. The section names are a CLOSED SET: story_draft rejects a section "
-                   "name that is not on this list, so read it here rather than inventing one.",
+    "descriptions, and its standard body sections. "
+    "Call this before creating an entity or asking the user about one, so you know "
+    "which questions are worth asking and which fields are still empty. "
+    "These are the field names to pass to story_draft, and the ones story_load "
+    "returns. The section names are a CLOSED SET: story_draft rejects a section "
+    "name that is not on this list, so read it here rather than inventing one.",
     "type": "object",
     "properties": {
         "entity_type": {
             "type": "string",
             "enum": list(ENTITY_SCHEMAS),
             "description": "Entity type to describe. Omit (and entity_types) for all types — "
-                           "the full set is large, so ask for the types you need.",
+            "the full set is large, so ask for the types you need.",
         },
         "entity_types": {
             "type": "array",
             "items": {"type": "string", "enum": list(ENTITY_SCHEMAS)},
             "description": "Several entity types at once, e.g. ['scene', 'scene_beats']. "
-                           "Each comes back complete. If they would not all fit the size "
-                           "budget the response is marked `truncated` and `deferred_types` "
-                           "lists the ones to ask for next.",
+            "Each comes back complete. If they would not all fit the size "
+            "budget the response is marked `truncated` and `deferred_types` "
+            "lists the ones to ask for next.",
         },
     },
 }
@@ -221,25 +222,27 @@ def handler(args: dict, **kwargs) -> str:
     types, unknown = _requested_types(args)
     if unknown:
         label = "entity_type" if len(unknown) == 1 else "entity_types"
-        return json.dumps({
-            "success": False,
-            "error": f"Unknown {label}: {', '.join(map(str, unknown))}. "
-                     f"Available: {', '.join(ENTITY_SCHEMAS)}",
-        })
+        return json.dumps(
+            {
+                "success": False,
+                "error": f"Unknown {label}: {', '.join(map(str, unknown))}. "
+                f"Available: {', '.join(ENTITY_SCHEMAS)}",
+            }
+        )
 
     schemas = _entity_schemas(types)
     kept, deferred = list(types), []
 
     def assemble() -> dict:
-        response = {"success": True,
-                    "entity_schemas": {t: schemas[t] for t in kept}}
+        response = {"success": True, "entity_schemas": {t: schemas[t] for t in kept}}
         if deferred:
             response["truncated"] = True
             response["deferred_types"] = list(deferred)
             response["hint"] = (
                 f"{len(kept)} of {len(types)} entity types are returned, each complete "
                 f"(every field and section). The size budget stopped the rest. Call "
-                f"again with entity_types=deferred_types to read them.")
+                f"again with entity_types=deferred_types to read them."
+            )
         return response
 
     # Measured on the real output, not estimated. The first type is always

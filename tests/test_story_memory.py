@@ -1,4 +1,5 @@
 """Focused tests for the dedicated story-memory mutation tool."""
+
 import json
 
 import pytest
@@ -19,15 +20,27 @@ def call(project, vault, **args):
 
 def test_add_remove_and_replace_round_trip(project):
     path, vault = project
-    added = call(path, vault, action="add", category="decisions", entry="Keep the mystery unresolved.")
+    added = call(
+        path, vault, action="add", category="decisions", entry="Keep the mystery unresolved."
+    )
     assert added["success"] is True
     assert added["usage"].endswith("/3000")
-    removed = call(path, vault, action="remove", category="decisions", old_entry="Keep the mystery unresolved.")
+    removed = call(
+        path, vault, action="remove", category="decisions", old_entry="Keep the mystery unresolved."
+    )
     assert removed["success"] is True
     call(path, vault, action="add", category="decisions", entry="Old rule")
-    replaced = call(path, vault, action="replace", category="decisions", old_entry="Old rule", new_entry="New rule")
+    replaced = call(
+        path,
+        vault,
+        action="replace",
+        category="decisions",
+        old_entry="Old rule",
+        new_entry="New rule",
+    )
     assert replaced["entry"] == "New rule"
     from white_words.scriptwriting.core.db import get_project_memory
+
     assert get_project_memory(path)["decisions"] == ["New rule"]
 
 
@@ -47,6 +60,8 @@ def test_invalid_operation_does_not_mutate(project):
 
 def test_replace_missing_entry_does_not_mutate(project):
     path, vault = project
-    result = call(path, vault, action="replace", category="decisions", old_entry="missing", new_entry="new")
+    result = call(
+        path, vault, action="replace", category="decisions", old_entry="missing", new_entry="new"
+    )
     assert result["success"] is False
     assert result["current_entries"] == []

@@ -34,6 +34,7 @@ def client(tmp_path, monkeypatch):
     slug = "testproj"
     (root / "projects" / slug).mkdir(parents=True, exist_ok=True)
     import shutil
+
     for f in proj.iterdir():
         if f.is_dir():
             shutil.copytree(f, root / "projects" / slug / f.name, dirs_exist_ok=True)
@@ -45,20 +46,32 @@ def client(tmp_path, monkeypatch):
 
 def test_messages_streams_text_done(client):
     tc, slug, pp = client
-    r = tc.post(f"/api/projects/{slug}/messages", json={"text": "hello"}, headers={"X-White-Words": "1", "Origin": "http://127.0.0.1:8731"})
+    r = tc.post(
+        f"/api/projects/{slug}/messages",
+        json={"text": "hello"},
+        headers={"X-White-Words": "1", "Origin": "http://127.0.0.1:8731"},
+    )
     assert r.status_code == 200
     assert "text" in r.text and "done" in r.text
 
 
 def test_missing_header_rejected(client):
     tc, slug, pp = client
-    r = tc.post(f"/api/projects/{slug}/messages", json={"text": "hello"}, headers={"Origin": "http://127.0.0.1:8731"})
+    r = tc.post(
+        f"/api/projects/{slug}/messages",
+        json={"text": "hello"},
+        headers={"Origin": "http://127.0.0.1:8731"},
+    )
     assert r.status_code == 403
 
 
 def test_foreign_origin_rejected(client):
     tc, slug, pp = client
-    r = tc.post(f"/api/projects/{slug}/messages", json={"text": "hello"}, headers={"X-White-Words": "1", "Origin": "http://evil.com"})
+    r = tc.post(
+        f"/api/projects/{slug}/messages",
+        json={"text": "hello"},
+        headers={"X-White-Words": "1", "Origin": "http://evil.com"},
+    )
     assert r.status_code == 403
 
 
@@ -72,5 +85,7 @@ def test_missing_key_503(tmp_path, monkeypatch):
     (root / "projects" / slug).mkdir(parents=True, exist_ok=True)
     (root / "projects" / slug / ".story").mkdir(exist_ok=True)
     tc = TestClient(app, base_url="http://127.0.0.1:8731")
-    r = tc.post(f"/api/projects/{slug}/messages", json={"text": "hi"}, headers={"X-White-Words": "1"})
+    r = tc.post(
+        f"/api/projects/{slug}/messages", json={"text": "hi"}, headers={"X-White-Words": "1"}
+    )
     assert r.status_code == 503

@@ -6,6 +6,7 @@ Before these writes ran in a transaction, a failure part-way left the database
 half-changed: an entity flagged deleted but its relations already gone, a purge
 that removed sections and relations but not the entity.
 """
+
 import json
 import shutil
 import sqlite3
@@ -23,9 +24,12 @@ def vault(tmp_path, monkeypatch):
     dest.parent.mkdir(parents=True)
     shutil.copytree(str(FIXTURE), str(dest))
     import white_words.scriptwriting.core.config
-    monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
-                        lambda: {"root_path": str(v)})
+
+    monkeypatch.setattr(
+        white_words.scriptwriting.core.config, "load_plugin_config", lambda: {"root_path": str(v)}
+    )
     from white_words.scriptwriting.tools.story_import import handler
+
     handler({"project": "stc", "confirm": True}, root_path=str(v))
     return v
 
@@ -35,8 +39,7 @@ def _project(vault):
 
 
 def _db(vault):
-    return sqlite3.connect(str(_project(vault) / ".story" / "story.db"),
-                           isolation_level=None)
+    return sqlite3.connect(str(_project(vault) / ".story" / "story.db"), isolation_level=None)
 
 
 def _snapshot(vault):
@@ -66,11 +69,12 @@ def _unbreak(vault, name):
 
 def _call_admin(vault, **args):
     from white_words.scriptwriting.tools.story_admin import handler
-    return json.loads(handler({"project": "stc", "summary": "t", **args},
-                              root_path=str(vault)))
+
+    return json.loads(handler({"project": "stc", "summary": "t", **args}, root_path=str(vault)))
 
 
 # ─── delete ───
+
 
 def test_failed_delete_changes_nothing(vault):
     """The entity's own flag is the delete's last write. If it fails, the child
@@ -79,17 +83,22 @@ def test_failed_delete_changes_nothing(vault):
     from white_words.scriptwriting.core.writes import delete_entity
 
     before = _snapshot(vault)
-    _break(vault, "CREATE TRIGGER boom BEFORE UPDATE OF is_deleted ON entities "
-                  "WHEN NEW.id = 'central-room-day' "
-                  "BEGIN SELECT RAISE(ABORT, 'boom'); END")
+    _break(
+        vault,
+        "CREATE TRIGGER boom BEFORE UPDATE OF is_deleted ON entities "
+        "WHEN NEW.id = 'central-room-day' "
+        "BEGIN SELECT RAISE(ABORT, 'boom'); END",
+    )
 
     with pytest.raises(sqlite3.Error, match="boom"):
         delete_entity(_project(vault), "scene", "central-room-day", "t", True)
 
     assert _snapshot(vault) == before
     c = _db(vault)
-    assert c.execute("SELECT is_deleted FROM entities "
-                     "WHERE id='central-room-day-beats'").fetchone()[0] == 0
+    assert (
+        c.execute("SELECT is_deleted FROM entities WHERE id='central-room-day-beats'").fetchone()[0]
+        == 0
+    )
     c.close()
 
     # Same call succeeds once the fault is gone: the failure left no residue.
@@ -97,8 +106,10 @@ def test_failed_delete_changes_nothing(vault):
     result = delete_entity(_project(vault), "scene", "central-room-day", "t", True)
     assert result["success"] is True
     c = _db(vault)
-    assert c.execute("SELECT is_deleted FROM entities "
-                     "WHERE id='central-room-day-beats'").fetchone()[0] == 1
+    assert (
+        c.execute("SELECT is_deleted FROM entities WHERE id='central-room-day-beats'").fetchone()[0]
+        == 1
+    )
 
 
 def test_delete_refusals_leave_database_untouched(vault):
@@ -110,8 +121,9 @@ def test_delete_refusals_leave_database_untouched(vault):
     refused = delete_entity(_project(vault), "character", "kael", "t", None)
     assert "error" in refused
     parent_of_scenes = next(
-        r[0] for r in _db(vault).execute(
-            "SELECT parent_id FROM entities WHERE type='scene' LIMIT 1"))
+        r[0]
+        for r in _db(vault).execute("SELECT parent_id FROM entities WHERE type='scene' LIMIT 1")
+    )
     blocked = delete_entity(_project(vault), "sequence", parent_of_scenes, "t", True)
     assert "error" in blocked
     assert _snapshot(vault) == before
@@ -123,6 +135,7 @@ def test_delete_refusals_leave_database_untouched(vault):
 
 # ─── purge ───
 
+
 def test_failed_purge_removes_nothing(vault):
     from white_words.scriptwriting.core.writes import delete_entity
 
@@ -133,10 +146,13 @@ def test_failed_purge_removes_nothing(vault):
     before = _snapshot(vault)
 
     # sections and relations are deleted first, the entity row last
-    _break(vault, "CREATE TRIGGER boom BEFORE DELETE ON entities "
-                  "BEGIN SELECT RAISE(ABORT, 'boom'); END")
+    _break(
+        vault,
+        "CREATE TRIGGER boom BEFORE DELETE ON entities BEGIN SELECT RAISE(ABORT, 'boom'); END",
+    )
     with pytest.raises(sqlite3.Error, match="boom"):
         from white_words.scriptwriting.core.trash import purge_deleted
+
         purge_deleted(_project(vault), {"entity_type": "character", "id": "kael"})
 
     assert _snapshot(vault) == before
@@ -144,22 +160,28 @@ def test_failed_purge_removes_nothing(vault):
 
 # ─── restore ───
 
+
 def test_failed_restore_leaves_parent_deleted(vault):
     """Restore flips the parent, then its children. If the children step fails,
     the parent must not come back alone."""
     from white_words.scriptwriting.core.writes import delete_entity
 
     c = _db(vault)
-    scene = c.execute("SELECT parent_id FROM entities "
-                      "WHERE type='scene_beats' LIMIT 1").fetchone()[0]
-    child = c.execute("SELECT id FROM entities WHERE parent_id=? AND type='scene_beats'",
-                      (scene,)).fetchone()[0]
+    scene = c.execute("SELECT parent_id FROM entities WHERE type='scene_beats' LIMIT 1").fetchone()[
+        0
+    ]
+    child = c.execute(
+        "SELECT id FROM entities WHERE parent_id=? AND type='scene_beats'", (scene,)
+    ).fetchone()[0]
     c.close()
     assert delete_entity(_project(vault), "scene", scene, "t", True)["success"]
     before = _snapshot(vault)
 
-    _break(vault, f"CREATE TRIGGER boom BEFORE UPDATE ON entities WHEN OLD.id='{child}' "
-                  f"BEGIN SELECT RAISE(ABORT, 'boom'); END")
+    _break(
+        vault,
+        f"CREATE TRIGGER boom BEFORE UPDATE ON entities WHEN OLD.id='{child}' "
+        f"BEGIN SELECT RAISE(ABORT, 'boom'); END",
+    )
     with pytest.raises(sqlite3.Error, match="boom"):
         _call_admin(vault, action="restore", target={"entity_type": "scene", "id": scene})
 
@@ -167,6 +189,7 @@ def test_failed_restore_leaves_parent_deleted(vault):
 
 
 # ─── import ───
+
 
 def test_import_failure_before_the_transaction_is_reported_not_raised(vault, monkeypatch):
     """A failure before the import's BEGIN (here: the safety backup) used to be
@@ -176,10 +199,12 @@ def test_import_failure_before_the_transaction_is_reported_not_raised(vault, mon
 
     def no_backup(project_path):
         raise OSError("disk full")
+
     monkeypatch.setattr(story_import, "_backup", no_backup)
 
-    out = json.loads(story_import.handler({"project": "stc", "confirm": True},
-                                          root_path=str(vault)))
+    out = json.loads(
+        story_import.handler({"project": "stc", "confirm": True}, root_path=str(vault))
+    )
     assert "disk full" in out["error"]
 
 
@@ -190,8 +215,10 @@ def test_failed_import_keeps_existing_data(vault):
 
     before = _snapshot(vault)
     # entities are inserted before sections; fail on the first section row
-    _break(vault, "CREATE TRIGGER boom BEFORE INSERT ON sections "
-                  "BEGIN SELECT RAISE(ABORT, 'boom'); END")
+    _break(
+        vault,
+        "CREATE TRIGGER boom BEFORE INSERT ON sections BEGIN SELECT RAISE(ABORT, 'boom'); END",
+    )
     out = json.loads(handler({"project": "stc", "confirm": True}, root_path=str(vault)))
     assert "boom" in out["error"]
     assert _snapshot(vault) == before

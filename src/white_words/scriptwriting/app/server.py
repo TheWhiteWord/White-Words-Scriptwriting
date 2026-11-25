@@ -1,4 +1,5 @@
 """FastAPI app factory."""
+
 from __future__ import annotations
 
 import asyncio
@@ -78,9 +79,12 @@ def create_app(config: Config) -> FastAPI:
         from white_words.scriptwriting.adapters.hermes.chat_backend import HermesChatBackend
         from white_words.scriptwriting.chat.service import ChatService
         from white_words.scriptwriting.app import token as _token_mod
+
         _ak = _token_mod.load_api_key()
         _base = f"http://127.0.0.1:{config.hermes_api_port}/p/{config.hermes_profile}"
-        app.state.chat_service = ChatService(HermesChatBackend(base_url=_base, api_key=_ak or "", model=config.hermes_profile))
+        app.state.chat_service = ChatService(
+            HermesChatBackend(base_url=_base, api_key=_ak or "", model=config.hermes_profile)
+        )
     except Exception:
         app.state.chat_service = None
 
@@ -89,15 +93,33 @@ def create_app(config: Config) -> FastAPI:
         host = request.headers.get("host", "")
         allowed = {"127.0.0.1", "localhost", f"127.0.0.1:{config.port}", f"localhost:{config.port}"}
         if host not in allowed:
-            return JSONResponse(status_code=400, content={"error": {"code": "bad_host", "message": "Invalid Host header"}})
+            return JSONResponse(
+                status_code=400,
+                content={"error": {"code": "bad_host", "message": "Invalid Host header"}},
+            )
         if request.method != "GET":
             origin = request.headers.get("origin")
             if origin is not None:
                 own = {f"http://127.0.0.1:{config.port}", f"http://localhost:{config.port}"}
                 if origin not in own:
-                    return JSONResponse(status_code=403, content={"error": {"code": "forbidden_origin", "message": "Foreign origin"}})
-            if request.headers.get("x-white-words") != "1" and not request.url.path.startswith("/mcp"):
-                return JSONResponse(status_code=403, content={"error": {"code": "missing_custom_header", "message": "Missing custom header"}})
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "error": {"code": "forbidden_origin", "message": "Foreign origin"}
+                        },
+                    )
+            if request.headers.get("x-white-words") != "1" and not request.url.path.startswith(
+                "/mcp"
+            ):
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "error": {
+                            "code": "missing_custom_header",
+                            "message": "Missing custom header",
+                        }
+                    },
+                )
         resp = await call_next(request)
         resp.headers["Cache-Control"] = "no-store"
         return resp
@@ -107,9 +129,18 @@ def create_app(config: Config) -> FastAPI:
         if request.url.path.startswith("/mcp"):
             expected = token_mod.load_token()
             auth = request.headers.get("authorization", "")
-            ok = bool(expected) and auth.startswith("Bearer ") and hmac.compare_digest(auth[7:].encode(), expected.encode())
+            ok = (
+                bool(expected)
+                and auth.startswith("Bearer ")
+                and hmac.compare_digest(auth[7:].encode(), expected.encode())
+            )
             if not ok:
-                return JSONResponse(status_code=401, content={"error": {"code": "unauthorized", "message": "Missing or invalid token"}})
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "error": {"code": "unauthorized", "message": "Missing or invalid token"}
+                    },
+                )
         return await call_next(request)
 
     app.include_router(agent_routes.make_router(config, app))
@@ -132,6 +163,7 @@ def create_app(config: Config) -> FastAPI:
     class _MCPApp:
         def __init__(self, mgr):
             self.mgr = mgr
+
         async def __call__(self, scope, receive, send):
             await self.mgr.handle_request(scope, receive, send)
 
@@ -145,6 +177,7 @@ def create_app(config: Config) -> FastAPI:
 
     from pathlib import Path
     import white_words.scriptwriting
+
     web_dir = Path(white_words.scriptwriting.__file__).parent / "web"
     if web_dir.exists():
         app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="web")

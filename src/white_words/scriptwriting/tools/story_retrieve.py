@@ -9,12 +9,16 @@ The counterpart to story_load ("what exists and where" vs "what does this say").
   up to the budget, then `truncated` + `deferred_ids` + a hint. An entity is
   never cut in half — it is returned complete or not at all (see core.budget).
 """
+
 import json
 from pathlib import Path
 
 from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
-from white_words.scriptwriting.core.entity import (ENTITY_COLUMN_MAP, REVERSED_RELATION_KINDS as REVERSED_KINDS,
-                          _RELATION_FIELDS)
+from white_words.scriptwriting.core.entity import (
+    ENTITY_COLUMN_MAP,
+    REVERSED_RELATION_KINDS as REVERSED_KINDS,
+    _RELATION_FIELDS,
+)
 from white_words.scriptwriting.core.value_focus import for_act, for_plot, for_project, for_sequence
 
 # The computed `value_focus` read-back per unit type, with the project beside
@@ -29,23 +33,26 @@ VALUE_FOCUS_SCOPES = {
 
 SCHEMA = {
     "description": "Read one or more entities: their field values and section prose, plus which "
-                   "fields are still unfilled. Use after story_load or story_search has identified "
-                   "the entity. Request only the sections or fields you need — this is how content "
-                   "is read.",
+    "fields are still unfilled. Use after story_load or story_search has identified "
+    "the entity. Request only the sections or fields you need — this is how content "
+    "is read.",
     "type": "object",
     "properties": {
         "project": {"type": "string", "description": "Project slug or name"},
-        "entity_type": {"type": "string", "enum": list(ENTITY_SCHEMAS),
-                        "description": "Type of entity to read"},
+        "entity_type": {
+            "type": "string",
+            "enum": list(ENTITY_SCHEMAS),
+            "description": "Type of entity to read",
+        },
         "id": {
             "type": "array",
             "items": {"type": "string"},
             "description": "Entity id(s), exactly as returned by story_load. Several at once is "
-                           "cheaper than one call per id. For entity_type='project' use the "
-                           "project name from story_load. Responses are kept within a size "
-                           "budget: entities come back whole, in the order given, and if "
-                           "they would not all fit the response is marked `truncated` and "
-                           "`deferred_ids` lists the ones to ask for next.",
+            "cheaper than one call per id. For entity_type='project' use the "
+            "project name from story_load. Responses are kept within a size "
+            "budget: entities come back whole, in the order given, and if "
+            "they would not all fit the response is marked `truncated` and "
+            "`deferred_ids` lists the ones to ask for next.",
         },
         "sections": {
             "type": "array",
@@ -56,12 +63,13 @@ SCHEMA = {
             "type": "array",
             "items": {"type": "string"},
             "description": "Field names to return. ['all'] for every field, including the "
-                           "computed ones a plot's five role fields are. Omit for none. Call "
-                           "story_describe to see what fields a type has.",
+            "computed ones a plot's five role fields are. Omit for none. Call "
+            "story_describe to see what fields a type has.",
         },
     },
     "required": ["project", "entity_type", "id"],
 }
+
 
 def _columns(conn) -> list:
     # Never cached across calls: tests and the dashboard use different databases
@@ -74,8 +82,10 @@ def _resolve(conn, entity_type: str, entity_id: str):
     if entity_type == "project":
         sql, params = "SELECT * FROM entities WHERE type='project' LIMIT 1", ()
     else:
-        sql, params = ("SELECT * FROM entities WHERE type=? AND id=? AND is_deleted=0",
-                      (entity_type, entity_id))
+        sql, params = (
+            "SELECT * FROM entities WHERE type=? AND id=? AND is_deleted=0",
+            (entity_type, entity_id),
+        )
     row = conn.execute(sql, params).fetchone()
     if row:
         return row, None
@@ -87,6 +97,7 @@ def _resolve(conn, entity_type: str, entity_id: str):
 def _row_data(conn, row) -> dict:
     """The entity as a dict, with references to deleted entities hidden."""
     from white_words.scriptwriting.core.references import dead_ids, live_column, live_extra_json
+
     data = dict(zip(_columns(conn), row))
     dead = dead_ids(conn)
     data["extra"] = live_extra_json(data.get("extra"), dead)
@@ -105,9 +116,9 @@ def _scene_beats_id(conn, scene_id: str) -> str:
     The record itself is read with `story_retrieve` on `scene_beats` and this id.
     """
     row = conn.execute(
-        "SELECT id FROM entities "
-        "WHERE type='scene_beats' AND parent_id=? AND is_deleted=0",
-        (scene_id,)).fetchone()
+        "SELECT id FROM entities WHERE type='scene_beats' AND parent_id=? AND is_deleted=0",
+        (scene_id,),
+    ).fetchone()
     return row[0] if row else ""
 
 
@@ -120,7 +131,8 @@ def _scene_beats(conn, scene_id: str) -> dict | None:
     row = conn.execute(
         "SELECT id, parent_id, extra FROM entities "
         "WHERE type='scene_beats' AND parent_id=? AND is_deleted=0",
-        (scene_id,)).fetchone()
+        (scene_id,),
+    ).fetchone()
     if not row:
         return None
     return {"id": row[0], "scene": row[1], **json.loads(row[2] or "{}")}
@@ -137,7 +149,8 @@ def _location_places(conn, location_id: str) -> list[str]:
         "SELECT e.extra FROM live_relations r JOIN entities e ON e.id=r.to_id "
         "WHERE r.from_id=? AND r.kind='location_scene' "
         "AND e.type='scene' AND e.is_deleted=0",
-        (location_id,)).fetchall()
+        (location_id,),
+    ).fetchall()
     places = set()
     for (extra_json,) in rows:
         place = (json.loads(extra_json or "{}").get("place") or "").strip()
@@ -180,8 +193,10 @@ def _entity_fields(conn, data: dict, entity_type: str, wanted: set) -> dict:
     # ignores its id and its scope function takes none.
     if "value_focus" in wanted and entity_type in VALUE_FOCUS_SCOPES:
         values["value_focus"] = (
-            for_project(_project_path(conn)) if entity_type == "project"
-            else VALUE_FOCUS_SCOPES[entity_type](_project_path(conn), data["id"]))
+            for_project(_project_path(conn))
+            if entity_type == "project"
+            else VALUE_FOCUS_SCOPES[entity_type](_project_path(conn), data["id"])
+        )
     # The same for a scene's `turning_point`: the record is another entity, so
     # there is nothing in this row's `extra` to read, and a scene with no record
     # returns "" — the distinction the design keeps ("or empty"). `scene_beats`
@@ -226,9 +241,9 @@ def _entity_fields(conn, data: dict, entity_type: str, wanted: set) -> dict:
     # field to five kinds — see entity.plot_role_relations.
     if entity_type == "scene" and "plot_roles" in wanted:
         values["plot_roles"] = [
-            {"plot": plot, "role": kind[len("plot_"):], "description": note or ""}
+            {"plot": plot, "role": kind[len("plot_") :], "description": note or ""}
             for plot, kind, note in conn.execute(
-                'SELECT from_id, kind, note FROM live_relations '
+                "SELECT from_id, kind, note FROM live_relations "
                 "WHERE to_id=? AND kind LIKE 'plot_%' ORDER BY \"order\"",
                 (data["id"],),
             ).fetchall()
@@ -238,19 +253,26 @@ def _entity_fields(conn, data: dict, entity_type: str, wanted: set) -> dict:
 
 def _unfilled(conn, data: dict, entity_type: str) -> list:
     from white_words.scriptwriting.core.entity import unfilled_fields
+
     extra = json.loads(data.get("extra") or "{}")
     # A plot beat is filled only when its relation row exists, not when extra has a key.
     for field, (kind, _) in _RELATION_FIELDS.get(entity_type, {}).items():
-        sql = ("SELECT 1 FROM live_relations WHERE to_id=? AND kind=? LIMIT 1"
-               if kind in REVERSED_KINDS
-               else "SELECT 1 FROM live_relations WHERE from_id=? AND kind=? LIMIT 1")
+        sql = (
+            "SELECT 1 FROM live_relations WHERE to_id=? AND kind=? LIMIT 1"
+            if kind in REVERSED_KINDS
+            else "SELECT 1 FROM live_relations WHERE from_id=? AND kind=? LIMIT 1"
+        )
         if conn.execute(sql, (data["id"], kind)).fetchone():
             extra[field] = [1]
     # The same for a scene's plot_roles — filled means a row exists, not an
     # extra key, and plot_roles is never in extra.
-    if entity_type == "scene" and conn.execute(
+    if (
+        entity_type == "scene"
+        and conn.execute(
             "SELECT 1 FROM live_relations WHERE to_id=? AND kind LIKE 'plot_%' LIMIT 1",
-            (data["id"],)).fetchone():
+            (data["id"],),
+        ).fetchone()
+    ):
         extra["plot_roles"] = [1]
     # `data` IS the row (see _row_data), so the column-backed fields —
     # scene.location, plot.one_sentence, project.logline, location.world —
@@ -272,9 +294,12 @@ def _sections(conn, entity_id: str, wanted) -> dict:
 def _section_sizes(conn, entity_id: str) -> dict:
     """Heading -> characters, for an entity too big to return whole, so the
     agent can ask for its sections one at a time instead of guessing."""
-    return {h: len(b or "") for h, b in conn.execute(
-        "SELECT heading, body FROM sections WHERE entity_id=? ORDER BY rowid",
-        (entity_id,))}
+    return {
+        h: len(b or "")
+        for h, b in conn.execute(
+            "SELECT heading, body FROM sections WHERE entity_id=? ORDER BY rowid", (entity_id,)
+        )
+    }
 
 
 def handler(args: dict, **kwargs) -> str:
@@ -295,16 +320,18 @@ def handler(args: dict, **kwargs) -> str:
 
     entity_type = args["entity_type"]
     ids = args["id"]
-    if isinstance(ids, str):          # tolerate a bare string
+    if isinstance(ids, str):  # tolerate a bare string
         ids = [ids]
     want_sections = args.get("sections")
     want_fields = args.get("fields")
 
     if not want_sections and not want_fields:
-        return json.dumps({
-            "error": "Nothing requested. Pass sections (['all'] or names) and/or fields "
-                     "(['all'] or names).",
-        })
+        return json.dumps(
+            {
+                "error": "Nothing requested. Pass sections (['all'] or names) and/or fields "
+                "(['all'] or names).",
+            }
+        )
 
     conn = get_db(project_path)
     try:
@@ -324,6 +351,7 @@ def handler(args: dict, **kwargs) -> str:
         wanted = set(schema) if want_fields == ["all"] else set(want_fields or [])
 
         from white_words.scriptwriting.core.budget import json_size, max_response_chars
+
         budget = max_response_chars()
         # What the envelope costs beside the entities: the type, the keys, and
         # room for `truncated`, `deferred_ids` and the hint.
@@ -332,7 +360,7 @@ def handler(args: dict, **kwargs) -> str:
         oversize = None
         for position, entity_id in enumerate(ids):
             if deferred:
-                deferred.append(entity_id)   # once one is deferred, the tail is
+                deferred.append(entity_id)  # once one is deferred, the tail is
                 continue
             row, error = _resolve(conn, entity_type, entity_id)
             if error:
@@ -365,8 +393,7 @@ def handler(args: dict, **kwargs) -> str:
                     deferred.append(entity_id)
                     continue
             elif used + cost > budget:
-                oversize = {"id": data["id"],
-                            "section_sizes": _section_sizes(conn, data["id"])}
+                oversize = {"id": data["id"], "section_sizes": _section_sizes(conn, data["id"])}
             entities.append(entry)
             used += cost
     finally:
@@ -384,12 +411,14 @@ def handler(args: dict, **kwargs) -> str:
             hints.append(
                 f"{len(entities)} of {len(ids)} requested entities are returned, "
                 f"each complete; the size budget stopped the rest. Call again with "
-                f"deferred_ids (same sections/fields) to read them.")
+                f"deferred_ids (same sections/fields) to read them."
+            )
         if oversize:
             response["over_budget"] = oversize
             hints.append(
                 f"'{oversize['id']}' alone is larger than the size budget. To read it "
-                f"in parts, request one section at a time — section_sizes lists them.")
+                f"in parts, request one section at a time — section_sizes lists them."
+            )
         if hints:
             response["hint"] = " ".join(hints)
         return response

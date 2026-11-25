@@ -7,6 +7,7 @@ steps are exercised with a test-only migration monkeypatched onto the (empty)
 real list — the mechanism, not history. Covers story.db (core.db) and chat.db
 (chat.store).
 """
+
 import sqlite3
 import threading
 import time
@@ -14,9 +15,14 @@ import time
 import pytest
 
 from white_words.scriptwriting.core import db as core_db
-from white_words.scriptwriting.core.db import (BASELINE_VERSION, LATEST_VERSION,
-                                     SchemaTooNewError, SchemaTooOldError,
-                                     apply_migrations, get_db)
+from white_words.scriptwriting.core.db import (
+    BASELINE_VERSION,
+    LATEST_VERSION,
+    SchemaTooNewError,
+    SchemaTooOldError,
+    apply_migrations,
+    get_db,
+)
 from white_words.scriptwriting.core.writes import create_project
 
 
@@ -64,6 +70,7 @@ def one_step(monkeypatch):
 
 # ─── story.db ───
 
+
 def test_a_new_project_is_stamped_current(tmp_path):
     proj = _new_project(tmp_path)
     assert _version(_db_file(proj)) == LATEST_VERSION
@@ -78,7 +85,7 @@ def test_get_db_creates_the_schema_on_a_file_with_no_tables(tmp_path):
 
 def test_a_database_one_step_behind_is_upgraded_on_open_and_keeps_its_rows(tmp_path, one_step):
     proj = _new_project(tmp_path)
-    _stamp(proj, BASELINE_VERSION)         # one behind the patched LATEST
+    _stamp(proj, BASELINE_VERSION)  # one behind the patched LATEST
     conn = get_db(proj)
     try:
         assert conn.execute("SELECT 1 FROM sqlite_master WHERE name='test_only_step'").fetchone()
@@ -101,8 +108,7 @@ def test_upgrading_twice_changes_nothing(tmp_path, one_step):
 def test_only_the_missing_steps_run(tmp_path):
     """A file stamped baseline+1 has had step 1: step 2 runs, step 1 does not."""
     calls = []
-    steps = [lambda c: calls.append(1), lambda c: calls.append(2),
-             lambda c: calls.append(3)]
+    steps = [lambda c: calls.append(1), lambda c: calls.append(2), lambda c: calls.append(3)]
     conn = sqlite3.connect(str(tmp_path / "x.db"), isolation_level=None)
     conn.execute("PRAGMA user_version = 1")
     apply_migrations(conn, steps, baseline=0)
@@ -121,6 +127,7 @@ def test_a_current_database_runs_no_steps_on_open(tmp_path, monkeypatch):
 
     def boom(conn):
         raise AssertionError("a migration ran on a current database")
+
     monkeypatch.setattr(core_db, "SCHEMA_MIGRATIONS", [boom])
     monkeypatch.setattr(core_db, "LATEST_VERSION", BASELINE_VERSION + 1)
     get_db(proj).close()
@@ -139,7 +146,9 @@ def test_a_failing_step_changes_nothing(tmp_path):
     with pytest.raises(RuntimeError, match="step 2 broke"):
         apply_migrations(conn, [make_table, fail], baseline=BASELINE_VERSION)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == BASELINE_VERSION
-    assert conn.execute("SELECT 1 FROM sqlite_master WHERE name='made_by_step_1'").fetchone() is None
+    assert (
+        conn.execute("SELECT 1 FROM sqlite_master WHERE name='made_by_step_1'").fetchone() is None
+    )
     conn.close()
 
 
@@ -238,20 +247,25 @@ def test_a_backup_one_step_behind_is_upgraded_when_opened(tmp_path, one_step):
 
 # ─── chat.db ───
 
+
 def test_a_new_chat_db_is_stamped(tmp_path):
     from white_words.scriptwriting.chat import store
+
     store.connect(tmp_path).close()
     assert _version(tmp_path / ".story" / "chat.db") == store.CHAT_LATEST
 
 
 def test_a_chat_db_one_step_behind_is_upgraded_on_open(tmp_path, monkeypatch):
     from white_words.scriptwriting.chat import store
-    store.connect(tmp_path).close()      # stamped CHAT_BASELINE
+
+    store.connect(tmp_path).close()  # stamped CHAT_BASELINE
     p = tmp_path / ".story" / "chat.db"
     c = sqlite3.connect(str(p))
     c.execute("INSERT INTO conversations (id, created_at, updated_at) VALUES ('c1', 't', 't')")
-    c.execute("INSERT INTO messages (conversation_id, role, text, timestamp) "
-              "VALUES ('c1', 'user', 'hello', 't')")
+    c.execute(
+        "INSERT INTO messages (conversation_id, role, text, timestamp) "
+        "VALUES ('c1', 'user', 'hello', 't')"
+    )
     c.commit()
     c.close()
 
@@ -275,6 +289,7 @@ def test_a_chat_db_one_step_behind_is_upgraded_on_open(tmp_path, monkeypatch):
 
 def test_a_chat_db_below_the_baseline_is_refused(tmp_path):
     from white_words.scriptwriting.chat import store
+
     store.connect(tmp_path).close()
     p = tmp_path / ".story" / "chat.db"
     c = sqlite3.connect(str(p))
@@ -287,6 +302,7 @@ def test_a_chat_db_below_the_baseline_is_refused(tmp_path):
 
 def test_chat_db_from_a_newer_build_is_refused(tmp_path):
     from white_words.scriptwriting.chat import store
+
     store.connect(tmp_path).close()
     p = tmp_path / ".story" / "chat.db"
     c = sqlite3.connect(str(p))

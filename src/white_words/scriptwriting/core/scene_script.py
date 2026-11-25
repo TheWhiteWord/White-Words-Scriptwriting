@@ -22,6 +22,7 @@ body only.
 What this module deliberately does not do: touch the database, decide who may
 write, or validate that a location exists. Those are `core/manual_edits.py`.
 """
+
 from __future__ import annotations
 
 import re
@@ -36,8 +37,7 @@ from .fountain_lexer import (
     trim_character_force_symbol,
 )
 
-BLOCK_TYPES = ("action", "character", "parenthetical", "dialogue",
-               "transition", "note", "raw")
+BLOCK_TYPES = ("action", "character", "parenthetical", "dialogue", "transition", "note", "raw")
 
 _PLACEHOLDER_RE = re.compile(r"^\s*\[placeholder", re.IGNORECASE)
 _NOTE_RE = re.compile(r"^\[\[(.*)\]\]$", re.DOTALL)
@@ -47,6 +47,7 @@ _LINE_BREAK = "  "
 
 
 # ─── Content in/out ──────────────────────────────────────────────────────────
+
 
 def is_placeholder(content: str) -> bool:
     """A template's `[placeholder — scene/Content]` marker is not content."""
@@ -80,7 +81,7 @@ def split_heading(content: str) -> tuple[str | None, str]:
     for i, ln in enumerate(lines):
         if ln.strip():
             if SCENE_HEADING_RE.match(ln):
-                return ln.strip(), "\n".join(lines[i + 1:])
+                return ln.strip(), "\n".join(lines[i + 1 :])
             return None, "\n".join(lines[i:])
     return None, ""
 
@@ -101,19 +102,21 @@ def _raw(para):
 def _parse_paragraph(para: list[str]) -> list[dict]:
     first = para[0].strip()
 
-    if first.startswith("!"):                       # forced action
+    if first.startswith("!"):  # forced action
         text = "\n".join([para[0].lstrip()[1:]] + para[1:])
         return [{"type": "action", "text": text}]
 
-    if first.startswith("@"):                       # forced character
+    if first.startswith("@"):  # forced character
         if len(para) >= 2 and not first.endswith("^"):
             return _dialogue_group(para)
         return _raw(para)
 
     # Everything the editor does not model stays verbatim.
-    if (SCENE_HEADING_RE.match(first)               # a heading mid-script
-            or first[:1] in ("#", "=", "~", ">")    # section/synopsis/page break/lyric/centered
-            or first.endswith("^")):                # dual dialogue
+    if (
+        SCENE_HEADING_RE.match(first)  # a heading mid-script
+        or first[:1] in ("#", "=", "~", ">")  # section/synopsis/page break/lyric/centered
+        or first.endswith("^")
+    ):  # dual dialogue
         return _raw(para)
 
     if len(para) == 1 and TRANSITION_RE.match(first):
@@ -141,9 +144,12 @@ def _dialogue_group(para: list[str]) -> list[dict]:
 
     def flush():
         if speech:
-            out.append({"type": "dialogue",
-                        "text": "\n".join("" if s == _LINE_BREAK else s
-                                          for s in speech)})
+            out.append(
+                {
+                    "type": "dialogue",
+                    "text": "\n".join("" if s == _LINE_BREAK else s for s in speech),
+                }
+            )
             speech.clear()
 
     for ln in para[1:]:
@@ -168,7 +174,7 @@ def serialize_blocks(blocks: list[dict]) -> str:
     in_speech = False  # inside a character's group: parentheticals/dialogue attach
     for b in blocks:
         t = b.get("type")
-        text = (b.get("text") or "")
+        text = b.get("text") or ""
         if t == "raw":
             paras.append(text.split("\n"))
             in_speech = False
@@ -185,8 +191,9 @@ def serialize_blocks(blocks: list[dict]) -> str:
                 p = "(" + p.strip("()") + ")"
             (paras[-1].append(p) if in_speech else paras.append([p]))
         elif t == "dialogue":
-            lines = [ln.strip() if ln.strip() else _LINE_BREAK
-                     for ln in text.strip("\n").split("\n")]
+            lines = [
+                ln.strip() if ln.strip() else _LINE_BREAK for ln in text.strip("\n").split("\n")
+            ]
             (paras[-1].extend(lines) if in_speech else paras.append(lines))
         elif t == "transition":
             paras.append([text.strip()])
@@ -226,8 +233,10 @@ def is_lossless(content: str, heading: str | None, blocks: list[dict]) -> bool:
 
 # ─── Heading ─────────────────────────────────────────────────────────────────
 
-def compose_heading(int_ext: str, location_name: str, place: str = "",
-                    time_of_day: str = "") -> str:
+
+def compose_heading(
+    int_ext: str, location_name: str, place: str = "", time_of_day: str = ""
+) -> str:
     """`INT. KITCHEN - NIGHT` / `INT. KITCHEN - PANTRY - NIGHT`.
 
     The location and place are upper-cased, as in a script. A time is always
@@ -252,8 +261,13 @@ def compose_heading(int_ext: str, location_name: str, place: str = "",
     return f"{heading} - {time_of_day or 'UNSPECIFIED'}"
 
 
-def scene_heading(int_ext: str, location_name: str, place: str = "",
-                  time_of_day: str = "", forced_heading: str = "") -> str:
+def scene_heading(
+    int_ext: str,
+    location_name: str,
+    place: str = "",
+    time_of_day: str = "",
+    forced_heading: str = "",
+) -> str:
     """The scene's heading line: the forced text, or the composed one.
 
     Empty when the scene has neither — a planned scene, or an incomplete one.
@@ -309,6 +323,7 @@ def parse_heading_line(line: str) -> dict | None:
 
 # ─── Cast ────────────────────────────────────────────────────────────────────
 
+
 def cue_key(cue: str) -> str:
     """A cue as a stable key: no `@`, `(V.O.)`, `^`; one space; upper-case."""
     c = trim_character_extension(trim_character_force_symbol(cue or ""))
@@ -363,31 +378,36 @@ def script_cast(blocks: list[dict], characters: list[dict]) -> list[dict]:
     for k in order:
         r = resolve_cue(k, characters)
         cid = r["id"]
-        if cid and cid in seen_ids:           # OAK and DETECTIVE OAK: one person
+        if cid and cid in seen_ids:  # OAK and DETECTIVE OAK: one person
             for e in cast:
                 if e["id"] == cid:
                     e["cues"] += counts[k]
             continue
         if cid:
             seen_ids.add(cid)
-        cast.append({
-            "cue": k, "id": cid, "registered": bool(cid),
-            "name": by_id[cid]["name"] if cid else k.title(),
-            "story_role": by_id[cid].get("story_role", "") if cid else "",
-            "cues": counts[k], "first_block": first_block[k],
-            "candidates": r["candidates"],
-        })
+        cast.append(
+            {
+                "cue": k,
+                "id": cid,
+                "registered": bool(cid),
+                "name": by_id[cid]["name"] if cid else k.title(),
+                "story_role": by_id[cid].get("story_role", "") if cid else "",
+                "cues": counts[k],
+                "first_block": first_block[k],
+                "candidates": r["candidates"],
+            }
+        )
     return cast
 
 
 # ─── Stats ───────────────────────────────────────────────────────────────────
 
+
 def script_stats(content: str, cast: list[dict]) -> dict:
     """`lines` are text lines (non-blank), per the existing dashboard figure;
     `speaking_parts` are distinct speakers."""
     lines = [ln for ln in (content or "").splitlines() if ln.strip()]
-    return {"lines": len(lines), "words": len(_words(content)),
-            "speaking_parts": len(cast)}
+    return {"lines": len(lines), "words": len(_words(content)), "speaking_parts": len(cast)}
 
 
 # ─── Findings ────────────────────────────────────────────────────────────────
@@ -399,17 +419,31 @@ CRITICAL, OTHER = "critical", "other"
 # `time_of_day` have their own critical findings, the heading fields are
 # covered by `heading_missing` (and `place`/`forced_heading` are optional by
 # design — an empty one is not a gap).
-_REPORTED_AS_CRITICAL = {"int_ext", "place", "forced_heading", "location",
-                         "time_of_day", "plot_roles", "characters"}
+_REPORTED_AS_CRITICAL = {
+    "int_ext",
+    "place",
+    "forced_heading",
+    "location",
+    "time_of_day",
+    "plot_roles",
+    "characters",
+}
 
 
 def _finding(level, code, message, **anchor):
     return {"level": level, "code": code, "message": message, **anchor}
 
 
-def findings(*, scene: dict, blocks: list[dict], cast: list[dict],
-             location: dict | None, has_plot_roles: bool, unfilled: list[str],
-             lossless: bool = True) -> list[dict]:
+def findings(
+    *,
+    scene: dict,
+    blocks: list[dict],
+    cast: list[dict],
+    location: dict | None,
+    has_plot_roles: bool,
+    unfilled: list[str],
+    lossless: bool = True,
+) -> list[dict]:
     """Everything worth telling the author about this scene's script.
 
     Critical = what breaks the script or the scene's place in the story:
@@ -424,38 +458,74 @@ def findings(*, scene: dict, blocks: list[dict], cast: list[dict],
     out: list[dict] = []
 
     if not lossless:
-        out.append(_finding(CRITICAL, "not_editable",
-                            "This script uses Fountain the editor cannot round-trip "
-                            "without losing text, so it opens read-only. Edit it with the harness."))
+        out.append(
+            _finding(
+                CRITICAL,
+                "not_editable",
+                "This script uses Fountain the editor cannot round-trip "
+                "without losing text, so it opens read-only. Edit it with the harness.",
+            )
+        )
     if not (scene.get("int_ext") and scene.get("location")) and not scene.get("forced_heading"):
-        out.append(_finding(CRITICAL, "heading_missing",
-                            "The scene has no heading. Set int_ext + location, or a "
-                            "forced heading.", field="heading"))
+        out.append(
+            _finding(
+                CRITICAL,
+                "heading_missing",
+                "The scene has no heading. Set int_ext + location, or a forced heading.",
+                field="heading",
+            )
+        )
     if not scene.get("order"):
-        out.append(_finding(CRITICAL, "order_unset",
-                            "Scene order is 0 — it has not been placed in its sequence yet.",
-                            field="order"))
+        out.append(
+            _finding(
+                CRITICAL,
+                "order_unset",
+                "Scene order is 0 — it has not been placed in its sequence yet.",
+                field="order",
+            )
+        )
     if not scene.get("time_of_day"):
-        out.append(_finding(CRITICAL, "time_of_day_missing",
-                            "Time of day is not set.", field="time_of_day"))
+        out.append(
+            _finding(
+                CRITICAL, "time_of_day_missing", "Time of day is not set.", field="time_of_day"
+            )
+        )
 
     if location is None:
         text = scene.get("location")
-        out.append(_finding(
-            CRITICAL, "location_unregistered",
-            (f"Location '{text}' is not a registered location." if text
-             else "No location is set."), field="location"))
+        out.append(
+            _finding(
+                CRITICAL,
+                "location_unregistered",
+                (
+                    f"Location '{text}' is not a registered location."
+                    if text
+                    else "No location is set."
+                ),
+                field="location",
+            )
+        )
     elif not location.get("world"):
-        out.append(_finding(CRITICAL, "location_no_world",
-                            f"Location '{location['name']}' belongs to no world.",
-                            field="location"))
+        out.append(
+            _finding(
+                CRITICAL,
+                "location_no_world",
+                f"Location '{location['name']}' belongs to no world.",
+                field="location",
+            )
+        )
 
     for c in cast:
         if not c["registered"]:
-            hint = (f" Could be: {', '.join(c['candidates'])}." if c["candidates"] else "")
-            out.append(_finding(CRITICAL, "character_unregistered",
-                                f"Character '{c['name']}' is not a registered character.{hint}",
-                                block=c["first_block"]))
+            hint = f" Could be: {', '.join(c['candidates'])}." if c["candidates"] else ""
+            out.append(
+                _finding(
+                    CRITICAL,
+                    "character_unregistered",
+                    f"Character '{c['name']}' is not a registered character.{hint}",
+                    block=c["first_block"],
+                )
+            )
 
     in_speech = False
     for i, b in enumerate(blocks):
@@ -464,27 +534,48 @@ def findings(*, scene: dict, blocks: list[dict], cast: list[dict],
             in_speech = bool((b.get("text") or "").strip())
         elif t in ("parenthetical", "dialogue"):
             if not in_speech and (b.get("text") or "").strip():
-                out.append(_finding(CRITICAL, "orphan_dialogue",
-                                    f"This {t} has no character before it, so it will "
-                                    f"read as action.", block=i))
+                out.append(
+                    _finding(
+                        CRITICAL,
+                        "orphan_dialogue",
+                        f"This {t} has no character before it, so it will read as action.",
+                        block=i,
+                    )
+                )
         else:
             in_speech = False
         if t == "transition" and not TRANSITION_RE.match((b.get("text") or "").strip()):
-            out.append(_finding(CRITICAL, "transition_unrecognised",
-                                "This will not read as a transition. Use 'CUT TO:' or "
-                                "'FADE OUT.' style.", block=i))
+            out.append(
+                _finding(
+                    CRITICAL,
+                    "transition_unrecognised",
+                    "This will not read as a transition. Use 'CUT TO:' or 'FADE OUT.' style.",
+                    block=i,
+                )
+            )
 
     if not has_plot_roles and scene.get("dramatic_role") not in ("transition", "non-event"):
-        out.append(_finding(CRITICAL, "plot_roles_missing",
-                            "The scene serves no plot, and is not marked transition or "
-                            "non-event.", field="plot_roles"))
+        out.append(
+            _finding(
+                CRITICAL,
+                "plot_roles_missing",
+                "The scene serves no plot, and is not marked transition or non-event.",
+                field="plot_roles",
+            )
+        )
 
     for f in unfilled:
         if f in _REPORTED_AS_CRITICAL and f != "characters":
             continue
         if f == "characters" and (scene.get("no_cast") or cast):
             continue
-        out.append(_finding(OTHER, "unfilled",
-                            f"Missing: field '{f}' not found in scene "
-                            f"'{scene.get('title') or scene.get('id')}'.", field=f))
+        out.append(
+            _finding(
+                OTHER,
+                "unfilled",
+                f"Missing: field '{f}' not found in scene "
+                f"'{scene.get('title') or scene.get('id')}'.",
+                field=f,
+            )
+        )
     return out

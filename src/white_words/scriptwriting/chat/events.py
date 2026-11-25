@@ -1,4 +1,5 @@
 """Chat event model (plain dataclasses)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

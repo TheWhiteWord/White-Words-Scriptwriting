@@ -1,4 +1,5 @@
 """SQLite conversation store (chat.db per project)."""
+
 from __future__ import annotations
 
 import json
@@ -97,8 +98,16 @@ def list_conversations(project_path) -> list[dict]:
         rows = conn.execute(
             "SELECT id, title, created_at, updated_at, last_opened FROM conversations ORDER BY updated_at DESC"
         ).fetchall()
-        return [{"id": r[0], "title": r[1], "created_at": r[2],
-                 "updated_at": r[3], "last_opened": bool(r[4])} for r in rows]
+        return [
+            {
+                "id": r[0],
+                "title": r[1],
+                "created_at": r[2],
+                "updated_at": r[3],
+                "last_opened": bool(r[4]),
+            }
+            for r in rows
+        ]
     finally:
         conn.close()
 
@@ -129,16 +138,27 @@ def get_conversation(project_path, cid, include_hidden=False) -> dict | None:
                     else:
                         conv_tools.append(t)
                 tools = conv_tools
-            messages.append({
-                "id": m[0], "role": m[1], "text": m[2], "timestamp": m[3],
-                "metadata": _loads(m[4]), "status": m[5],
-                "tools": tools, "drafts": _loads(m[7]),
-                "attachments": _loads(m[8]), "hidden": bool(m[9]),
-                "error": m[10],
-            })
+            messages.append(
+                {
+                    "id": m[0],
+                    "role": m[1],
+                    "text": m[2],
+                    "timestamp": m[3],
+                    "metadata": _loads(m[4]),
+                    "status": m[5],
+                    "tools": tools,
+                    "drafts": _loads(m[7]),
+                    "attachments": _loads(m[8]),
+                    "hidden": bool(m[9]),
+                    "error": m[10],
+                }
+            )
         return {
-            "id": row[0], "title": row[1], "created_at": row[2],
-            "updated_at": row[3], "backend_state": _loads(row[4]),
+            "id": row[0],
+            "title": row[1],
+            "created_at": row[2],
+            "updated_at": row[3],
+            "backend_state": _loads(row[4]),
             "messages": messages,
         }
     finally:
@@ -179,15 +199,37 @@ def delete_conversation(project_path, cid) -> bool:
         conn.close()
 
 
-def add_message(project_path, cid, role, text, metadata=None, status="complete",
-                tools=None, drafts=None, attachments=None, hidden=False, error=None) -> int:  # type: ignore[return-value]
+def add_message(
+    project_path,
+    cid,
+    role,
+    text,
+    metadata=None,
+    status="complete",
+    tools=None,
+    drafts=None,
+    attachments=None,
+    hidden=False,
+    error=None,
+) -> int:  # type: ignore[return-value]
     now = _now()
     conn = connect(project_path)
     try:
         cur = conn.execute(
             "INSERT INTO messages (conversation_id, role, text, timestamp, metadata, status, tools, drafts, attachments, hidden, error) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (cid, role, text, now, _dumps(metadata), status, _dumps(tools),
-             _dumps(drafts), _dumps(attachments), 1 if hidden else 0, error),
+            (
+                cid,
+                role,
+                text,
+                now,
+                _dumps(metadata),
+                status,
+                _dumps(tools),
+                _dumps(drafts),
+                _dumps(attachments),
+                1 if hidden else 0,
+                error,
+            ),
         )
         conn.execute("UPDATE conversations SET updated_at=? WHERE id=?", (now, cid))
         conn.commit()
@@ -197,26 +239,45 @@ def add_message(project_path, cid, role, text, metadata=None, status="complete",
         conn.close()
 
 
-def update_message(project_path, msg_id, text, status="complete", metadata=None,
-                   tools=None, drafts=None, attachments=None, hidden=None, error=None,
-                   update_tools=False, update_drafts=False, update_attachments=False,
-                   update_hidden=False, update_error=False) -> None:
+def update_message(
+    project_path,
+    msg_id,
+    text,
+    status="complete",
+    metadata=None,
+    tools=None,
+    drafts=None,
+    attachments=None,
+    hidden=None,
+    error=None,
+    update_tools=False,
+    update_drafts=False,
+    update_attachments=False,
+    update_hidden=False,
+    update_error=False,
+) -> None:
     conn = connect(project_path)
     try:
         sets = ["text=?", "status=?"]
         vals = [text, status]
         if metadata is not None:
-            sets.append("metadata=?"); vals.append(_dumps(metadata))
+            sets.append("metadata=?")
+            vals.append(_dumps(metadata))
         if update_tools:
-            sets.append("tools=?"); vals.append(_dumps(tools))
+            sets.append("tools=?")
+            vals.append(_dumps(tools))
         if update_drafts:
-            sets.append("drafts=?"); vals.append(_dumps(drafts))
+            sets.append("drafts=?")
+            vals.append(_dumps(drafts))
         if update_attachments:
-            sets.append("attachments=?"); vals.append(_dumps(attachments))
+            sets.append("attachments=?")
+            vals.append(_dumps(attachments))
         if update_hidden:
-            sets.append("hidden=?"); vals.append(1 if hidden else 0)
+            sets.append("hidden=?")
+            vals.append(1 if hidden else 0)
         if update_error:
-            sets.append("error=?"); vals.append(error)
+            sets.append("error=?")
+            vals.append(error)
         vals.append(msg_id)
         conn.execute(f"UPDATE messages SET {', '.join(sets)} WHERE id=?", tuple(vals))
         conn.commit()

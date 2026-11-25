@@ -31,15 +31,21 @@ def project(tmp_path, monkeypatch):
     vault = tmp_path / "v"
     shutil.copytree(FIXTURE, vault / "projects" / "save-the-children")
     import white_words.scriptwriting.core.config
-    monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
-                        lambda: {"root_path": str(vault)})
+
+    monkeypatch.setattr(
+        white_words.scriptwriting.core.config,
+        "load_plugin_config",
+        lambda: {"root_path": str(vault)},
+    )
     from white_words.scriptwriting.tools.story_import import handler as import_handler
+
     import_handler({"project": "save-the-children", "confirm": True}, root_path=str(vault))
     return vault / "projects" / "save-the-children"
 
 
 def load(project, **args):
     from white_words.scriptwriting.tools.story_load import handler
+
     vault = str(project.parent.parent)
     return json.loads(handler({"project": "save-the-children", **args}, root_path=vault))
 
@@ -57,18 +63,22 @@ class TestPlotBeatsLiveInTheirOwnView:
         result = load(project)
         assert result["plots"], "fixture should have plots"
         for plot in result["plots"]:
-            assert not {"setups", "complications", "crisis", "climax",
-                        "resolutions"} & plot.keys()
+            assert not {"setups", "complications", "crisis", "climax", "resolutions"} & plot.keys()
 
     def test_dramatic_elements_carries_every_beat_kind(self, project):
         """No flag: the view's job is cross-checking plot roles against the
         structural milestones, and half of that was withheld behind add_plot."""
         result = load(project, view="dramatic_elements")
-        roles = {p["role"]
-                 for act in result["acts"] for seq in act.get("sequences", [])
-                 for scene in seq.get("scenes", []) for p in scene.get("plots", [])}
+        roles = {
+            p["role"]
+            for act in result["acts"]
+            for seq in act.get("sequences", [])
+            for scene in seq.get("scenes", [])
+            for p in scene.get("plots", [])
+        }
         assert roles, "dramatic_elements returned no plot references at all"
         from white_words.scriptwriting.core.constants import PLOT_ROLES
+
         assert roles <= set(PLOT_ROLES)
 
     def test_the_plot_index_sits_under_the_project(self, project):
@@ -106,18 +116,26 @@ class TestPlotBeatsLiveInTheirOwnView:
         from the index has nothing to be checked against."""
         out = load(project, view="dramatic_elements")
         known = {p["id"] for p in out["project"]["plots"]}
-        named = {p["plot"]
-                 for act in out["acts"] for seq in act.get("sequences", [])
-                 for scene in seq.get("scenes", []) for p in scene.get("plots", [])}
+        named = {
+            p["plot"]
+            for act in out["acts"]
+            for seq in act.get("sequences", [])
+            for scene in seq.get("scenes", [])
+            for p in scene.get("plots", [])
+        }
         assert named <= known, f"unresolvable plot slugs: {named - known}"
 
     def test_scene_plot_entries_carry_no_description(self, project):
         """Dropped on purpose — it is the plot note's prose and it roughly
         doubles the payload. `story_retrieve` is where a description is read."""
         out = load(project, view="dramatic_elements")
-        entries = [p
-                   for act in out["acts"] for seq in act.get("sequences", [])
-                   for scene in seq.get("scenes", []) for p in scene.get("plots", [])]
+        entries = [
+            p
+            for act in out["acts"]
+            for seq in act.get("sequences", [])
+            for scene in seq.get("scenes", [])
+            for p in scene.get("plots", [])
+        ]
         assert entries
         assert all(set(p) == {"plot", "role"} for p in entries)
 
@@ -130,32 +148,58 @@ class TestPlotBeatsLiveInTheirOwnView:
         """
         from white_words.scriptwriting.tools.story_retrieve import handler as retrieve_handler
         import json as _json
+
         plot_id = load(project)["plots"][0]["id"]
-        got = _json.loads(retrieve_handler({
-            "project": "save-the-children", "entity_type": "plot",
-            "id": [plot_id],
-            "fields": ["setups", "inciting_incident", "complications",
-                       "crisis", "climax", "resolutions"],
-            "root_path": str(project.parent.parent),
-        }))["entities"][0]["fields"]
-        beats = got.get("setups", []) + got.get("inciting_incident", []) \
-            + got.get("complications", []) + got.get("crisis", []) \
-            + got.get("climax", []) + got.get("resolutions", [])
+        got = _json.loads(
+            retrieve_handler(
+                {
+                    "project": "save-the-children",
+                    "entity_type": "plot",
+                    "id": [plot_id],
+                    "fields": [
+                        "setups",
+                        "inciting_incident",
+                        "complications",
+                        "crisis",
+                        "climax",
+                        "resolutions",
+                    ],
+                    "root_path": str(project.parent.parent),
+                }
+            )
+        )["entities"][0]["fields"]
+        beats = (
+            got.get("setups", [])
+            + got.get("inciting_incident", [])
+            + got.get("complications", [])
+            + got.get("crisis", [])
+            + got.get("climax", [])
+            + got.get("resolutions", [])
+        )
         assert beats, f"{plot_id} lost its beats — they are readable nowhere"
 
     def test_the_scenes_plot_roles_are_the_write_side(self, project):
         """Same rows, reachable from the scene, which is where they are written."""
         from white_words.scriptwriting.tools.story_retrieve import handler as retrieve_handler
         import json as _json
-        got = _json.loads(retrieve_handler({
-            "project": "save-the-children", "entity_type": "scene",
-            "id": ["central-room-day"], "fields": ["all"],
-            "root_path": str(project.parent.parent),
-        }))["entities"][0]["fields"]
+
+        got = _json.loads(
+            retrieve_handler(
+                {
+                    "project": "save-the-children",
+                    "entity_type": "scene",
+                    "id": ["central-room-day"],
+                    "fields": ["all"],
+                    "root_path": str(project.parent.parent),
+                }
+            )
+        )["entities"][0]["fields"]
         assert got["plot_roles"], "the scene's own plot roles are unreadable"
         assert got["plot_roles"][0] == {
-            "plot": "the-resistance", "role": "inciting_incident",
-            "description": got["plot_roles"][0]["description"]}
+            "plot": "the-resistance",
+            "role": "inciting_incident",
+            "description": got["plot_roles"][0]["description"],
+        }
         assert got["plot_roles"][0]["description"]
 
 
@@ -167,8 +211,15 @@ class TestBaseViewIsUnchanged:
 
     def test_base_view_keeps_its_slim_key_set(self, project):
         assert set(load(project)) == {
-            "loaded", "confirmation", "project", "acts",
-            "characters", "plots", "worlds", "memory"}
+            "loaded",
+            "confirmation",
+            "project",
+            "acts",
+            "characters",
+            "plots",
+            "worlds",
+            "memory",
+        }
 
     def test_base_view_carries_no_domain_depth(self, project):
         """The base map deliberately omits the domains the views own."""
@@ -183,15 +234,20 @@ class TestBaseViewIsUnchanged:
         assert "is_crisis" not in dumped
         assert "perspectives" not in dumped
 
-
     def test_base_view_stays_small_as_the_project_grows(self, project):
         """The cost that justifies the views: a scene must be near-free."""
         from white_words.scriptwriting.tools.story_load import handler
+
         small = len(json.dumps(load(project)))
         from white_words.scriptwriting.core.writes import create_entity
+
         for i in range(40):
-            create_entity(project, "scene", f"extra-{i:02d}",
-                          {"title": f"Extra {i}", "sequence_id": "seq-discovery"})
+            create_entity(
+                project,
+                "scene",
+                f"extra-{i:02d}",
+                {"title": f"Extra {i}", "sequence_id": "seq-discovery"},
+            )
         grown = len(json.dumps(load(project)))
         # 40 scenes must not cost more than a trivial slice of the budget.
         assert (grown - small) / 40 < 40, f"{grown - small} chars for 40 scenes"
@@ -199,28 +255,29 @@ class TestBaseViewIsUnchanged:
 
 class TestDramaticElementsView:
     def test_nests_scenes_under_sequence_under_act(self, project):
-        scenes = (load(project, view="dramatic_elements")["acts"][0]
-                  ["sequences"][0]["scenes"])
+        scenes = load(project, view="dramatic_elements")["acts"][0]["sequences"][0]["scenes"]
         assert [s["id"] for s in scenes] == [
-            "central-room-day", "central-room-night", "the-core-day"]
+            "central-room-day",
+            "central-room-night",
+            "the-core-day",
+        ]
 
     def test_carries_dramatic_role_and_the_plot_roles(self, project):
         """Both halves, because the view exists to check them against each
         other. `dramatic_role` says the scene serves a plot; `plots[]` says
         which and in what role. "plot_role" with no `plots[]` is exactly the
         disagreement worth spotting, so it must be reported, not hidden."""
-        scenes = {s["id"]: s for s in
-                  (load(project, view="dramatic_elements")["acts"][0]
-                   ["sequences"][0]["scenes"])}
+        scenes = {
+            s["id"]: s
+            for s in (load(project, view="dramatic_elements")["acts"][0]["sequences"][0]["scenes"])
+        }
         day = scenes["central-room-day"]
         assert day["dramatic_role"] == "plot_role"
         assert day["plots"], "the plot roles must be visible alongside it"
 
     def test_plots_are_always_present_not_behind_a_flag(self, project):
-        scenes = (load(project, view="dramatic_elements")["acts"][0]
-                  ["sequences"][0]["scenes"])
-        assert any("plots" in s for s in scenes), \
-            "plot roles must be in the view unconditionally"
+        scenes = load(project, view="dramatic_elements")["acts"][0]["sequences"][0]["scenes"]
+        assert any("plots" in s for s in scenes), "plot roles must be in the view unconditionally"
 
     def test_project_is_the_top_container(self, project):
         """The story's climax and inciting incident are global facts, so they
@@ -243,15 +300,13 @@ class TestDramaticElementsView:
         assert [a["id"] for a in out["acts"]] == ["act-1"]
 
     def test_sequence_carries_its_primary_plot(self, project):
-        seq = (load(project, view="dramatic_elements")["acts"][0]
-               ["sequences"][0])
+        seq = load(project, view="dramatic_elements")["acts"][0]["sequences"][0]
         assert seq["primary_plot"] == "the-resistance"
 
     def test_scene_reports_milestones_from_main_plot_roles(self, project):
         """Milestones are the main plot's roles. The fixture's main plot
         (the-resistance) holds central-room-night as its climax."""
-        scenes = (load(project, view="dramatic_elements")["acts"][0]
-                  ["sequences"][0]["scenes"])
+        scenes = load(project, view="dramatic_elements")["acts"][0]["sequences"][0]["scenes"]
         night = scenes[1]
         assert "milestone" in night
         assert "climax" in night["milestone"]
@@ -259,8 +314,7 @@ class TestDramaticElementsView:
     def test_scene_reports_the_derived_milestone_label(self, project):
         """The milestone label is derived from the scene's plot_roles. A scene
         with a main-plot role carries the label."""
-        scenes = (load(project, view="dramatic_elements")["acts"][0]
-                  ["sequences"][0]["scenes"])
+        scenes = load(project, view="dramatic_elements")["acts"][0]["sequences"][0]["scenes"]
         assert "milestone" in scenes[1]
         assert "climax" in scenes[1]["milestone"]
         assert "milestone" in scenes[0]
@@ -271,10 +325,8 @@ class TestDramaticElementsView:
         is_crisis / is_climax / is_resolution — none a scene field, and two of
         If any reappear, the view is reading a key that
         belongs to another entity type."""
-        scenes = (load(project, view="dramatic_elements")["acts"][0]
-                  ["sequences"][0]["scenes"])
-        dead = {"is_setup", "is_turning_point", "is_crisis", "is_climax",
-                "is_resolution"}
+        scenes = load(project, view="dramatic_elements")["acts"][0]["sequences"][0]["scenes"]
+        dead = {"is_setup", "is_turning_point", "is_crisis", "is_climax", "is_resolution"}
         assert not [k for s in scenes for k in s if k in dead]
 
     def test_both_halbes_are_reported_so_they_can_be_cross_checked(self, project):
@@ -288,45 +340,47 @@ class TestDramaticElementsView:
         from white_words.scriptwriting.core.writes import edit_entity
 
         # 1. the scene says plot_role and a plot agrees -> both reported.
-        edit_entity(project, "scene", "central-room-day",
-                    {"dramatic_role": "plot_role"}, "r")
-        scenes = {s["id"]: s for s in
-                  (load(project, view="dramatic_elements")["acts"][0]
-                   ["sequences"][0]["scenes"])}
+        edit_entity(project, "scene", "central-room-day", {"dramatic_role": "plot_role"}, "r")
+        scenes = {
+            s["id"]: s
+            for s in (load(project, view="dramatic_elements")["acts"][0]["sequences"][0]["scenes"])
+        }
         day = scenes["central-room-day"]
         assert day["dramatic_role"] == "plot_role"
         assert day["plots"], "the plot roles must be visible alongside it"
 
         # 2. the scene says non-event -> reported, and it serves no plot.
-        edit_entity(project, "scene", "central-room-day",
-                    {"dramatic_role": "non-event", "plot_roles": []}, "r")
-        day = {s["id"]: s for s in
-               (load(project, view="dramatic_elements")["acts"][0]
-                ["sequences"][0]["scenes"])}["central-room-day"]
+        edit_entity(
+            project,
+            "scene",
+            "central-room-day",
+            {"dramatic_role": "non-event", "plot_roles": []},
+            "r",
+        )
+        day = {
+            s["id"]: s
+            for s in (load(project, view="dramatic_elements")["acts"][0]["sequences"][0]["scenes"])
+        }["central-room-day"]
         assert day["dramatic_role"] == "non-event"
         assert "plots" not in day
 
     def test_the_role_is_derived_from_the_relation_kind(self, project):
         """Not guessed from the plot's fields — read off the `plot_<role>` row."""
-        scenes = (load(project, view="dramatic_elements")
-                  ["acts"][0]["sequences"][0]["scenes"])
-        assert scenes[0]["plots"][0] == {"plot": "the-resistance",
-                                         "role": "inciting_incident"}
+        scenes = load(project, view="dramatic_elements")["acts"][0]["sequences"][0]["scenes"]
+        assert scenes[0]["plots"][0] == {"plot": "the-resistance", "role": "inciting_incident"}
         assert scenes[2]["plots"][0]["role"] == "resolution"
 
 
 class TestRelationshipView:
     def test_returns_every_relationship(self, project):
         r = load(project, view="relationship")
-        assert {x["id"] for x in r["relationships"]} >= {
-            "kael-mira", "kael-the-administrator"}
+        assert {x["id"] for x in r["relationships"]} >= {"kael-mira", "kael-the-administrator"}
 
     def test_perspectives_are_flat_and_name_the_character(self, project):
         """Keyed-by-character dicts would be fine in storage but unreadable here."""
         rel = load(project, view="relationship")["relationships"][0]
         first = rel["perspectives"][0]
-        assert set(first) == {"character", "type", "label", "feeling",
-                              "strength", "secret"}
+        assert set(first) == {"character", "type", "label", "feeling", "strength", "secret"}
         assert first["character"] in rel["characters"]
 
 
@@ -349,13 +403,13 @@ class TestUnfilledView:
         counts = [i["count"] for i in load(project, view="unfilled")["unfilled"]]
         assert counts == sorted(counts, reverse=True)
 
-    def test_is_capped_so_it_stays_a_suggestion_not_an_inventory(self, project,
-                                                                 monkeypatch):
+    def test_is_capped_so_it_stays_a_suggestion_not_an_inventory(self, project, monkeypatch):
         # The cap is set here rather than left to the fixture's gap count: the
         # plot's six role fields stopped being gaps when they became computed,
         # so the fixture sits exactly on the cap and truncation stopped firing
         # for a reason unrelated to truncation.
         import white_words.scriptwriting.tools.story_load as sl
+
         monkeypatch.setattr(sl, "UNFILLED_LIMIT", 3)
         r = load(project, view="unfilled")
         assert len(r["unfilled"]) <= 3
@@ -363,6 +417,7 @@ class TestUnfilledView:
 
     def test_truncation_is_honest_about_what_is_hidden(self, project, monkeypatch):
         import white_words.scriptwriting.tools.story_load as sl
+
         monkeypatch.setattr(sl, "UNFILLED_LIMIT", 3)
         r = load(project, view="unfilled")
         assert r["shown_types"] == len(r["unfilled"])
@@ -378,8 +433,9 @@ class TestBaseMapSceneRow:
     is FOR — its plots, its objective — and a pointer to its beats. The beats,
     their `turning_point` and the `value_turns` are the views' and the record's."""
 
-    def _scene_with_beats(self, project, slug="slim", parent="act-slim",
-                          objective="to get the door open"):
+    def _scene_with_beats(
+        self, project, slug="slim", parent="act-slim", objective="to get the door open"
+    ):
         """A scene with a beat list, in its own act/sequence.
 
         Fresh ids throughout: the fixture already has acts, sequences and a
@@ -387,20 +443,36 @@ class TestBaseMapSceneRow:
         would make the assertion about a row this helper did not write.
         """
         writes_create_entity(project, "act", parent, {"title": "Act"})
-        writes_create_entity(project, "sequence", f"seq-{slug}",
-                             {"title": "Seq", "act_id": parent})
-        writes_create_entity(project, "scene", slug, {
-            "title": "Scene", "status": "drafted", "sequence_id": f"seq-{slug}",
-            "act_id": parent, "scene_objective": objective,
-        })
+        writes_create_entity(project, "sequence", f"seq-{slug}", {"title": "Seq", "act_id": parent})
+        writes_create_entity(
+            project,
+            "scene",
+            slug,
+            {
+                "title": "Scene",
+                "status": "drafted",
+                "sequence_id": f"seq-{slug}",
+                "act_id": parent,
+                "scene_objective": objective,
+            },
+        )
         # A record with a beat list, so the assertion has something to exclude.
-        writes_create_entity(project, "scene_beats", f"{slug}-beats", {
-            "scene": slug,
-            "turning_point": "the lock was never engaged",
-            "beats": [{"action": {"surface": "A" * 200},
-                       "reaction": {"surface": "B" * 200},
-                       "gap": "C" * 200}],
-        })
+        writes_create_entity(
+            project,
+            "scene_beats",
+            f"{slug}-beats",
+            {
+                "scene": slug,
+                "turning_point": "the lock was never engaged",
+                "beats": [
+                    {
+                        "action": {"surface": "A" * 200},
+                        "reaction": {"surface": "B" * 200},
+                        "gap": "C" * 200,
+                    }
+                ],
+            },
+        )
 
     def test_the_base_map_carries_only_the_pointer(self, project):
         self._scene_with_beats(project)
@@ -414,11 +486,19 @@ class TestBaseMapSceneRow:
         """The plots a scene serves, as slugs. The role it plays in each is the
         `dramatic_elements` view's, which carries the plot index."""
         from white_words.scriptwriting.core.writes import edit_entity
-        edit_entity(project, "scene", "central-room-day",
-                    {"plot_roles": [
-                        {"plot": "the-resistance", "role": "inciting_incident"},
-                        {"plot": "the-scientists-last-stand", "role": "setup"},
-                    ]}, "r")
+
+        edit_entity(
+            project,
+            "scene",
+            "central-room-day",
+            {
+                "plot_roles": [
+                    {"plot": "the-resistance", "role": "inciting_incident"},
+                    {"plot": "the-scientists-last-stand", "role": "setup"},
+                ]
+            },
+            "r",
+        )
         row = self._row(project, "central-room-day")
         assert "plots" not in row
         # `dramatic_role` is a single word about the scene; the plots are the
@@ -435,19 +515,42 @@ class TestBaseMapSceneRow:
         One record per scene, so the existing one is edited."""
         self._scene_with_beats(project, slug="fallback", parent="act-fallback")
         edit_entity(project, "scene", "fallback", {"scene_objective": ""}, "r")
-        edit_entity(project, "scene_beats", "fallback-beats",
-                    {"scene_objective": "the record's version"}, "r")
+        edit_entity(
+            project,
+            "scene_beats",
+            "fallback-beats",
+            {"scene_objective": "the record's version"},
+            "r",
+        )
         assert self._row(project, "fallback")["scene_objective"] == "the record's version"
 
     def test_the_base_map_carries_no_value_turns(self, project):
         """A value turn is a shift of a value with its effects — the `values`
         view and the dashboard's graph read it, not the base map."""
-        edit_entity(project, "scene", "central-room-day",
-                    {"value_turns": [{"plot": "the-resistance", "value": "freedom",
-                                      "from": "imprisoned", "to": "free",
-                                      "effects": [{"character": "kael", "levels": [
-                                          {"conflict_level": "inner",
-                                           "effect": "Kael realises it."}]}]}]}, "r")
+        edit_entity(
+            project,
+            "scene",
+            "central-room-day",
+            {
+                "value_turns": [
+                    {
+                        "plot": "the-resistance",
+                        "value": "freedom",
+                        "from": "imprisoned",
+                        "to": "free",
+                        "effects": [
+                            {
+                                "character": "kael",
+                                "levels": [
+                                    {"conflict_level": "inner", "effect": "Kael realises it."}
+                                ],
+                            }
+                        ],
+                    }
+                ]
+            },
+            "r",
+        )
         assert "value_turns" not in self._row(project, "central-room-day")
 
     def test_the_base_map_stays_small_with_a_beat_list(self, project):
@@ -461,12 +564,20 @@ class TestBaseMapSceneRow:
         """
         self._scene_with_beats(project, objective="")
         writes_create_entity(project, "act", "act-bare", {"title": "Act"})
-        writes_create_entity(project, "sequence", "seq-bare",
-                             {"title": "Seq", "act_id": "act-bare"})
-        writes_create_entity(project, "scene", "bare", {
-            "title": "Scene", "status": "drafted",
-            "sequence_id": "seq-bare", "act_id": "act-bare",
-        })
+        writes_create_entity(
+            project, "sequence", "seq-bare", {"title": "Seq", "act_id": "act-bare"}
+        )
+        writes_create_entity(
+            project,
+            "scene",
+            "bare",
+            {
+                "title": "Scene",
+                "status": "drafted",
+                "sequence_id": "seq-bare",
+                "act_id": "act-bare",
+            },
+        )
         scenes = self._all_scenes(project)
         assert "scene_beats" not in scenes["bare"]
         assert "scene_beats" not in scenes["slim"]
@@ -474,21 +585,37 @@ class TestBaseMapSceneRow:
 
     def test_a_scene_without_a_record_carries_no_pointer(self, project):
         writes_create_entity(project, "act", "act-bare", {"title": "Act"})
-        writes_create_entity(project, "sequence", "seq-bare",
-                             {"title": "Seq", "act_id": "act-bare"})
-        writes_create_entity(project, "scene", "bare", {
-            "title": "Scene", "status": "drafted",
-            "sequence_id": "seq-bare", "act_id": "act-bare",
-        })
+        writes_create_entity(
+            project, "sequence", "seq-bare", {"title": "Seq", "act_id": "act-bare"}
+        )
+        writes_create_entity(
+            project,
+            "scene",
+            "bare",
+            {
+                "title": "Scene",
+                "status": "drafted",
+                "sequence_id": "seq-bare",
+                "act_id": "act-bare",
+            },
+        )
         assert "scene_beats" not in self._row(project, "bare")
 
     def _all_scenes(self, project):
-        return {s["id"]: s for a in get_project_summary(project)["acts"]
-                for q in a["sequences"] for s in q["scenes"]}
+        return {
+            s["id"]: s
+            for a in get_project_summary(project)["acts"]
+            for q in a["sequences"]
+            for s in q["scenes"]
+        }
 
     def _row(self, project, slug):
-        scenes = [s for a in get_project_summary(project)["acts"]
-                  for q in a["sequences"] for s in q["scenes"]]
+        scenes = [
+            s
+            for a in get_project_summary(project)["acts"]
+            for q in a["sequences"]
+            for s in q["scenes"]
+        ]
         return next(s for s in scenes if s["id"] == slug)
 
 
@@ -497,30 +624,47 @@ class TestDramaticElementsCarriesTheSpine:
     pointer, each emitted only when filled."""
 
     def _load(self, project):
-        return json.loads(load_handler(
-            {"project": "save-the-children", "view": "dramatic_elements"},
-            root_path=str(project.parent.parent)))
+        return json.loads(
+            load_handler(
+                {"project": "save-the-children", "view": "dramatic_elements"},
+                root_path=str(project.parent.parent),
+            )
+        )
 
     def _scene_row(self, project, slug="spine-scene"):
         acts = self._load(project)["acts"]
-        return next(s for a in acts for q in a["sequences"]
-                    for s in q["scenes"] if s["id"] == slug)
+        return next(s for a in acts for q in a["sequences"] for s in q["scenes"] if s["id"] == slug)
 
     def _scene(self, project, slug="spine-scene", parent="act-spine", **fields):
         writes_create_entity(project, "act", parent, {"title": "Act"})
-        writes_create_entity(project, "sequence", f"seq-{parent}",
-                             {"title": "Seq", "act_id": parent})
-        writes_create_entity(project, "scene", slug, {
-            "title": "Scene", "status": "drafted",
-            "sequence_id": f"seq-{parent}", "act_id": parent, **fields})
+        writes_create_entity(
+            project, "sequence", f"seq-{parent}", {"title": "Seq", "act_id": parent}
+        )
+        writes_create_entity(
+            project,
+            "scene",
+            slug,
+            {
+                "title": "Scene",
+                "status": "drafted",
+                "sequence_id": f"seq-{parent}",
+                "act_id": parent,
+                **fields,
+            },
+        )
         return slug
 
     def test_a_record_carries_objective_turning_point_and_pointer(self, project):
         self._scene(project, scene_objective="to get the door open without being seen")
-        writes_create_entity(project, "scene_beats", "spine-scene-beats", {
-            "scene": "spine-scene",
-            "turning_point": "the handle turns and the lock was never engaged",
-        })
+        writes_create_entity(
+            project,
+            "scene_beats",
+            "spine-scene-beats",
+            {
+                "scene": "spine-scene",
+                "turning_point": "the handle turns and the lock was never engaged",
+            },
+        )
         row = self._scene_row(project)
         assert row["scene_objective"] == "to get the door open without being seen"
         assert row["turning_point"] == "the handle turns and the lock was never engaged"
@@ -530,20 +674,30 @@ class TestDramaticElementsCarriesTheSpine:
         """The scene's own field is the reasoning behind it; the record's is the
         mechanism's first step. They may drift, so the scene wins when set."""
         self._scene(project)
-        writes_create_entity(project, "scene_beats", "spine-scene-beats", {
-            "scene": "spine-scene",
-            "scene_objective": "the record's version",
-        })
+        writes_create_entity(
+            project,
+            "scene_beats",
+            "spine-scene-beats",
+            {
+                "scene": "spine-scene",
+                "scene_objective": "the record's version",
+            },
+        )
         assert self._scene_row(project)["scene_objective"] == "the record's version"
 
     def test_the_scene_field_wins_when_both_are_set(self, project):
         """The two keep identical names and are allowed to drift; the scene's is
         the reasoning behind it, so it is the one the view reports."""
         self._scene(project, scene_objective="the scene's version")
-        writes_create_entity(project, "scene_beats", "spine-scene-beats", {
-            "scene": "spine-scene",
-            "scene_objective": "the record's version",
-        })
+        writes_create_entity(
+            project,
+            "scene_beats",
+            "spine-scene-beats",
+            {
+                "scene": "spine-scene",
+                "scene_objective": "the record's version",
+            },
+        )
         assert self._scene_row(project)["scene_objective"] == "the scene's version"
 
     def test_each_field_is_omitted_when_unfilled(self, project):
@@ -566,21 +720,25 @@ class TestDramaticElementsEscalationSpine:
     the role that plot holds there."""
 
     def _load(self, project, **args):
-        return json.loads(load_handler(
-            {"project": "save-the-children", "view": "dramatic_elements", **args},
-            root_path=str(project.parent.parent)))
+        return json.loads(
+            load_handler(
+                {"project": "save-the-children", "view": "dramatic_elements", **args},
+                root_path=str(project.parent.parent),
+            )
+        )
 
     @staticmethod
     def _scenes(out):
-        return [s for a in out["acts"] for q in a["sequences"]
-                for s in q["scenes"]]
+        return [s for a in out["acts"] for q in a["sequences"] for s in q["scenes"]]
 
     def test_the_full_view_keeps_its_header_and_rows(self, project):
         """The new arguments are opt-in: with neither, nothing changes."""
         out = self._load(project)
         assert out["plot"] == "all"
         assert {p["id"] for p in out["project"]["plots"]} == {
-            "the-resistance", "the-scientists-last-stand"}
+            "the-resistance",
+            "the-scientists-last-stand",
+        }
         assert set(self._scenes(out)[0]) >= {"title", "status", "plots"}
 
     def test_plot_narrows_the_header_to_that_plot(self, project):
@@ -607,25 +765,21 @@ class TestDramaticElementsEscalationSpine:
         left both facts empty. Filling the fixture's beat list is what
         surfaced it.
         """
-        rows = self._scenes(self._load(project, plot="the-resistance",
-                                       milestones_only=True))
-        assert [r["id"] for r in rows] == [
-            "central-room-day", "central-room-night", "the-core-day"]
+        rows = self._scenes(self._load(project, plot="the-resistance", milestones_only=True))
+        assert [r["id"] for r in rows] == ["central-room-day", "central-room-night", "the-core-day"]
         for row in rows:
-            assert set(row) <= {"id", "milestone", "role",
-                                "scene_objective", "turning_point"}, row
+            assert set(row) <= {"id", "milestone", "role", "scene_objective", "turning_point"}, row
         # And on the fixture's filled record both are there, which is the
         # assertion the three-key version could not make.
-        assert rows[0]["scene_objective"] == (
-            "Find out whether the door was ever locked.")
-        assert rows[0]["turning_point"] == (
-            "The handle turns. The lock was never engaged.")
+        assert rows[0]["scene_objective"] == ("Find out whether the door was ever locked.")
+        assert rows[0]["turning_point"] == ("The handle turns. The lock was never engaged.")
 
     def test_a_subplot_row_carries_that_plots_own_role(self, project):
         """`milestone` is the main plot's, so the subplot's role has to have a
         key of its own — filtering on `milestone` would keep nothing at all."""
-        rows = self._scenes(self._load(
-            project, plot="the-scientists-last-stand", milestones_only=True))
+        rows = self._scenes(
+            self._load(project, plot="the-scientists-last-stand", milestones_only=True)
+        )
         assert [r["id"] for r in rows] == ["central-room-day"]
         assert rows[0]["role"] == ["setup"]
         # The scene also serves the main plot, so both role keys are present
@@ -635,8 +789,7 @@ class TestDramaticElementsEscalationSpine:
     def test_milestones_only_without_plot_keeps_every_promoted_scene(self, project):
         """No `plot`: the spine is every scene any plot promotes."""
         rows = self._scenes(self._load(project, milestones_only=True))
-        assert [r["id"] for r in rows] == [
-            "central-room-day", "central-room-night", "the-core-day"]
+        assert [r["id"] for r in rows] == ["central-room-day", "central-room-night", "the-core-day"]
         # One plot can promote a scene once and another plot twice: the roles
         # are listed together, in story order, not deduplicated across plots.
         assert rows[0]["role"] == ["inciting_incident", "setup"]
@@ -646,18 +799,33 @@ class TestDramaticElementsEscalationSpine:
         point. The fixture records exist but carry no prose, so the facts are
         written here — the point is that the trimmed row keeps them."""
         from white_words.scriptwriting.core.writes import create_entity, edit_entity
-        edit_entity(project, "scene", "central-room-day",
-                    {"scene_objective": "to get the door open without being seen"}, "r")
+
+        edit_entity(
+            project,
+            "scene",
+            "central-room-day",
+            {"scene_objective": "to get the door open without being seen"},
+            "r",
+        )
         # One record per scene, so the existing one is edited rather than
         # a second created.
-        edit_entity(project, "scene_beats", "the-core-day-beats",
-                    {"turning_point": "the handle turns and the lock was never engaged"}, "r")
-        rows = {r["id"]: r for r in self._scenes(
-            self._load(project, plot="the-resistance", milestones_only=True))}
+        edit_entity(
+            project,
+            "scene_beats",
+            "the-core-day-beats",
+            {"turning_point": "the handle turns and the lock was never engaged"},
+            "r",
+        )
+        rows = {
+            r["id"]: r
+            for r in self._scenes(self._load(project, plot="the-resistance", milestones_only=True))
+        }
         assert rows["central-room-day"]["scene_objective"] == (
-            "to get the door open without being seen")
+            "to get the door open without being seen"
+        )
         assert rows["the-core-day"]["turning_point"] == (
-            "the handle turns and the lock was never engaged")
+            "the handle turns and the lock was never engaged"
+        )
         # And the trimmed row drops what the spine does not need.
         assert "scene_beats" not in rows["the-core-day"]
         assert "title" not in rows["central-room-day"]
@@ -666,26 +834,32 @@ class TestDramaticElementsEscalationSpine:
         """Case (d): a transition serves no plot, so it is never a milestone
         and never appears here."""
         from white_words.scriptwriting.core.writes import create_entity
+
         create_entity(project, "act", "act-corridor", {"title": "Act"})
-        create_entity(project, "sequence", "seq-corridor",
-                      {"title": "Seq", "act_id": "act-corridor"})
-        create_entity(project, "scene", "corridor-walk", {
-            "title": "Corridor", "status": "drafted",
-            "sequence_id": "seq-corridor", "act_id": "act-corridor",
-            "dramatic_role": "transition",
-        })
-        ids = [r["id"] for r in self._scenes(
-            self._load(project, milestones_only=True))]
+        create_entity(
+            project, "sequence", "seq-corridor", {"title": "Seq", "act_id": "act-corridor"}
+        )
+        create_entity(
+            project,
+            "scene",
+            "corridor-walk",
+            {
+                "title": "Corridor",
+                "status": "drafted",
+                "sequence_id": "seq-corridor",
+                "act_id": "act-corridor",
+                "dramatic_role": "transition",
+            },
+        )
+        ids = [r["id"] for r in self._scenes(self._load(project, milestones_only=True))]
         assert "corridor-walk" not in ids
         # It is still in the full view, where a transition is a real row.
-        assert "corridor-walk" in [r["id"] for r in self._scenes(
-            self._load(project))]
+        assert "corridor-walk" in [r["id"] for r in self._scenes(self._load(project))]
 
     def test_an_empty_act_is_dropped_by_the_spine(self, project):
         """A sequence with no promoted scene is the filter's result, not
         structure — leaving it in would make a reader count empty acts."""
-        out = self._load(project, plot="the-scientists-last-stand",
-                         milestones_only=True)
+        out = self._load(project, plot="the-scientists-last-stand", milestones_only=True)
         assert [a["id"] for a in out["acts"]] == ["act-1"]
         assert all(q["scenes"] for a in out["acts"] for q in a["sequences"])
 
@@ -694,11 +868,16 @@ class TestDispatch:
     def test_unknown_view_lists_the_valid_ones(self, project):
         r = load(project, view="nonsense")
         assert "unfilled" in r["error"]
-        for v in ("dramatic_elements", "relationship", "unfilled", "values",
-                  "track"):
+        for v in ("dramatic_elements", "relationship", "unfilled", "values", "track"):
             assert v in r["error"]
 
     def test_every_view_is_documented_in_the_schema(self, project):
         from white_words.scriptwriting.tools.story_load import SCHEMA
+
         assert set(SCHEMA["properties"]["view"]["enum"]) == {
-            "dramatic_elements", "relationship", "unfilled", "values", "track"}
+            "dramatic_elements",
+            "relationship",
+            "unfilled",
+            "values",
+            "track",
+        }

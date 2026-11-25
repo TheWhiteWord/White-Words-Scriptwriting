@@ -4,6 +4,7 @@ The parity tests pin the property the module's docstring claims: it agrees
 with the lexer about what a heading, a cue and a transition are, on real
 scene content, not only on hand-picked strings.
 """
+
 import pytest
 
 from white_words.scriptwriting.core import scene_script as ss
@@ -35,8 +36,18 @@ class TestRoundTrip:
         h, blocks = _roundtrip(SCRIPT)
         assert h == "INT. KITCHEN - NIGHT"
         assert [b["type"] for b in blocks] == [
-            "action", "action", "character", "parenthetical", "dialogue",
-            "character", "dialogue", "transition", "note", "action", "raw"]
+            "action",
+            "action",
+            "character",
+            "parenthetical",
+            "dialogue",
+            "character",
+            "dialogue",
+            "transition",
+            "note",
+            "action",
+            "raw",
+        ]
 
     def test_serialization_is_stable(self):
         h, blocks = _roundtrip(SCRIPT)
@@ -51,27 +62,37 @@ class TestRoundTrip:
         """An action line must not turn into a cue just because it is all-caps."""
         out = ss.serialize_blocks([{"type": "action", "text": "RAIN HAMMERS.\nIt will not stop."}])
         assert out.startswith("!RAIN HAMMERS.")
-        assert ss.parse_blocks(out) == [{"type": "action", "text": "RAIN HAMMERS.\nIt will not stop."}]
+        assert ss.parse_blocks(out) == [
+            {"type": "action", "text": "RAIN HAMMERS.\nIt will not stop."}
+        ]
 
     def test_plain_action_is_left_clean(self):
         assert ss.serialize_blocks([{"type": "action", "text": "Rain hammers."}]) == "Rain hammers."
 
     def test_mixed_case_cue_gets_at_sign_and_survives(self):
-        out = ss.serialize_blocks([{"type": "character", "text": "McCoy"},
-                                   {"type": "dialogue", "text": "Hi."}])
+        out = ss.serialize_blocks(
+            [{"type": "character", "text": "McCoy"}, {"type": "dialogue", "text": "Hi."}]
+        )
         assert out.startswith("@McCoy")
         assert ss.parse_blocks(out)[0] == {"type": "character", "text": "McCoy"}
 
     def test_blank_line_inside_dialogue_is_kept(self):
-        blocks = [{"type": "character", "text": "MARA"},
-                  {"type": "dialogue", "text": "One.\n\nTwo."}]
+        blocks = [
+            {"type": "character", "text": "MARA"},
+            {"type": "dialogue", "text": "One.\n\nTwo."},
+        ]
         again = ss.parse_blocks(ss.serialize_blocks(blocks))
         assert again == blocks
 
     def test_orphan_dialogue_is_reported_not_hidden(self):
-        f = ss.findings(scene={"order": 1, "time_of_day": "DAY"},
-                        blocks=[{"type": "dialogue", "text": "Hello?"}], cast=[], location=None,
-                        has_plot_roles=True, unfilled=[])
+        f = ss.findings(
+            scene={"order": 1, "time_of_day": "DAY"},
+            blocks=[{"type": "dialogue", "text": "Hello?"}],
+            cast=[],
+            location=None,
+            has_plot_roles=True,
+            unfilled=[],
+        )
         assert any(x["code"] == "orphan_dialogue" and x["block"] == 0 for x in f)
 
     def test_empty_blocks_are_dropped(self):
@@ -89,22 +110,25 @@ class TestParityWithLexer:
 
     def test_fixture_scenes(self, fixture_db):
         import sqlite3
+
         conn = sqlite3.connect(str(fixture_db / ".story" / "story.db"))
-        bodies = [r[0] for r in conn.execute(
-            "SELECT body FROM sections WHERE heading='Content' AND body<>'' ")]
+        bodies = [
+            r[0]
+            for r in conn.execute("SELECT body FROM sections WHERE heading='Content' AND body<>'' ")
+        ]
         conn.close()
         bodies = [b for b in bodies if not ss.is_placeholder(b)]
         assert bodies, "fixture has no scene content to compare"
         checked = 0
         for body in bodies:
             h, blocks = _roundtrip(body)
-            tokens = [t for t in lex(body)["tokens"]
-                      if t["type"] in ("character", "transition")]
+            tokens = [t for t in lex(body)["tokens"] if t["type"] in ("character", "transition")]
             lex_cues = [ss.cue_key(t["text"]) for t in tokens if t["type"] == "character"]
             mine = [ss.cue_key(b["text"]) for b in blocks if b["type"] == "character"]
             assert mine == lex_cues, body[:80]
-            assert [t["text"] for t in tokens if t["type"] == "transition"] == \
-                   [b["text"] for b in blocks if b["type"] == "transition"]
+            assert [t["text"] for t in tokens if t["type"] == "transition"] == [
+                b["text"] for b in blocks if b["type"] == "transition"
+            ]
             assert ss.is_lossless(body, h, blocks), body[:80]
             checked += 1
         assert checked
@@ -116,7 +140,10 @@ class TestHeading:
     def test_compose(self):
         assert ss.compose_heading("INT.", "The kitchen", "", "NIGHT") == "INT. THE KITCHEN - NIGHT"
         assert ss.compose_heading("EXT.", "Pier") == "EXT. PIER - UNSPECIFIED"
-        assert ss.compose_heading("INT.", "The kitchen", "Pantry", "NIGHT") == "INT. THE KITCHEN - PANTRY - NIGHT"
+        assert (
+            ss.compose_heading("INT.", "The kitchen", "Pantry", "NIGHT")
+            == "INT. THE KITCHEN - PANTRY - NIGHT"
+        )
         with pytest.raises(ValueError):
             ss.compose_heading("INT.", "", "", "DAY")
         with pytest.raises(ValueError):
@@ -125,19 +152,22 @@ class TestHeading:
     def test_the_place_segment_is_upper_cased_and_omitted_when_empty(self):
         """The place is a segment of the upper-case line; the stored value keeps
         its own case, so the composer is the only place it is normalised."""
-        assert ss.compose_heading("INT.", "The Kitchen", "pantry", "NIGHT") == \
-            "INT. THE KITCHEN - PANTRY - NIGHT"
+        assert (
+            ss.compose_heading("INT.", "The Kitchen", "pantry", "NIGHT")
+            == "INT. THE KITCHEN - PANTRY - NIGHT"
+        )
         # Whitespace is collapsed, so a sloppy value still composes one segment.
-        assert ss.compose_heading("INT.", "The Kitchen", "  back   room ", "NIGHT") == \
-            "INT. THE KITCHEN - BACK ROOM - NIGHT"
+        assert (
+            ss.compose_heading("INT.", "The Kitchen", "  back   room ", "NIGHT")
+            == "INT. THE KITCHEN - BACK ROOM - NIGHT"
+        )
         assert " - PANTRY - " not in ss.compose_heading("INT.", "The Kitchen", "   ", "NIGHT")
 
     def test_a_time_is_always_emitted(self):
         """The last ` - ` segment is always the time, so the parser can split the
         line unambiguously. `UNSPECIFIED` is what an unset time composes to."""
         assert ss.compose_heading("EXT.", "Pier", "", "") == "EXT. PIER - UNSPECIFIED"
-        assert ss.compose_heading("EXT.", "Pier", "Quay", "") == \
-            "EXT. PIER - QUAY - UNSPECIFIED"
+        assert ss.compose_heading("EXT.", "Pier", "Quay", "") == "EXT. PIER - QUAY - UNSPECIFIED"
 
     def test_the_separator_may_not_appear_in_a_segment(self):
         """` - ` is the separator between place and time, so a segment carrying
@@ -152,8 +182,7 @@ class TestHeading:
         from white_words.scriptwriting.core.constants import INT_EXT_CHOICES
 
         for value in INT_EXT_CHOICES:
-            assert ss.compose_heading(value, "Kitchen", "", "DAY") == \
-                f"{value} KITCHEN - DAY"
+            assert ss.compose_heading(value, "Kitchen", "", "DAY") == f"{value} KITCHEN - DAY"
         for value in ("", "INT", "int.", "I/E", "OUT."):
             with pytest.raises(ValueError):
                 ss.compose_heading(value, "Kitchen", "", "DAY")
@@ -162,16 +191,20 @@ class TestHeading:
         """Readers that still show a line get one source: forced wins, an
         unusable composed heading reads as no heading at all."""
         assert ss.scene_heading("", "", "", "", "") == ""
-        assert ss.scene_heading("INT.", "Kitchen", "Pantry", "NIGHT", "") == \
-            "INT. KITCHEN - PANTRY - NIGHT"
+        assert (
+            ss.scene_heading("INT.", "Kitchen", "Pantry", "NIGHT", "")
+            == "INT. KITCHEN - PANTRY - NIGHT"
+        )
         assert ss.scene_heading("", "", "", "", ".SNIPER SCOPE POV") == ".SNIPER SCOPE POV"
         assert ss.scene_heading("OUT.", "Kitchen", "", "NIGHT", "") == ""
 
     def test_split_heading_takes_a_leading_line_and_leaves_the_body(self):
         """A note whose Content still opens with a heading line is canonicalised
         on import; the line is stripped so the composed heading is not duplicated."""
-        assert ss.split_heading("INT. KITCHEN - NIGHT\n\nRain.\n") == \
-            ("INT. KITCHEN - NIGHT", "\nRain.\n")
+        assert ss.split_heading("INT. KITCHEN - NIGHT\n\nRain.\n") == (
+            "INT. KITCHEN - NIGHT",
+            "\nRain.\n",
+        )
         assert ss.split_heading("Rain.\n") == (None, "Rain.\n")
         assert ss.split_heading("   \n\nRain.\n") == (None, "Rain.\n")
         assert ss.split_heading("[placeholder — scene/Content]") == (None, "")
@@ -197,9 +230,14 @@ class TestCast:
         assert ss.cue_key("MARA (CONT'D)") == "MARA"
 
     def test_two_cues_one_person_count_once(self):
-        blocks = [{"type": "character", "text": "MARA"}, {"type": "dialogue", "text": "a"},
-                  {"type": "character", "text": "MARA CHEN"}, {"type": "dialogue", "text": "b"},
-                  {"type": "character", "text": "LEO"}, {"type": "dialogue", "text": "c"}]
+        blocks = [
+            {"type": "character", "text": "MARA"},
+            {"type": "dialogue", "text": "a"},
+            {"type": "character", "text": "MARA CHEN"},
+            {"type": "dialogue", "text": "b"},
+            {"type": "character", "text": "LEO"},
+            {"type": "dialogue", "text": "c"},
+        ]
         cast = ss.script_cast(blocks, CHARS)
         assert [c["id"] for c in cast] == ["mara-chen", None]
         assert cast[0]["cues"] == 2 and cast[1]["name"] == "Leo" and not cast[1]["registered"]
@@ -208,10 +246,23 @@ class TestCast:
 
 class TestFindings:
     def _f(self, **kw):
-        base = dict(scene={"order": 3, "time_of_day": "NIGHT", "dramatic_role": "", "id": "s", "title": "S",
-                           "int_ext": "INT.", "location": "k", "forced_heading": ""},
-                    blocks=[], cast=[], location={"id": "k", "name": "Kitchen", "world": {"id": "w", "name": "W"}},
-                    has_plot_roles=True, unfilled=[])
+        base = dict(
+            scene={
+                "order": 3,
+                "time_of_day": "NIGHT",
+                "dramatic_role": "",
+                "id": "s",
+                "title": "S",
+                "int_ext": "INT.",
+                "location": "k",
+                "forced_heading": "",
+            },
+            blocks=[],
+            cast=[],
+            location={"id": "k", "name": "Kitchen", "world": {"id": "w", "name": "W"}},
+            has_plot_roles=True,
+            unfilled=[],
+        )
         base.update(kw)
         return {x["code"] for x in ss.findings(**base)}
 
@@ -219,21 +270,37 @@ class TestFindings:
         assert self._f() == set()
 
     def test_every_critical_rule(self):
-        codes = self._f(scene={"order": 0, "time_of_day": "", "dramatic_role": "", "id": "s"},
-                        location=None, has_plot_roles=False)
-        assert {"order_unset", "time_of_day_missing", "heading_missing",
-                "location_unregistered", "plot_roles_missing"} <= codes
+        codes = self._f(
+            scene={"order": 0, "time_of_day": "", "dramatic_role": "", "id": "s"},
+            location=None,
+            has_plot_roles=False,
+        )
+        assert {
+            "order_unset",
+            "time_of_day_missing",
+            "heading_missing",
+            "location_unregistered",
+            "plot_roles_missing",
+        } <= codes
 
     def test_transition_scene_needs_no_plot_roles(self):
         assert "plot_roles_missing" not in self._f(
             scene={"order": 1, "time_of_day": "DAY", "dramatic_role": "transition", "id": "s"},
-            has_plot_roles=False)
+            has_plot_roles=False,
+        )
 
     def test_location_without_world(self):
-        assert "location_no_world" in self._f(location={"id": "k", "name": "Kitchen", "world": None})
+        assert "location_no_world" in self._f(
+            location={"id": "k", "name": "Kitchen", "world": None}
+        )
 
     def test_unfilled_critical_fields_are_not_reported_twice(self):
-        f = ss.findings(scene={"order": 1, "time_of_day": "", "id": "s"},
-                        blocks=[], cast=[], location={"id": "k", "name": "K", "world": {"id": "w"}},
-                        has_plot_roles=True, unfilled=["time_of_day", "scene_objective"])
+        f = ss.findings(
+            scene={"order": 1, "time_of_day": "", "id": "s"},
+            blocks=[],
+            cast=[],
+            location={"id": "k", "name": "K", "world": {"id": "w"}},
+            has_plot_roles=True,
+            unfilled=["time_of_day", "scene_objective"],
+        )
         assert [x["field"] for x in f if x["level"] == "other"] == ["scene_objective"]

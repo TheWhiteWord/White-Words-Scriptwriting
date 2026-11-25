@@ -1,14 +1,27 @@
 """Entity extraction, validation, and DB column/relation mapping."""
+
 import json
 import frontmatter
 from pathlib import Path
 from .constants import (
-    REQUIRED_FIELDS, ENTITY_SCHEMAS, VALID_ROLES, VALID_STATUSES,
-    SCENE_STATUSES, SEQUENCE_STATUSES, ACT_STATUSES,
-    SCENE_TIMES_OF_DAY, SCENE_DRAMATIC_ROLES, INT_EXT_CHOICES,
-    STRUCTURE_TYPES, PLOT_TYPES,
-    PLOT_SCOPES, VALUE_ARCS, PLOT_ROLES, UNIQUE_PLOT_ROLES,
-    CONFLICT_LEVELS, VALUE_LADDER,
+    REQUIRED_FIELDS,
+    ENTITY_SCHEMAS,
+    VALID_ROLES,
+    VALID_STATUSES,
+    SCENE_STATUSES,
+    SEQUENCE_STATUSES,
+    ACT_STATUSES,
+    SCENE_TIMES_OF_DAY,
+    SCENE_DRAMATIC_ROLES,
+    INT_EXT_CHOICES,
+    STRUCTURE_TYPES,
+    PLOT_TYPES,
+    PLOT_SCOPES,
+    VALUE_ARCS,
+    PLOT_ROLES,
+    UNIQUE_PLOT_ROLES,
+    CONFLICT_LEVELS,
+    VALUE_LADDER,
 )
 from .section_parser import list_sections
 
@@ -117,8 +130,7 @@ def validate_entity(entity_type: str, frontmatter: dict) -> list[str]:
 #                 import creates every entity in one pass and a note is allowed
 #                 to be mid-shape, so these are the author's business and not
 #                 the importer's to enforce.
-STRUCTURAL_WARNINGS = ("Missing required field", "relationship requires",
-                       "Missing perspective")
+STRUCTURAL_WARNINGS = ("Missing required field", "relationship requires", "Missing perspective")
 
 
 def value_problems(entity_type: str, frontmatter: dict) -> list[str]:
@@ -128,8 +140,11 @@ def value_problems(entity_type: str, frontmatter: dict) -> list[str]:
     does not allow. Returning the list rather than raising keeps
     `validate_entity`'s warning contract intact for its other callers.
     """
-    return [w for w in validate_entity(entity_type, frontmatter)
-            if not w.startswith(STRUCTURAL_WARNINGS)]
+    return [
+        w
+        for w in validate_entity(entity_type, frontmatter)
+        if not w.startswith(STRUCTURAL_WARNINGS)
+    ]
 
 
 # ─── Shape validation ───
@@ -144,8 +159,9 @@ _SUBFIELD_TYPES = {
 }
 
 
-def _validate_field(entity_type: str, field: str, value, meta: dict,
-                    warnings: list[str], path: str = "") -> None:
+def _validate_field(
+    entity_type: str, field: str, value, meta: dict, warnings: list[str], path: str = ""
+) -> None:
     """A field that declares `sub_fields` must hold them, at every depth.
 
     The declaration is one form: a `{type, description}` sub-field dict, plus
@@ -168,23 +184,24 @@ def _validate_field(entity_type: str, field: str, value, meta: dict,
     if meta["type"] == "list":
         if not isinstance(value, list):
             warnings.append(
-                f"{at} must be a list of objects with keys [{keys}] "
-                f"— got {type(value).__name__}")
+                f"{at} must be a list of objects with keys [{keys}] — got {type(value).__name__}"
+            )
             return
         for i, entry in enumerate(value):
             entry_at = f"{at}[{i}]"
             if not isinstance(entry, dict):
                 warnings.append(
                     f"{at} must be a list of objects with keys [{keys}] "
-                    f"— got a list containing a non-object")
+                    f"— got a list containing a non-object"
+                )
                 continue
             for key, key_meta in sub_fields.items():
                 _validate_sub_field(entry_at, entry, key, key_meta, warnings)
     elif meta["type"] == "object":
         if not isinstance(value, dict):
             warnings.append(
-                f"{at} must be an object with keys [{keys}] "
-                f"— got {type(value).__name__}")
+                f"{at} must be an object with keys [{keys}] — got {type(value).__name__}"
+            )
             return
         if not meta.get("keyed"):
             # A fixed-key object: the declaration names its own keys.
@@ -199,14 +216,14 @@ def _validate_field(entity_type: str, field: str, value, meta: dict,
             if not isinstance(entry, dict):
                 warnings.append(
                     f"{at} must be an object with keys [{keys}] "
-                    f"— {key_name} holds a {type(entry).__name__}")
+                    f"— {key_name} holds a {type(entry).__name__}"
+                )
                 continue
             for key, key_meta in sub_fields.items():
                 _validate_sub_field(entry_at, entry, key, key_meta, warnings)
 
 
-def _validate_sub_field(path: str, entry: dict, key: str, meta: dict,
-                        warnings: list[str]) -> None:
+def _validate_sub_field(path: str, entry: dict, key: str, meta: dict, warnings: list[str]) -> None:
     """One declared key inside one entry: required, type, enum, recursion."""
     at = f"{path}.{key}"
     if key not in entry:
@@ -215,17 +232,17 @@ def _validate_sub_field(path: str, entry: dict, key: str, meta: dict,
         return
     value = entry[key]
     if "enum" in meta and value not in meta["enum"]:
-        warnings.append(
-            f"{at} must be one of: {', '.join(meta['enum'])} — got {value!r}")
+        warnings.append(f"{at} must be one of: {', '.join(meta['enum'])} — got {value!r}")
     declared = meta.get("type")
     if meta.get("sub_fields"):
         _validate_field("", key, value, meta, warnings, path=path)
     elif declared in _SUBFIELD_TYPES and not isinstance(value, _SUBFIELD_TYPES[declared]):
-        warnings.append(
-            f"{at} must be a {declared} — got {type(value).__name__}")
+        warnings.append(f"{at} must be a {declared} — got {type(value).__name__}")
 
 
-def _validate_enum(frontmatter: dict, field: str, valid: list[str], warnings: list[str], empty_ok: bool = False) -> None:
+def _validate_enum(
+    frontmatter: dict, field: str, valid: list[str], warnings: list[str], empty_ok: bool = False
+) -> None:
     """Append warning if frontmatter[field] is present and not in valid (unless empty_ok and empty)."""
     if field not in frontmatter:
         return
@@ -242,7 +259,8 @@ def _validate_no_separator(frontmatter: dict, field: str, warnings: list[str], l
     if isinstance(value, str) and " - " in value:
         warnings.append(
             f"{label} cannot contain ' - ' — the scene heading uses it as the "
-            f"separator between place and time")
+            f"separator between place and time"
+        )
 
 
 def _validate_numeric(frontmatter: dict, field: str, warnings: list[str]) -> None:
@@ -260,12 +278,12 @@ def _validate_value(frontmatter: dict, warnings: list[str]) -> None:
     the ladder collapses. `p/c/cd/nn` non-empty is the required-field check,
     which runs before this.
     """
-    words = {rung: str(frontmatter.get(rung) or "").strip()
-             for rung in VALUE_LADDER}
+    words = {rung: str(frontmatter.get(rung) or "").strip() for rung in VALUE_LADDER}
     if any(words.values()) and not distinct_ladder_words(words):
         warnings.append(
             f"a value needs four distinct words — the rungs are: "
-            f"{', '.join(f'{k} {v}' for k, v in words.items())}")
+            f"{', '.join(f'{k} {v}' for k, v in words.items())}"
+        )
 
 
 def distinct_ladder_words(words: dict) -> bool:
@@ -289,7 +307,14 @@ ENTITY_COLUMN_MAP = {
     "location": {"name": "name", "one_sentence": "one_sentence", "world": "parent_id"},
     "world": {"name": "name", "one_sentence": "one_sentence"},
     "plot": {"name": "name", "one_sentence": "one_sentence", "status": "status"},
-    "scene": {"title": "name", "one_sentence": "one_sentence", "order": "order_key", "status": "status", "sequence_id": "parent_id", "location": "location_id"},
+    "scene": {
+        "title": "name",
+        "one_sentence": "one_sentence",
+        "order": "order_key",
+        "status": "status",
+        "sequence_id": "parent_id",
+        "location": "location_id",
+    },
     "sequence": {"title": "name", "order": "order_key", "status": "status", "act_id": "parent_id"},
     "act": {"title": "name", "order": "order_key", "status": "status"},
     # `scene` is the structural link the delete cascade reads (`parent_id`), so
@@ -374,8 +399,10 @@ BESPOKE_RELATION_FIELDS = {"scene": {"plot_roles"}}
 def relation_fields(entity_type: str) -> dict:
     """Every relation-stored field of a type: the generic map, plus the
     bespoke one-field-to-many-kinds fields."""
-    return {**_RELATION_FIELDS.get(entity_type, {}),
-            **{f: None for f in BESPOKE_RELATION_FIELDS.get(entity_type, set())}}
+    return {
+        **_RELATION_FIELDS.get(entity_type, {}),
+        **{f: None for f in BESPOKE_RELATION_FIELDS.get(entity_type, set())},
+    }
 
 
 def _is_empty(value, default) -> bool:
@@ -424,13 +451,15 @@ def unfilled_fields(entity_type: str, extra: dict, row: dict | None = None) -> l
       tracking (an entry existing = filled; entry notes are optional prose)
     """
     from .constants import ENTITY_SCHEMAS
+
     if row:
         # Layer the column-backed fields over `extra`. `extra` wins on a
         # collision: it is the newer value if a field ever moves out of a
         # column, and a stale column must not shadow what was just written.
-        extra = {**{f: row.get(col) for f, col in
-                    ENTITY_COLUMN_MAP.get(entity_type, {}).items()},
-                **extra}
+        extra = {
+            **{f: row.get(col) for f, col in ENTITY_COLUMN_MAP.get(entity_type, {}).items()},
+            **extra,
+        }
     schema = ENTITY_SCHEMAS.get(entity_type, {})
     unfilled = []
     for field, meta in schema.items():
@@ -454,9 +483,11 @@ def unfilled_fields(entity_type: str, extra: dict, row: dict | None = None) -> l
             continue
         # status: workflow state, always emitted, never "unfilled"
         # boolean/number: binary or scalar values, not "unfilled"
-        if (field == "status"
-                or not meta.get("optional", True)
-                or meta["type"] in ("boolean", "number")):
+        if (
+            field == "status"
+            or not meta.get("optional", True)
+            or meta["type"] in ("boolean", "number")
+        ):
             continue
         value = extra.get(field, meta["default"])
         if "sub_fields" in meta and not _is_empty(value, meta["default"]):
@@ -479,10 +510,44 @@ def unfilled_fields(entity_type: str, extra: dict, row: dict | None = None) -> l
 def standard_sections(entity_type: str) -> list[str]:
     """Standard body sections for an entity type."""
     sections = {
-        "project": ["Premise", "Spine", "Controlling Idea", "Value Arc", "Structure", "Genre", "Notes"],
-        "character": ["Identity", "Desires", "Background", "Contradictions", "Psychology", "Arc", "Relationships", "Voice", "Notes"],
-        "location": ["Description", "Atmosphere", "Image System", "History", "Dramatic Function", "Notes"],
-        "world": ["Description", "History", "Livelihood", "Power", "Rituals", "Values", "Conflict", "Notes"],
+        "project": [
+            "Premise",
+            "Spine",
+            "Controlling Idea",
+            "Value Arc",
+            "Structure",
+            "Genre",
+            "Notes",
+        ],
+        "character": [
+            "Identity",
+            "Desires",
+            "Background",
+            "Contradictions",
+            "Psychology",
+            "Arc",
+            "Relationships",
+            "Voice",
+            "Notes",
+        ],
+        "location": [
+            "Description",
+            "Atmosphere",
+            "Image System",
+            "History",
+            "Dramatic Function",
+            "Notes",
+        ],
+        "world": [
+            "Description",
+            "History",
+            "Livelihood",
+            "Power",
+            "Rituals",
+            "Values",
+            "Conflict",
+            "Notes",
+        ],
         "plot": ["Summary", "Role", "Threads", "Value", "Characters", "Notes"],
         # Conflict and Beats stay on the scene: the scene is created first, so
         # it is where the scene is PLANNED — what resists the objective, and
@@ -490,11 +555,34 @@ def standard_sections(entity_type: str) -> list[str]:
         # execution lives, and keeps its own Conflict/Findings for how the
         # finished scene works. Objective stays too — the reasoning behind the
         # field, as on the act.
-        "scene": ["Content", "Objective", "Conflict", "Beats", "Value Turn",
-                  "Dramatic Function", "Production", "Notes"],
-        "sequence": ["Summary", "Purpose", "Value Arc", "Progression", "Sequence Climax", "Plots", "Notes"],
+        "scene": [
+            "Content",
+            "Objective",
+            "Conflict",
+            "Beats",
+            "Value Turn",
+            "Dramatic Function",
+            "Production",
+            "Notes",
+        ],
+        "sequence": [
+            "Summary",
+            "Purpose",
+            "Value Arc",
+            "Progression",
+            "Sequence Climax",
+            "Plots",
+            "Notes",
+        ],
         "act": ["Summary", "Objective", "Value Arc", "Reversal", "Notes"],
-        "relationship": ["Nature", "Perspectives", "Tension", "History", "Scenes to Write", "Notes"],
+        "relationship": [
+            "Nature",
+            "Perspectives",
+            "Tension",
+            "History",
+            "Scenes to Write",
+            "Notes",
+        ],
         "value": ["Definition", "Notes"],
         # One section. `scene_beats` is the execution record — the beats, the
         # turning point, the closing changes are fields. Everything that is
@@ -534,6 +622,7 @@ def columns_for_insert(entity_type: str, slug: str, fm: dict) -> dict:
     column_map = ENTITY_COLUMN_MAP.get(entity_type, {})
     rel_fields = relation_fields(entity_type)
     from .constants import ENTITY_SCHEMAS
+
     schema = ENTITY_SCHEMAS.get(entity_type, {})
 
     columns = {
@@ -586,13 +675,15 @@ def location_scene_relations(scene_id: str, location_id) -> list[dict]:
     """
     if not location_id:
         return []
-    return [{
-        "from_id": str(location_id),
-        "to_id": scene_id,
-        "kind": "location_scene",
-        "note": "",
-        "order": 1,
-    }]
+    return [
+        {
+            "from_id": str(location_id),
+            "to_id": scene_id,
+            "kind": "location_scene",
+            "note": "",
+            "order": 1,
+        }
+    ]
 
 
 def plot_role_relations(scene_id: str, entries) -> list[dict]:
@@ -622,13 +713,15 @@ def plot_role_relations(scene_id: str, entries) -> list[dict]:
         role = str(entry.get("role") or "")
         if not plot or role not in PLOT_ROLES:
             continue
-        rows.append({
-            "from_id": plot,
-            "to_id": scene_id,
-            "kind": f"plot_{role}",
-            "note": str(entry.get("description") or ""),
-            "order": i,
-        })
+        rows.append(
+            {
+                "from_id": plot,
+                "to_id": scene_id,
+                "kind": f"plot_{role}",
+                "note": str(entry.get("description") or ""),
+                "order": i,
+            }
+        )
     return rows
 
 
@@ -667,25 +760,29 @@ def relations_for_insert(entity_type: str, slug: str, fm: dict) -> list[dict]:
                 to_id, note = relation_entry(item)
                 if to_id:
                     from_id, to_id = relation_endpoints(slug, kind, to_id)
-                    relations.append({
-                        "from_id": from_id,
-                        "to_id": to_id,
-                        "kind": kind,
-                        "note": note,
-                        "order": i + 1,
-                    })
+                    relations.append(
+                        {
+                            "from_id": from_id,
+                            "to_id": to_id,
+                            "kind": kind,
+                            "note": note,
+                            "order": i + 1,
+                        }
+                    )
         else:
             # Non-list: single string value
             value = fm.get(field)
             if value:
                 from_id, to_id = relation_endpoints(slug, kind, str(value))
-                relations.append({
-                    "from_id": from_id,
-                    "to_id": to_id,
-                    "kind": kind,
-                    "note": "",
-                    "order": 1,
-                })
+                relations.append(
+                    {
+                        "from_id": from_id,
+                        "to_id": to_id,
+                        "kind": kind,
+                        "note": "",
+                        "order": 1,
+                    }
+                )
 
     return relations
 
@@ -697,15 +794,14 @@ def validate_scene_act_id(project_path, sequence_id: str, act_id: str, *, conn=N
     committed are visible; when None, opens its own connection.
     """
     from white_words.scriptwriting.core.db import use_connection
+
     with use_connection(project_path, conn) as c:
         row = c.execute(
             "SELECT parent_id FROM entities WHERE id=? AND type='sequence'",
             (sequence_id,),
         ).fetchone()
         if row and row[0] and row[0] != act_id:
-            raise ValueError(
-                f"Sequence {sequence_id} belongs to act {row[0]}, not {act_id}"
-            )
+            raise ValueError(f"Sequence {sequence_id} belongs to act {row[0]}, not {act_id}")
 
 
 def validate_scene_location(project_path, location: str, *, conn=None) -> None:
@@ -724,6 +820,7 @@ def validate_scene_location(project_path, location: str, *, conn=None) -> None:
     if not location:
         return
     from white_words.scriptwriting.core.db import use_connection
+
     with use_connection(project_path, conn) as c:
         row = c.execute(
             "SELECT id FROM entities WHERE id=? AND type='location'",
@@ -745,16 +842,14 @@ def _collect_refs(meta: dict, value, path: str, refs: list) -> None:
             return
         for i, entry in enumerate(value):
             if isinstance(entry, dict):
-                _collect_refs_entry(meta.get("sub_fields") or {}, entry,
-                                    f"{path}[{i}]", refs)
+                _collect_refs_entry(meta.get("sub_fields") or {}, entry, f"{path}[{i}]", refs)
     elif meta["type"] == "object":
         if not isinstance(value, dict):
             return
         if meta.get("keyed"):
             for key, entry in value.items():
                 if isinstance(entry, dict):
-                    _collect_refs_entry(meta.get("sub_fields") or {}, entry,
-                                        f"{path}.{key}", refs)
+                    _collect_refs_entry(meta.get("sub_fields") or {}, entry, f"{path}.{key}", refs)
         else:
             _collect_refs_entry(meta.get("sub_fields") or {}, value, path, refs)
 
@@ -807,10 +902,9 @@ def check_references(project_path, entity_type: str, frontmatter: dict, *, conn=
     with use_connection(project_path, conn) as c:
         for ref_type, target, path in refs:
             if not c.execute(
-                    "SELECT 1 FROM entities WHERE id=? AND type=?",
-                    (target, ref_type)).fetchone():
-                raise ValueError(f"{ref_type.capitalize()} not found: {target} "
-                                 f"(at {path})")
+                "SELECT 1 FROM entities WHERE id=? AND type=?", (target, ref_type)
+            ).fetchone():
+                raise ValueError(f"{ref_type.capitalize()} not found: {target} (at {path})")
 
 
 def validate_scene_beats(project_path, merged: dict, *, conn=None) -> None:
@@ -837,21 +931,27 @@ def validate_scene_beats(project_path, merged: dict, *, conn=None) -> None:
         raise ValueError("scene_beats requires a scene")
     with use_connection(project_path, conn) as c:
         if not c.execute(
-                "SELECT id FROM entities WHERE id=? AND type='scene' AND is_deleted=0",
-                (scene_id,)).fetchone():
+            "SELECT id FROM entities WHERE id=? AND type='scene' AND is_deleted=0", (scene_id,)
+        ).fetchone():
             raise ValueError(f"Scene not found: {scene_id}")
         # A record may already exist for this scene; on create that is a
         # refusal, on edit it is this very record being edited, which is why
         # the caller skips this check for the row it is writing.
         if c.execute(
-                "SELECT id FROM entities WHERE type='scene_beats' "
-                "AND parent_id=? AND is_deleted=0", (scene_id,)).fetchone():
-            raise ValueError(f"Scene '{scene_id}' already has scene_beats. "
-                             f"Edit it instead of creating another.")
+            "SELECT id FROM entities WHERE type='scene_beats' AND parent_id=? AND is_deleted=0",
+            (scene_id,),
+        ).fetchone():
+            raise ValueError(
+                f"Scene '{scene_id}' already has scene_beats. Edit it instead of creating another."
+            )
         check_references(project_path, "scene_beats", merged, conn=conn)
-        validate_beat_references(project_path, merged.get("beats", []),
-                                 merged.get("true_character", []),
-                                 merged.get("changes", []), conn=conn)
+        validate_beat_references(
+            project_path,
+            merged.get("beats", []),
+            merged.get("true_character", []),
+            merged.get("changes", []),
+            conn=conn,
+        )
         _validate_beat_content(merged.get("beats", []))
 
 
@@ -864,12 +964,18 @@ _CHANGE_TYPES = ("character", "relationship", "location", "world")
 
 def _resolve_any(conn, slug: str, types) -> bool:
     """True when `slug` is an existing, non-deleted entity of one of `types`."""
-    return bool(conn.execute(
-        f"SELECT 1 FROM entities WHERE id=? AND is_deleted=0 AND type IN "
-        f"({','.join('?' * len(types))})", (slug, *types)).fetchone())
+    return bool(
+        conn.execute(
+            f"SELECT 1 FROM entities WHERE id=? AND is_deleted=0 AND type IN "
+            f"({','.join('?' * len(types))})",
+            (slug, *types),
+        ).fetchone()
+    )
 
 
-def validate_beat_references(project_path, beats, true_character, changes=None, *, conn=None) -> None:
+def validate_beat_references(
+    project_path, beats, true_character, changes=None, *, conn=None
+) -> None:
     """Raise ValueError on a `by` or `changes[].entity` that resolves to nothing.
 
     `check_references` resolves a `ref` against exactly one type, and these two
@@ -899,8 +1005,8 @@ def validate_beat_references(project_path, beats, true_character, changes=None, 
                 slug = str(entry.get("by") or "")
                 if slug and not _resolve_any(c, slug, _BY_TYPES):
                     raise ValueError(
-                        f"{at}.{side}.by '{slug}' is not a character, "
-                        f"location or world")
+                        f"{at}.{side}.by '{slug}' is not a character, location or world"
+                    )
         if not isinstance(changes, list):
             return
         for j, change in enumerate(changes):
@@ -910,7 +1016,8 @@ def validate_beat_references(project_path, beats, true_character, changes=None, 
             if slug and not _resolve_any(c, slug, _CHANGE_TYPES):
                 raise ValueError(
                     f"changes[{j}].entity '{slug}' is not a "
-                    f"character, relationship, location or world")
+                    f"character, relationship, location or world"
+                )
 
 
 def _validate_beat_content(beats) -> None:
@@ -929,11 +1036,14 @@ def _validate_beat_content(beats) -> None:
         action, reaction = beat.get("action"), beat.get("reaction")
         action = action if isinstance(action, dict) else {}
         reaction = reaction if isinstance(reaction, dict) else {}
-        if not (action.get("surface") or reaction.get("surface")
-                or action.get("subtext") or reaction.get("subtext")
-                or beat.get("gap")):
-            raise ValueError(
-                f"Beat {i} has no content: no surface, subtext, or gap.")
+        if not (
+            action.get("surface")
+            or reaction.get("surface")
+            or action.get("subtext")
+            or reaction.get("subtext")
+            or beat.get("gap")
+        ):
+            raise ValueError(f"Beat {i} has no content: no surface, subtext, or gap.")
 
 
 class PlotRoleError(ValueError):
@@ -981,30 +1091,34 @@ def validate_scene_plot_roles(project_path, entries, scene_id=None, conn=None) -
         role = str(entry.get("role") or "")
         if role not in PLOT_ROLES:
             raise ValueError(
-                f"Invalid plot role: {role or '(empty)'}. "
-                f"One of: {', '.join(PLOT_ROLES)}")
+                f"Invalid plot role: {role or '(empty)'}. One of: {', '.join(PLOT_ROLES)}"
+            )
         plot = str(entry.get("plot") or "")
         if not plot:
-            raise ValueError(
-                f"plot_roles entry needs a plot slug: {entry!r}")
+            raise ValueError(f"plot_roles entry needs a plot slug: {entry!r}")
         pair = (plot, role)
         if pair in seen:
             raise PlotRoleError(
-                f"Duplicate plot role: {plot} / {role} appears twice in "
-                f"this scene's plot_roles.", plot, role)
+                f"Duplicate plot role: {plot} / {role} appears twice in this scene's plot_roles.",
+                plot,
+                role,
+            )
         seen.add(pair)
         if role in UNIQUE_PLOT_ROLES:
             singular.append(pair)
     if not singular:
         return
     from white_words.scriptwriting.core.db import get_db
+
     own = conn is None
     if own:
         conn = get_db(project_path)
     try:
         for plot, role in singular:
-            sql = ("SELECT e.id FROM live_relations r JOIN entities e ON e.id = r.to_id "
-                   "WHERE r.from_id=? AND r.kind=? AND e.is_deleted=0")
+            sql = (
+                "SELECT e.id FROM live_relations r JOIN entities e ON e.id = r.to_id "
+                "WHERE r.from_id=? AND r.kind=? AND e.is_deleted=0"
+            )
             params = [plot, f"plot_{role}"]
             if scene_id:
                 sql += " AND r.to_id<>?"
@@ -1013,7 +1127,10 @@ def validate_scene_plot_roles(project_path, entries, scene_id=None, conn=None) -
             if row:
                 raise PlotRoleError(
                     f"Plot '{plot}' already has its {role} on scene "
-                    f"'{row[0]}' — one scene per plot.", plot, role)
+                    f"'{row[0]}' — one scene per plot.",
+                    plot,
+                    role,
+                )
     finally:
         if own:
             conn.close()
@@ -1095,27 +1212,29 @@ def validate_scene_value_turns(project_path, value_turns, *, conn=None) -> None:
     if own_conn:
         conn = get_db(project_path)
     try:
-        plots = {row[0]: json.loads(row[1]) if row[1] else {}
-                 for row in conn.execute(
-                     "SELECT id, extra FROM entities WHERE type='plot'")}
+        plots = {
+            row[0]: json.loads(row[1]) if row[1] else {}
+            for row in conn.execute("SELECT id, extra FROM entities WHERE type='plot'")
+        }
         # One value per entity, its four rung words. Keyed case-insensitively:
         # a turn names the value it means, so the name is matched as written,
         # trimmed and lowercased, exactly as a value entity's uniqueness is.
         values = {}
         for _, name, extra in conn.execute(
-                "SELECT id, name, extra FROM entities WHERE type='value' "
-                "AND is_deleted=0").fetchall():
+            "SELECT id, name, extra FROM entities WHERE type='value' AND is_deleted=0"
+        ).fetchall():
             extra = json.loads(extra) if extra else {}
             values[str(name or "").strip().lower()] = {
-                rung: str(extra.get(rung) or "").strip()
-                for rung in VALUE_LADDER}
+                rung: str(extra.get(rung) or "").strip() for rung in VALUE_LADDER
+            }
 
         for i, turn in enumerate(value_turns):
             at = f"value_turns[{i}]"
             if not isinstance(turn, dict):
                 raise ValueError(
                     f"{at} must be an object with keys [plot, value, from, "
-                    f"to, effects] — got {type(turn).__name__}")
+                    f"to, effects] — got {type(turn).__name__}"
+                )
             plot = str(turn.get("plot") or "").strip()
             if not plot:
                 raise ValueError(f"{at}.plot is required")
@@ -1133,7 +1252,8 @@ def validate_scene_value_turns(project_path, value_turns, *, conn=None) -> None:
                     f"{value} is not a defined value. Defined values: "
                     f"{_defined_values(values)}. Create the value first "
                     f"(story_draft create type='value'), then name it here — "
-                    f"a value has one schema wherever it is used.")
+                    f"a value has one schema wherever it is used."
+                )
 
             for key in ("from", "to"):
                 word = str(turn.get(key) or "").strip()
@@ -1142,17 +1262,17 @@ def validate_scene_value_turns(project_path, value_turns, *, conn=None) -> None:
                 if word.lower() not in {w.lower() for w in words.values()}:
                     raise ValueError(
                         f"{at}.{key} '{word}' is not a word of the {value} "
-                        f"schema: {_schema_words(words)}")
+                        f"schema: {_schema_words(words)}"
+                    )
 
             effects = turn.get("effects")
             if not effects:
                 raise ValueError(
                     f"{at}.effects is required and must list one entry per "
-                    f"protagonist the shift affects")
+                    f"protagonist the shift affects"
+                )
             if not isinstance(effects, list):
-                raise ValueError(
-                    f"{at}.effects must be a list — got "
-                    f"{type(effects).__name__}")
+                raise ValueError(f"{at}.effects must be a list — got {type(effects).__name__}")
             allowed = characters
             affected = set()
             for j, effect in enumerate(effects):
@@ -1160,29 +1280,31 @@ def validate_scene_value_turns(project_path, value_turns, *, conn=None) -> None:
                 if not isinstance(effect, dict):
                     raise ValueError(
                         f"{where} must be an object with keys "
-                        f"[character, levels] — got {type(effect).__name__}")
+                        f"[character, levels] — got {type(effect).__name__}"
+                    )
                 character = str(effect.get("character") or "").strip()
                 if not character:
                     raise ValueError(f"{where}.character is required")
                 if character in affected:
                     raise ValueError(
                         f"{character} appears twice in {at}.effects — one "
-                        f"entry per protagonist, with one level per circle")
+                        f"entry per protagonist, with one level per circle"
+                    )
                 affected.add(character)
                 if character not in allowed:
                     raise ValueError(
                         f"{character} is not a protagonist of {plot}: "
                         f"{', '.join(allowed) or '(none defined)'}. "
-                        f"Add them to plot.characters, or name a protagonist.")
+                        f"Add them to plot.characters, or name a protagonist."
+                    )
                 levels = effect.get("levels")
                 if not levels:
                     raise ValueError(
                         f"{where}.levels is required — one entry per conflict "
-                        f"level through which the shift reaches {character}")
+                        f"level through which the shift reaches {character}"
+                    )
                 if not isinstance(levels, list):
-                    raise ValueError(
-                        f"{where}.levels must be a list — got "
-                        f"{type(levels).__name__}")
+                    raise ValueError(f"{where}.levels must be a list — got {type(levels).__name__}")
                 circles = set()
                 for k, level in enumerate(levels):
                     spot = f"{where}.levels[{k}]"
@@ -1190,26 +1312,30 @@ def validate_scene_value_turns(project_path, value_turns, *, conn=None) -> None:
                         raise ValueError(
                             f"{spot} must be an object with keys "
                             f"[conflict_level, effect] — got "
-                            f"{type(level).__name__}")
+                            f"{type(level).__name__}"
+                        )
                     conflict_level = str(level.get("conflict_level") or "").strip()
                     if not conflict_level:
                         raise ValueError(f"{spot}.conflict_level is required")
                     if conflict_level not in CONFLICT_LEVELS:
                         raise ValueError(
                             f"{spot}.conflict_level '{conflict_level}' is not "
-                            f"one of: {', '.join(CONFLICT_LEVELS)}")
+                            f"one of: {', '.join(CONFLICT_LEVELS)}"
+                        )
                     if conflict_level in circles:
                         raise ValueError(
                             f"{character} has two '{conflict_level}' levels in "
                             f"{where}.levels — one level per circle, with an "
-                            f"effect focused on that level")
+                            f"effect focused on that level"
+                        )
                     circles.add(conflict_level)
                     sentence = str(level.get("effect") or "").strip()
                     if not sentence:
                         raise ValueError(
                             f"{spot}.effect is required — one sentence: what "
                             f"the shift does to {character} at the "
-                            f"{conflict_level} level")
+                            f"{conflict_level} level"
+                        )
     finally:
         if own_conn:
             conn.close()
@@ -1229,8 +1355,4 @@ def _defined_values(values) -> str:
     """
     if not values:
         return "none"
-    return "; ".join(f"{name}: {_schema_words(words)}"
-                     for name, words in values.items())
-
-
-
+    return "; ".join(f"{name}: {_schema_words(words)}" for name, words in values.items())

@@ -16,9 +16,7 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 VALUE_GRAPH = PLUGIN_ROOT / "src/white_words/scriptwriting/web/js/graph/value-graph.js"
 
-pytestmark = pytest.mark.skipif(
-    not shutil.which("node"), reason="node not available"
-)
+pytestmark = pytest.mark.skipif(not shutil.which("node"), reason="node not available")
 
 # Runs value-graph.js with a stub DOM and writes out the values-body markup.
 _HARNESS = r"""
@@ -59,7 +57,9 @@ def render(story):
     try:
         out = subprocess.run(
             ["node", "-e", _HARNESS, str(VALUE_GRAPH), data_path],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
     finally:
         Path(data_path).unlink()
@@ -80,19 +80,52 @@ def _story():
             {"id": "seq-2", "name": "Confrontation", "order": 2, "parent_id": "act-2"},
         ],
         "scenes": [
-            {"id": "s1", "title": "Scene 1", "order": 1, "sequence_id": "seq-1",
-             "parent_id": "seq-1", "act_id": "act-1",
-             "value_turns": [{"plot": "main", "value": "trust", "from": "despair", "to": "hope",
-                              "effects": []}],
-             "milestone": ["setup"]},
-            {"id": "s2", "title": "Scene 2", "order": 2, "sequence_id": "seq-2",
-             "parent_id": "seq-2", "act_id": "act-2",
-             "value_turns": [{"plot": "main", "value": "trust", "from": "hope", "to": "despair",
-                              "effects": []}],
-             "milestone": ["climax"]},
+            {
+                "id": "s1",
+                "title": "Scene 1",
+                "order": 1,
+                "sequence_id": "seq-1",
+                "parent_id": "seq-1",
+                "act_id": "act-1",
+                "value_turns": [
+                    {
+                        "plot": "main",
+                        "value": "trust",
+                        "from": "despair",
+                        "to": "hope",
+                        "effects": [],
+                    }
+                ],
+                "milestone": ["setup"],
+            },
+            {
+                "id": "s2",
+                "title": "Scene 2",
+                "order": 2,
+                "sequence_id": "seq-2",
+                "parent_id": "seq-2",
+                "act_id": "act-2",
+                "value_turns": [
+                    {
+                        "plot": "main",
+                        "value": "trust",
+                        "from": "hope",
+                        "to": "despair",
+                        "effects": [],
+                    }
+                ],
+                "milestone": ["climax"],
+            },
         ],
         "values": [
-            {"id": "trust", "name": "trust", "p": "hope", "c": "doubt", "cd": "despair", "nn": "fanatic"},
+            {
+                "id": "trust",
+                "name": "trust",
+                "p": "hope",
+                "c": "doubt",
+                "cd": "despair",
+                "nn": "fanatic",
+            },
         ],
         "plots": [
             {"id": "main", "name": "Main Plot", "plot_scope": "main", "status": "active"},
@@ -103,6 +136,7 @@ def _story():
 
 
 # ---------- axis
+
 
 def test_axis_renders_act_labels():
     html = render(_story())
@@ -125,6 +159,7 @@ def test_axis_renders_milestone_markers():
 
 # ---------- legend
 
+
 def test_legend_has_shift_and_hold_and_negation():
     html = render(_story())
     assert "shift in a scene" in html
@@ -146,6 +181,7 @@ def test_legend_has_milestones():
 
 
 # ---------- chart
+
 
 def test_schema_labels_render_for_major_values():
     """Lane words (hope, doubt, despair, fanatic) must appear in the chart."""
@@ -172,11 +208,21 @@ def test_unknown_word_shows_marker():
 
 # ---------- empty state
 
+
 def test_no_turns_shows_empty_state():
     story = _story()
-    story["scenes"] = [{"id": "s1", "title": "Scene 1", "order": 1,
-                         "sequence_id": "seq-1", "parent_id": "seq-1", "act_id": "act-1",
-                         "value_turns": [], "milestone": []}]
+    story["scenes"] = [
+        {
+            "id": "s1",
+            "title": "Scene 1",
+            "order": 1,
+            "sequence_id": "seq-1",
+            "parent_id": "seq-1",
+            "act_id": "act-1",
+            "value_turns": [],
+            "milestone": [],
+        }
+    ]
     html = render(story)
     assert "No value shifts recorded yet" in html
 
@@ -270,7 +316,9 @@ def zoom_steps(story):
     try:
         out = subprocess.run(
             ["node", "-e", _ZOOM_HARNESS, str(VALUE_GRAPH), data_path],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
     finally:
         Path(data_path).unlink()
@@ -280,7 +328,7 @@ def zoom_steps(story):
 
 def test_zoom_in_goes_all_then_act_then_sequence():
     s = zoom_steps(_story())
-    assert s[0]["act"] == "act-2" and s[0]["seq"] is None    # All -> act
+    assert s[0]["act"] == "act-2" and s[0]["seq"] is None  # All -> act
     assert s[1]["act"] == "act-2" and s[1]["seq"] == "seq-2"  # act -> sequence
 
 
@@ -314,6 +362,6 @@ def test_breadcrumb_tracks_the_zoom_level():
     s = zoom_steps(_story())
     # s[0] is after the first gesture (All -> act), so the root is already listed.
     assert "All" in s[0]["crumbs"] and "Act II" in s[0]["crumbs"]
-    assert "S1" not in s[0]["crumbs"]                         # no sequence yet
+    assert "S1" not in s[0]["crumbs"]  # no sequence yet
     assert "All" in s[1]["crumbs"] and "Act II" in s[1]["crumbs"]
     assert "S1" in s[1]["crumbs"]

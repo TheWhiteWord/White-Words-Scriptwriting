@@ -17,6 +17,7 @@ The fifth case in here is a TRUE positive and is pinned as one:
 "empty" rule counts as unset because the user never chose it. It is the
 reason the survivor of the sweep is correct rather than a leftover.
 """
+
 import json
 import shutil
 import sqlite3
@@ -35,9 +36,11 @@ def project(tmp_path):
     root = tmp_path / "projects"
     root.mkdir(exist_ok=True)
     proj = root / "stc"
-    shutil.copytree(str(Path(__file__).resolve().parent / "fixtures" / "save-the-children"),
-                    str(proj))
+    shutil.copytree(
+        str(Path(__file__).resolve().parent / "fixtures" / "save-the-children"), str(proj)
+    )
     from conftest import build_fixture_db
+
     build_fixture_db(proj, tmp_path)
     return proj
 
@@ -45,6 +48,7 @@ def project(tmp_path):
 def reported(project, entity_type, entity_id):
     """What story_retrieve reports as unfilled, through its own path."""
     from white_words.scriptwriting.tools.story_retrieve import _resolve, _row_data, _unfilled
+
     conn = get_db(project)
     try:
         row, err = _resolve(conn, entity_type, entity_id)
@@ -56,6 +60,7 @@ def reported(project, entity_type, entity_id):
 
 def field_value(project, entity_type, entity_id, field):
     from white_words.scriptwriting.tools.story_retrieve import _resolve, _row_data, _entity_fields
+
     conn = get_db(project)
     try:
         row, err = _resolve(conn, entity_type, entity_id)
@@ -77,30 +82,28 @@ COLUMN_CASES = [
 
 class TestColumnBackedFieldsAreNotGaps:
     @pytest.mark.parametrize("entity_type,entity_id,field", COLUMN_CASES)
-    def test_a_filled_column_is_not_reported(self, project, entity_type,
-                                             entity_id, field):
-        assert field_value(project, entity_type, entity_id, field), \
+    def test_a_filled_column_is_not_reported(self, project, entity_type, entity_id, field):
+        assert field_value(project, entity_type, entity_id, field), (
             "fixture no longer has this value; the test is vacuous"
+        )
         assert field not in reported(project, entity_type, entity_id)
 
     @pytest.mark.parametrize("entity_type,entity_id,field", COLUMN_CASES)
-    def test_the_field_is_still_returned_with_its_value(self, project,
-                                                       entity_type, entity_id,
-                                                       field):
+    def test_the_field_is_still_returned_with_its_value(
+        self, project, entity_type, entity_id, field
+    ):
         """The two halves have to agree: a field cannot be both returned and
         missing. This is the shape of the original bug."""
         assert field_value(project, entity_type, entity_id, field)
         assert field not in reported(project, entity_type, entity_id)
 
     @pytest.mark.parametrize("entity_type,entity_id,field", COLUMN_CASES)
-    def test_clearing_the_column_is_reported_again(self, project, entity_type,
-                                                   entity_id, field):
+    def test_clearing_the_column_is_reported_again(self, project, entity_type, entity_id, field):
         """The fix must not have made the gap undetectable — an unfilled field
         that never reports is as useless as one that always does."""
         conn = get_db(project)
         col = ENTITY_COLUMN_MAP[entity_type][field]
-        row = conn.execute(
-            f"SELECT {col} FROM entities WHERE id=?", (entity_id,)).fetchone()
+        row = conn.execute(f"SELECT {col} FROM entities WHERE id=?", (entity_id,)).fetchone()
         conn.execute(f"UPDATE entities SET {col}='' WHERE id=?", (entity_id,))
         conn.commit()
         conn.close()
@@ -108,8 +111,7 @@ class TestColumnBackedFieldsAreNotGaps:
             assert field in reported(project, entity_type, entity_id)
         finally:
             conn = get_db(project)
-            conn.execute(f"UPDATE entities SET {col}=? WHERE id=?",
-                         (row[0], entity_id))
+            conn.execute(f"UPDATE entities SET {col}=? WHERE id=?", (row[0], entity_id))
             conn.commit()
             conn.close()
 
@@ -126,8 +128,9 @@ class TestTheUnfilledMap:
         for entity_type, entity_id, field in COLUMN_CASES:
             if entity_type == "project":
                 continue  # this view excludes the project row by design
-            assert entity_id not in unfilled.get(field, []), \
+            assert entity_id not in unfilled.get(field, []), (
                 f"{field} reported for {entity_id} despite having a value"
+            )
 
     def test_a_genuine_gap_in_the_same_field_is_still_reported(self, project):
         """The other half. `one_sentence` on the-resistance is filled and on
@@ -156,7 +159,8 @@ class TestScreenplayTitleIsARealGap:
 
     def test_a_chosen_title_is_not_a_gap(self):
         assert "screenplay_title" not in unfilled_fields(
-            "project", {"screenplay_title": "Save the Children"})
+            "project", {"screenplay_title": "Save the Children"}
+        )
 
 
 class TestTheHelperItself:
@@ -177,6 +181,5 @@ class TestTheHelperItself:
     def test_extra_wins_over_a_stale_column(self):
         """If a field ever moves out of a column, the blob is the newer value
         and a stale column must not shadow it."""
-        gaps = unfilled_fields("plot", {"one_sentence": "written"},
-                               {"one_sentence": ""})
+        gaps = unfilled_fields("plot", {"one_sentence": "written"}, {"one_sentence": ""})
         assert "one_sentence" not in gaps

@@ -16,9 +16,7 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 STORY_VIEW = PLUGIN_ROOT / "src/white_words/scriptwriting/web/js/views/story.js"
 
-pytestmark = pytest.mark.skipif(
-    not shutil.which("node"), reason="node not available"
-)
+pytestmark = pytest.mark.skipif(not shutil.which("node"), reason="node not available")
 
 # Runs story.js with a stub DOM and writes out the story-body markup.
 _HARNESS = r"""
@@ -49,7 +47,9 @@ def render(story):
     try:
         out = subprocess.run(
             ["node", "-e", _HARNESS, str(STORY_VIEW), data_path],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
     finally:
         Path(data_path).unlink()

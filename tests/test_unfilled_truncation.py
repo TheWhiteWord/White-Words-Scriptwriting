@@ -5,6 +5,7 @@ the view, so setting no_cast on one of two castless scenes dropped the count to
 1 and pushed it further off. The view then showed no `characters` gap at all
 while the DB still had one — fixing a scene looked like resolving the field.
 """
+
 import json
 import shutil
 from pathlib import Path
@@ -20,24 +21,38 @@ def project(tmp_path, monkeypatch):
     root = tmp_path / "root"
     shutil.copytree(FIXTURE, root / "projects" / "save-the-children")
     import white_words.scriptwriting.core.config
-    monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config", lambda: {"root_path": str(root)})
+
+    monkeypatch.setattr(
+        white_words.scriptwriting.core.config,
+        "load_plugin_config",
+        lambda: {"root_path": str(root)},
+    )
     from white_words.scriptwriting.tools.story_import import handler as import_handler
+
     import_handler({"project": "save-the-children", "confirm": True}, root_path=str(root))
     return root / "projects" / "save-the-children"
 
 
 def unfilled(project):
     from white_words.scriptwriting.tools.story_load import handler
+
     return json.loads(
-        handler({"project": "save-the-children", "view": "unfilled"},
-                root_path=str(project.parent.parent)))
+        handler(
+            {"project": "save-the-children", "view": "unfilled"},
+            root_path=str(project.parent.parent),
+        )
+    )
 
 
 def unfilled_by(project, **kw):
     from white_words.scriptwriting.tools.story_load import handler
+
     return json.loads(
-        handler({"project": "save-the-children", "view": "unfilled", **kw},
-                root_path=str(project.parent.parent)))
+        handler(
+            {"project": "save-the-children", "view": "unfilled", **kw},
+            root_path=str(project.parent.parent),
+        )
+    )
 
 
 def test_a_filtered_answer_is_complete_and_points_both_ways(project, monkeypatch):
@@ -52,6 +67,7 @@ def test_a_filtered_answer_is_complete_and_points_both_ways(project, monkeypatch
     """
     import white_words.scriptwriting.tools.story_load as sl
     from white_words.scriptwriting.core.db import get_unfilled_map
+
     known = get_unfilled_map(project)
     # The cap is set here rather than left to the fixture's gap count: the
     # plot's six role fields stopped being gaps when they became computed, so
@@ -68,8 +84,7 @@ def test_a_filtered_answer_is_complete_and_points_both_ways(project, monkeypatch
     entity = by_field["entities"][0]
     by_entity = unfilled_by(project, entity=entity)
     assert "truncated" not in by_entity and "other_fields" not in by_entity
-    assert by_entity["fields"] == sorted(
-        f for f, ids in known.items() if entity in ids)
+    assert by_entity["fields"] == sorted(f for f, ids in known.items() if entity in ids)
 
     both = unfilled_by(project, field=dropped, entity=entity)
     assert both["entities"] == known[dropped]
@@ -95,23 +110,28 @@ def test_a_field_that_is_empty_by_design_is_not_a_gap():
     """
     from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
     from white_words.scriptwriting.core.entity import unfilled_fields
+
     for entity_type in ("location", "world"):
-        assert "variant_of" in ENTITY_SCHEMAS[entity_type], \
+        assert "variant_of" in ENTITY_SCHEMAS[entity_type], (
             f"{entity_type} lost variant_of — this guard is about the field, not the type"
-        assert "variant_of" not in unfilled_fields(entity_type, {}), \
+        )
+        assert "variant_of" not in unfilled_fields(entity_type, {}), (
             f"{entity_type}.variant_of is reported as a gap on a base entity"
+        )
 
 
 def test_a_field_that_is_filled_by_hand_is_still_not_a_gap():
     """The skip is unconditional — a real variant relationship is not a gap
     either, and neither state should reach the view."""
     from white_words.scriptwriting.core.entity import unfilled_fields
+
     assert "variant_of" not in unfilled_fields("location", {"variant_of": "the-i"})
 
 
 def test_omitted_fields_are_named(project, monkeypatch):
     """When the view truncates, it must say which fields it dropped."""
     import white_words.scriptwriting.tools.story_load as sl
+
     # See test_a_filtered_answer_is_complete_and_points_both_ways: the cap is
     # set here so truncation is exercised by the test rather than by whatever
     # the fixture happens to hold.
@@ -132,6 +152,7 @@ def test_omitted_fields_are_named(project, monkeypatch):
 def test_a_gap_is_never_silently_absent(project):
     """Every field the DB knows about is either shown or named as omitted."""
     from white_words.scriptwriting.core.db import get_unfilled_map
+
     data = unfilled(project)
     known = set(get_unfilled_map(project))
     accounted = {i["field"] for i in data["unfilled"]} | set(data.get("other_fields", []))
@@ -141,6 +162,7 @@ def test_a_gap_is_never_silently_absent(project):
 def test_untruncated_view_has_no_other_fields(project, monkeypatch):
     """Below the cap there is nothing omitted, so the key must be absent."""
     import white_words.scriptwriting.tools.story_load as sl
+
     monkeypatch.setattr(sl, "UNFILLED_LIMIT", 1000)
     data = unfilled(project)
     assert "truncated" not in data

@@ -1,4 +1,5 @@
 """story_export tool — reads story.db → writes markdown vault."""
+
 import json
 import re
 from pathlib import Path
@@ -9,12 +10,10 @@ from white_words.scriptwriting.core.references import dead_ids, live_column, liv
 
 SCHEMA = {
     "description": "Write the whole database back out to Markdown files. Use to publish the "
-                   "project as readable notes, or to snapshot it before a story_import. Note this "
-                   "does not create a restorable database copy — use story_backup for that.",
+    "project as readable notes, or to snapshot it before a story_import. Note this "
+    "does not create a restorable database copy — use story_backup for that.",
     "type": "object",
-    "properties": {
-        "project": {"type": "string", "description": "Project slug or path"}
-    },
+    "properties": {"project": {"type": "string", "description": "Project slug or path"}},
     "required": ["project"],
 }
 
@@ -42,12 +41,14 @@ def handler(args, **kwargs) -> str:
         return json.dumps({"error": str(e)})
 
     conn.close()
-    return json.dumps({
-        "success": True,
-        "message": f"Exported {project_path.name}",
-        "files_written": len(written),
-        "files_removed": removed,
-    })
+    return json.dumps(
+        {
+            "success": True,
+            "message": f"Exported {project_path.name}",
+            "files_written": len(written),
+            "files_removed": removed,
+        }
+    )
 
 
 # Where notes live, by entity type. Used by the sweep to know what it may touch.
@@ -137,8 +138,9 @@ def _export_all(conn, project_path: Path) -> set:
 
     # A scene_beats note has no title of its own — the design names it by the
     # SCENE's title — so the map has to exist before the records are written.
-    scene_titles = dict(conn.execute(
-        "SELECT id, name FROM entities WHERE type='scene' AND is_deleted=0"))
+    scene_titles = dict(
+        conn.execute("SELECT id, name FROM entities WHERE type='scene' AND is_deleted=0")
+    )
     written = set()
     value_blocks = []
     entity_rows = conn.execute(
@@ -148,7 +150,17 @@ def _export_all(conn, project_path: Path) -> set:
 
     dead = dead_ids(conn)
     for row in entity_rows:
-        entity_id, entity_type, name, one_sentence, order_key, status, parent_id, location_id, extra_json = row
+        (
+            entity_id,
+            entity_type,
+            name,
+            one_sentence,
+            order_key,
+            status,
+            parent_id,
+            location_id,
+            extra_json,
+        ) = row
         extra = live_extra(json.loads(extra_json) if extra_json else {}, dead)
         location_id = live_column(location_id, dead)
         parent_id = live_column(parent_id, dead)
@@ -157,7 +169,7 @@ def _export_all(conn, project_path: Path) -> set:
         if entity_type == "scene":
             chars = conn.execute(
                 "SELECT from_id FROM live_relations WHERE to_id=? AND kind='character_scene'",
-                (entity_id,)
+                (entity_id,),
             ).fetchall()
             if chars:
                 extra["characters"] = [r[0] for r in chars]
@@ -169,19 +181,18 @@ def _export_all(conn, project_path: Path) -> set:
             role_rows = conn.execute(
                 "SELECT from_id, kind, note FROM live_relations "
                 "WHERE to_id=? AND kind LIKE 'plot_%' ORDER BY \"order\"",
-                (entity_id,)
+                (entity_id,),
             ).fetchall()
             if role_rows:
                 extra["plot_roles"] = [
-                    {"plot": f, "role": k[len("plot_"):], "description": n or ""}
+                    {"plot": f, "role": k[len("plot_") :], "description": n or ""}
                     for f, k, n in role_rows
                 ]
 
         if entity_type == "location" or entity_type == "world":
             kind = "location_variant" if entity_type == "location" else "world_variant"
             var = conn.execute(
-                f"SELECT to_id FROM live_relations WHERE from_id=? AND kind='{kind}'",
-                (entity_id,)
+                f"SELECT to_id FROM live_relations WHERE from_id=? AND kind='{kind}'", (entity_id,)
             ).fetchone()
             if var:
                 extra["variant_of"] = var[0]
@@ -202,14 +213,23 @@ def _export_all(conn, project_path: Path) -> set:
             if meta.get("sub_fields") and field in extra:
                 extra[field] = _ordered(extra[field], meta)
 
-        fm = _frontmatter_for(entity_type, entity_id, name, one_sentence, order_key, status, parent_id, location_id, extra)
+        fm = _frontmatter_for(
+            entity_type,
+            entity_id,
+            name,
+            one_sentence,
+            order_key,
+            status,
+            parent_id,
+            location_id,
+            extra,
+        )
         # The filename is the title, so `id` is the only thing that survives a
         # rename — it has to be in the note for every type, not just the four
         # that happened to declare it. Set here rather than in each branch.
         fm["id"] = entity_id
         sections = conn.execute(
-            "SELECT heading, body FROM sections WHERE entity_id = ? ORDER BY rowid",
-            (entity_id,)
+            "SELECT heading, body FROM sections WHERE entity_id = ? ORDER BY rowid", (entity_id,)
         ).fetchall()
 
         body = ""
@@ -227,6 +247,7 @@ def _export_all(conn, project_path: Path) -> set:
             _write_note(project_path / "project.md", fm, body)
             written.add(project_path / "project.md")
             from white_words.scriptwriting.core.db import get_project_memory
+
             _write_note(project_path / ".story" / "memory.md", get_project_memory(project_path), "")
             written.add(project_path / ".story" / "memory.md")
             continue
@@ -280,8 +301,9 @@ def _ordered(value, meta: dict):
             return {k: _ordered(v, meta) for k, v in value.items()}
         for key, sub_meta in subs.items():
             if key in value:
-                out[key] = _ordered(value[key], sub_meta) if sub_meta.get(
-                    "sub_fields") else value[key]
+                out[key] = (
+                    _ordered(value[key], sub_meta) if sub_meta.get("sub_fields") else value[key]
+                )
         for key, v in value.items():
             if key not in out:
                 out[key] = v
@@ -289,9 +311,17 @@ def _ordered(value, meta: dict):
     return value
 
 
-def _frontmatter_for(entity_type: str, entity_id: str, name: str, one_sentence: str,
-                     order_key: float, status: str, parent_id: str, location_id: str,
-                     extra: dict) -> dict:
+def _frontmatter_for(
+    entity_type: str,
+    entity_id: str,
+    name: str,
+    one_sentence: str,
+    order_key: float,
+    status: str,
+    parent_id: str,
+    location_id: str,
+    extra: dict,
+) -> dict:
     """Build frontmatter dict for export."""
     if entity_type == "project":
         fm = {"name": name, "logline": one_sentence}
@@ -392,6 +422,7 @@ def _value_block(entity_id: str, name: str, extra: dict, body: str) -> str:
     concatenation of these, and the importer splits on the `---` fences.
     """
     import frontmatter
+
     fm = {"id": entity_id, "name": name}
     for rung in ("p", "c", "cd", "nn"):
         fm[rung] = str(extra.get(rung) or "")
@@ -414,6 +445,7 @@ def _write_note(path: Path, fm: dict, body: str) -> None:
     the intended reading order.
     """
     import frontmatter
+
     path.parent.mkdir(parents=True, exist_ok=True)
     post = frontmatter.Post(body, **fm)
     with open(path, "w") as f:

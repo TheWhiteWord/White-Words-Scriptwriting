@@ -31,9 +31,12 @@ def vault(tmp_path, monkeypatch):
     dest.parent.mkdir(parents=True)
     shutil.copytree(str(FIXTURE), str(dest))
     import white_words.scriptwriting.core.config
-    monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
-                        lambda: {"root_path": str(v)})
+
+    monkeypatch.setattr(
+        white_words.scriptwriting.core.config, "load_plugin_config", lambda: {"root_path": str(v)}
+    )
     from white_words.scriptwriting.tools.story_import import handler
+
     handler({"project": "stc", "confirm": True}, root_path=str(v))
     return v
 
@@ -46,16 +49,24 @@ def _edit(vault, action, entity_type="character", slug="kael", **extra):
     """route the two admin actions (purge/restore) and the two write ones."""
     from white_words.scriptwriting.core.writes import delete_entity, edit_entity
     from white_words.scriptwriting.tools.story_admin import handler
+
     project = vault / "projects" / "stc"
     if action == "delete_entity":
-        return delete_entity(project, entity_type, slug, "test",
-                             extra.get("confirm"))
+        return delete_entity(project, entity_type, slug, "test", extra.get("confirm"))
     if action == "edit_note":
         return edit_entity(project, entity_type, slug, extra.get("data", {}), "test")
-    return json.loads(handler({
-        "action": action, "project": "stc",
-        "target": {"entity_type": entity_type, "id": slug},
-        "summary": "test", **extra}, root_path=str(vault)))
+    return json.loads(
+        handler(
+            {
+                "action": action,
+                "project": "stc",
+                "target": {"entity_type": entity_type, "id": slug},
+                "summary": "test",
+                **extra,
+            },
+            root_path=str(vault),
+        )
+    )
 
 
 def _q(vault, sql, args=()):
@@ -92,8 +103,11 @@ class TestDeleteFlagsRatherThanErases:
 
     def test_cascade_children_are_also_flagged(self, vault):
         _delete(vault)
-        live = _q(vault, "SELECT id FROM entities WHERE type='scene_beats' "
-                        "AND parent_id='kael' AND is_deleted=0")
+        live = _q(
+            vault,
+            "SELECT id FROM entities WHERE type='scene_beats' "
+            "AND parent_id='kael' AND is_deleted=0",
+        )
         assert live == []
 
     def test_response_advertises_how_to_undo(self, vault):
@@ -108,17 +122,28 @@ class TestDeletedEntitiesAreInvisible:
 
     def test_retrieve_cannot_find_it(self, vault):
         from white_words.scriptwriting.tools.story_retrieve import handler
+
         _delete(vault)
-        r = json.loads(handler({
-            "project": "stc", "entity_type": "character", "id": ["kael"],
-            "fields": ["one_sentence"]}, root_path=str(vault)))
+        r = json.loads(
+            handler(
+                {
+                    "project": "stc",
+                    "entity_type": "character",
+                    "id": ["kael"],
+                    "fields": ["one_sentence"],
+                },
+                root_path=str(vault),
+            )
+        )
         assert r.get("entities", []) == []
         assert r.get("not_found"), "a deleted id must not read as found"
 
     def test_story_load_omits_it(self, vault):
         from white_words.scriptwriting.tools.story_load import handler
+
         _delete(vault)
         payload = json.loads(handler({"project": "stc"}, root_path=str(vault)))
+
         # Scoped to the character's own nodes, not the whole JSON: a value turn
         # legitimately names a character in its `effects` prose, so a deleted
         # character can still appear as a *mention* while being absent as an
@@ -132,14 +157,18 @@ class TestDeletedEntitiesAreInvisible:
             elif isinstance(node, list):
                 for x in node:
                     walk(x)
+
         walk(payload)
 
     def test_search_cannot_reach_its_prose(self, vault):
         from white_words.scriptwriting.tools.story_search import handler
         from white_words.scriptwriting.core.db import search_sections
+
         # A term that occurs in Kael's own sections.
-        own = _q(vault, "SELECT body FROM sections WHERE entity_id='kael' "
-                        "AND body LIKE '%curriculum%' LIMIT 1")
+        own = _q(
+            vault,
+            "SELECT body FROM sections WHERE entity_id='kael' AND body LIKE '%curriculum%' LIMIT 1",
+        )
         assert own, "fixture no longer contains the probe term"
         _delete(vault)
         found = search_sections(vault / "projects" / "stc", "curriculum")
@@ -148,6 +177,7 @@ class TestDeletedEntitiesAreInvisible:
     def test_search_total_excludes_deleted(self, vault):
         """A count that included invisible rows would mislead the agent."""
         from white_words.scriptwriting.core.db import search_sections
+
         before = search_sections(vault / "projects" / "stc", "curriculum")["total_matches"]
         _delete(vault)
         after = search_sections(vault / "projects" / "stc", "curriculum")["total_matches"]
@@ -155,6 +185,7 @@ class TestDeletedEntitiesAreInvisible:
 
     def test_dashboard_omits_it(self, vault):
         from white_words.scriptwriting.core.db import get_dashboard_data
+
         _delete(vault)
         data = get_dashboard_data(vault / "projects" / "stc")
 
@@ -177,16 +208,16 @@ class TestDeletedEntitiesAreInvisible:
 
     def test_story_load_arc_view_omits_its_beats(self, vault):
         from white_words.scriptwriting.tools.story_load import handler
+
         _delete(vault)
-        r = json.loads(handler({"project": "stc", "view": "arc"},
-                               root_path=str(vault)))
+        r = json.loads(handler({"project": "stc", "view": "arc"}, root_path=str(vault)))
         assert "kael" not in {a["character"] for a in r.get("arcs", [])}
 
     def test_unfilled_view_omits_it(self, vault):
         from white_words.scriptwriting.tools.story_load import handler
+
         _delete(vault)
-        r = json.loads(handler({"project": "stc", "view": "unfilled"},
-                               root_path=str(vault)))
+        r = json.loads(handler({"project": "stc", "view": "unfilled"}, root_path=str(vault)))
         listed = {e for item in r["unfilled"] for e in item["entities"]}
         assert "kael" not in listed
 
@@ -197,10 +228,18 @@ class TestRestore:
         from white_words.scriptwriting.tools.story_retrieve import handler
 
         def snap():
-            r = json.loads(handler({
-                "project": "stc", "entity_type": "character", "id": ["kael"],
-                "fields": ["goals_short", "one_sentence"],
-                "sections": ["all"]}, root_path=str(vault)))
+            r = json.loads(
+                handler(
+                    {
+                        "project": "stc",
+                        "entity_type": "character",
+                        "id": ["kael"],
+                        "fields": ["goals_short", "one_sentence"],
+                        "sections": ["all"],
+                    },
+                    root_path=str(vault),
+                )
+            )
             return r["entities"][0]
 
         before = snap()
@@ -211,8 +250,11 @@ class TestRestore:
     def test_restores_its_cascade_children(self, vault):
         _delete(vault)
         _edit(vault, "restore")
-        live = _q(vault, "SELECT id FROM entities WHERE type='scene_beats' "
-                        "AND parent_id='kael' AND is_deleted=0 ORDER BY id")
+        live = _q(
+            vault,
+            "SELECT id FROM entities WHERE type='scene_beats' "
+            "AND parent_id='kael' AND is_deleted=0 ORDER BY id",
+        )
         assert live == []
 
     def test_restoring_something_live_is_an_error(self, vault):
@@ -236,6 +278,7 @@ class TestSchema:
     def test_migration_is_idempotent(self, vault):
         """Opening twice adds nothing twice — get_db runs on every connection."""
         from white_words.scriptwriting.core.db import get_db
+
         proj = vault / "projects" / "stc"
         get_db(proj).close()
         conn = get_db(proj)

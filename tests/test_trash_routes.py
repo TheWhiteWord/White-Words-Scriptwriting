@@ -5,6 +5,7 @@ The rules these call are the agent's own (`core/trash.py`, shared with
 a bundle is the parent plus what it took with it, restore is exact, and a purge
 is one transaction behind one backup.
 """
+
 import json
 import shutil
 import sqlite3
@@ -26,7 +27,7 @@ def _sql(p, sql, *args):
     conn = sqlite3.connect(str(p / ".story" / "story.db"))
     try:
         rows = conn.execute(sql, args).fetchall()
-        conn.commit()          # a write has to land, or the next connection can't see it
+        conn.commit()  # a write has to land, or the next connection can't see it
         return rows
     finally:
         conn.close()
@@ -37,8 +38,10 @@ def _first_scene_with_beats(p):
 
 
 def _beats_of(p, scene):
-    return [r[0] for r in _sql(
-        p, "SELECT id FROM entities WHERE type='scene_beats' AND parent_id=?", scene)]
+    return [
+        r[0]
+        for r in _sql(p, "SELECT id FROM entities WHERE type='scene_beats' AND parent_id=?", scene)
+    ]
 
 
 def _earlier(p, entity_id, stamp="2026-01-01T09:00:00+00:00"):
@@ -76,6 +79,7 @@ def _ids(payload):
 
 # ─── the list ────────────────────────────────────────────────────────────────
 
+
 def test_empty_trash(client):
     tc, project = client
     body = _trash(tc)
@@ -97,7 +101,7 @@ def test_a_deletion_is_one_row_with_its_children_nested(client):
     assert item["id"] == scene and item["type"] == "scene"
     assert {inc["id"] for inc in item["includes"]} == set(beats)
     assert item["label"] == "Scene" and item["includes"][0]["label"] == "Scene Beats"
-    assert item["preview"]                      # the composed heading, not the id
+    assert item["preview"]  # the composed heading, not the id
     assert item["has_script"] in (True, False)
     assert item["restore"]["blockers"] == []
     # The badge counts every entity, not just the rows.
@@ -124,10 +128,11 @@ def test_a_child_deleted_separately_keeps_its_own_row(client):
     body = _trash(tc)
     assert _ids(body) == {scene, beats}
     scene_row = next(i for i in body["items"] if i["id"] == scene)
-    assert scene_row["includes"] == []           # did not take the beats with it
+    assert scene_row["includes"] == []  # did not take the beats with it
 
 
 # ─── the preview ─────────────────────────────────────────────────────────────
+
 
 def test_preview_shows_the_prose_and_the_hidden_links(client):
     tc, project = client
@@ -168,6 +173,7 @@ def test_preview_of_an_unknown_entity_is_404(client):
 
 
 # ─── restore ─────────────────────────────────────────────────────────────────
+
 
 def test_the_bundle_is_not_reported_as_staying_behind(client):
     """A child of the bundle comes back with the parent — so it is never "stranded".
@@ -230,8 +236,9 @@ def test_restoring_the_parent_brings_the_bundle_back(client):
 
     assert _trash(tc)["count"] == 0
     assert _sql(project, "SELECT is_deleted FROM entities WHERE id=?", scene)[0][0] == 0
-    live = _sql(project, "SELECT count(*) FROM live_relations WHERE from_id=? OR to_id=?",
-                scene, scene)[0][0]
+    live = _sql(
+        project, "SELECT count(*) FROM live_relations WHERE from_id=? OR to_id=?", scene, scene
+    )[0][0]
     assert live, "the cast comes back visible: nothing was rebuilt, only un-hidden"
 
 
@@ -244,8 +251,7 @@ def test_restore_is_blocked_while_the_parent_is_in_the_trash(client):
     _earlier(project, beats)
     assert delete_entity(project, "scene", scene, "t", True)["success"]
 
-    r = tc.post(f"/api/projects/{SLUG}/trash/scene_beats/{beats}/restore",
-                json={}, headers=HDR)
+    r = tc.post(f"/api/projects/{SLUG}/trash/scene_beats/{beats}/restore", json={}, headers=HDR)
     assert r.status_code == 409, r.text
     error = r.json()["error"]
     assert error["code"] == "restore_blocked"
@@ -254,9 +260,16 @@ def test_restore_is_blocked_while_the_parent_is_in_the_trash(client):
     assert blocker["fix"]["id"] == scene
 
     # The fix the panel offers: the same call with the parent added.
-    r = tc.post(f"/api/projects/{SLUG}/trash/restore",
-                json={"targets": [{"entity_type": "scene_beats", "id": beats},
-                                  {"entity_type": "scene", "id": scene}]}, headers=HDR)
+    r = tc.post(
+        f"/api/projects/{SLUG}/trash/restore",
+        json={
+            "targets": [
+                {"entity_type": "scene_beats", "id": beats},
+                {"entity_type": "scene", "id": scene},
+            ]
+        },
+        headers=HDR,
+    )
     assert r.status_code == 200, r.text
     assert _sql(project, "SELECT is_deleted FROM entities WHERE id=?", beats)[0][0] == 0
 
@@ -270,10 +283,16 @@ def test_a_blocked_target_restores_nothing_from_the_batch(client):
     delete_entity(project, "scene", scene, "t", True)
     delete_entity(project, "character", "kael", "t", True)
 
-    r = tc.post(f"/api/projects/{SLUG}/trash/restore",
-                json={"targets": [{"entity_type": "character", "id": "kael"},
-                                  {"entity_type": "scene_beats", "id": beats}]},
-                headers=HDR)
+    r = tc.post(
+        f"/api/projects/{SLUG}/trash/restore",
+        json={
+            "targets": [
+                {"entity_type": "character", "id": "kael"},
+                {"entity_type": "scene_beats", "id": beats},
+            ]
+        },
+        headers=HDR,
+    )
     assert r.status_code == 409, r.text
     assert r.json()["error"]["code"] == "restore_blocked"
     # kael was restorable, and is still deleted: the batch is one action.
@@ -285,13 +304,17 @@ def test_restore_refuses_an_empty_batch_and_a_live_target(client):
     r = tc.post(f"/api/projects/{SLUG}/trash/restore", json={"targets": []}, headers=HDR)
     assert r.status_code == 422
 
-    r = tc.post(f"/api/projects/{SLUG}/trash/restore",
-                json={"targets": [{"entity_type": "character", "id": "kael"}]}, headers=HDR)
+    r = tc.post(
+        f"/api/projects/{SLUG}/trash/restore",
+        json={"targets": [{"entity_type": "character", "id": "kael"}]},
+        headers=HDR,
+    )
     assert r.status_code == 409
     assert r.json()["error"]["code"] == "not_in_trash"
 
 
 # ─── purge ───────────────────────────────────────────────────────────────────
+
 
 def test_purge_preview_names_the_bundle_and_what_else_is_touched(client):
     tc, project = client
@@ -299,8 +322,11 @@ def test_purge_preview_names_the_bundle_and_what_else_is_touched(client):
     beats = _beats_of(project, scene)
     delete_entity(project, "scene", scene, "t", True)
 
-    r = tc.post(f"/api/projects/{SLUG}/trash/purge-preview",
-                json={"targets": [{"entity_type": "scene", "id": scene}]}, headers=HDR)
+    r = tc.post(
+        f"/api/projects/{SLUG}/trash/purge-preview",
+        json={"targets": [{"entity_type": "scene", "id": scene}]},
+        headers=HDR,
+    )
     assert r.status_code == 200, r.text
     body = r.json()
     assert {i["id"] for i in body["items"]} == {scene} | set(beats)
@@ -315,15 +341,25 @@ def test_purge_removes_the_bundle_behind_one_backup(client):
     delete_entity(project, "scene", scene, "t", True)
     before = len(list_backups(project))
 
-    r = tc.post(f"/api/projects/{SLUG}/trash/purge",
-                json={"targets": [{"entity_type": "scene", "id": scene}]}, headers=HDR)
+    r = tc.post(
+        f"/api/projects/{SLUG}/trash/purge",
+        json={"targets": [{"entity_type": "scene", "id": scene}]},
+        headers=HDR,
+    )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["backup"] and body["purged"]
     assert len(list_backups(project)) == before + 1, "one backup for the whole call"
 
-    gone = [r[0] for r in _sql(project, "SELECT id FROM entities WHERE id IN (%s)"
-                               % ",".join("?" * (1 + len(beats))), scene, *beats)]
+    gone = [
+        r[0]
+        for r in _sql(
+            project,
+            "SELECT id FROM entities WHERE id IN (%s)" % ",".join("?" * (1 + len(beats))),
+            scene,
+            *beats,
+        )
+    ]
     assert gone == []
     assert _sql(project, "SELECT count(*) FROM sections WHERE entity_id=?", scene)[0][0] == 0
     assert _trash(tc)["count"] == 0
@@ -339,8 +375,11 @@ def test_purging_clears_a_live_entitys_reference(client):
     tc, project = client
     assert delete_entity(project, "character", "kael", "t", True)["success"]
 
-    r = tc.post(f"/api/projects/{SLUG}/trash/purge",
-                json={"targets": [{"entity_type": "character", "id": "kael"}]}, headers=HDR)
+    r = tc.post(
+        f"/api/projects/{SLUG}/trash/purge",
+        json={"targets": [{"entity_type": "character", "id": "kael"}]},
+        headers=HDR,
+    )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["affected"], "a live relationship named the character"
@@ -353,13 +392,19 @@ def test_purging_clears_a_live_entitys_reference(client):
 
 def test_purge_refuses_a_live_target_an_unknown_one_and_an_empty_list(client):
     tc, project = client
-    r = tc.post(f"/api/projects/{SLUG}/trash/purge",
-                json={"targets": [{"entity_type": "character", "id": "kael"}]}, headers=HDR)
+    r = tc.post(
+        f"/api/projects/{SLUG}/trash/purge",
+        json={"targets": [{"entity_type": "character", "id": "kael"}]},
+        headers=HDR,
+    )
     assert r.status_code == 409
     assert r.json()["error"]["code"] == "not_in_trash"
 
-    r = tc.post(f"/api/projects/{SLUG}/trash/purge",
-                json={"targets": [{"entity_type": "character", "id": "nobody"}]}, headers=HDR)
+    r = tc.post(
+        f"/api/projects/{SLUG}/trash/purge",
+        json={"targets": [{"entity_type": "character", "id": "nobody"}]},
+        headers=HDR,
+    )
     assert r.status_code == 404
 
     r = tc.post(f"/api/projects/{SLUG}/trash/purge", json={"targets": []}, headers=HDR)
@@ -371,20 +416,27 @@ def test_purge_leaves_a_live_location_link_blank_rather_than_dangling(client):
     rows = _sql(project, "SELECT id FROM entities WHERE type='location'")
     assert rows
     location = rows[0][0]
-    scene = _sql(project, "SELECT id FROM entities WHERE type='scene' AND location_id=? "
-                          "AND is_deleted=0 LIMIT 1", location)
+    scene = _sql(
+        project,
+        "SELECT id FROM entities WHERE type='scene' AND location_id=? AND is_deleted=0 LIMIT 1",
+        location,
+    )
     if not scene:
         pytest.skip("fixture has no scene pointing at that location")
     scene = scene[0][0]
     delete_entity(project, "location", location, "t", True)
 
-    r = tc.post(f"/api/projects/{SLUG}/trash/purge",
-                json={"targets": [{"entity_type": "location", "id": location}]}, headers=HDR)
+    r = tc.post(
+        f"/api/projects/{SLUG}/trash/purge",
+        json={"targets": [{"entity_type": "location", "id": location}]},
+        headers=HDR,
+    )
     assert r.status_code == 200, r.text
     assert _sql(project, "SELECT location_id FROM entities WHERE id=?", scene)[0][0] == ""
 
 
 # ─── the agent and the tab agree ─────────────────────────────────────────────
+
 
 def test_the_tab_and_the_agent_report_the_same_bundle(client):
     from white_words.scriptwriting.tools.story_admin import handler as admin
@@ -393,10 +445,15 @@ def test_the_tab_and_the_agent_report_the_same_bundle(client):
     scene = _first_scene_with_beats(project)
     delete_entity(project, "scene", scene, "t", True)
 
-    agent = json.loads(admin({"project": str(project), "action": "list_deleted"},
-                             root_path=str(project.parent.parent)))
+    agent = json.loads(
+        admin(
+            {"project": str(project), "action": "list_deleted"},
+            root_path=str(project.parent.parent),
+        )
+    )
     ui = _trash(tc)
     assert agent["count"] == ui["count"]
     assert {i["id"] for i in agent["deleted"]} == _ids(ui)
-    assert {i["id"] for i in agent["deleted"][0]["includes"]} == \
-           {i["id"] for i in ui["items"][0]["includes"]}
+    assert {i["id"] for i in agent["deleted"][0]["includes"]} == {
+        i["id"] for i in ui["items"][0]["includes"]
+    }

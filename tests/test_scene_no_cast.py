@@ -6,6 +6,7 @@ Two halves, both load-bearing:
 - with `no_cast` set → it must stop flagging, or a deliberate decision is
   reported as a gap forever and the author learns to ignore the field
 """
+
 import json
 import shutil
 from pathlib import Path
@@ -21,24 +22,34 @@ def project(tmp_path, monkeypatch):
     root = tmp_path / "root"
     shutil.copytree(FIXTURE, root / "projects" / "save-the-children")
     import white_words.scriptwriting.core.config
-    monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config", lambda: {"root_path": str(root)})
+
+    monkeypatch.setattr(
+        white_words.scriptwriting.core.config,
+        "load_plugin_config",
+        lambda: {"root_path": str(root)},
+    )
     from white_words.scriptwriting.tools.story_import import handler as import_handler
+
     import_handler({"project": "save-the-children", "confirm": True}, root_path=str(root))
     return root / "projects" / "save-the-children"
 
 
 def gaps(project, field):
     from white_words.scriptwriting.tools.story_load import handler
+
     data = json.loads(
-        handler({"project": "save-the-children", "view": "unfilled",
-                 "field": field},
-                root_path=str(project.parent.parent)))
+        handler(
+            {"project": "save-the-children", "view": "unfilled", "field": field},
+            root_path=str(project.parent.parent),
+        )
+    )
     return set(data.get("entities", []))
 
 
 def _scene_with_no_cast(project, scene_id):
     """Force the fixture scene into the state we care about: drafted, no relations."""
     import sqlite3
+
     db = project / ".story" / "story.db"
     conn = sqlite3.connect(str(db))
     conn.execute("DELETE FROM relations WHERE to_id=? AND kind='character_scene'", (scene_id,))
@@ -49,6 +60,7 @@ def _scene_with_no_cast(project, scene_id):
 def _set_no_cast(project, scene_id, value=True):
     import json as _json
     import sqlite3
+
     db = project / ".story" / "story.db"
     conn = sqlite3.connect(str(db))
     row = conn.execute("SELECT extra FROM entities WHERE id=?", (scene_id,)).fetchone()
@@ -69,6 +81,7 @@ def test_a_castless_drafted_scene_is_flagged(project, monkeypatch):
     question a caller would ask rather than reading the capped list.
     """
     import white_words.scriptwriting.tools.story_load as sl
+
     monkeypatch.setattr(sl, "UNFILLED_LIMIT", 1)
     _scene_with_no_cast(project, "central-room-day")
     assert "central-room-day" in gaps(project, "characters")
@@ -92,11 +105,12 @@ def test_clearing_no_cast_restores_the_gap(project):
 def test_no_cast_does_not_hide_a_real_cast(project):
     """no_cast is a statement about an empty cast, not a way to suppress the check."""
     import sqlite3
+
     db = project / ".story" / "story.db"
     conn = sqlite3.connect(str(db))
     n = conn.execute(
-        "SELECT COUNT(*) FROM relations WHERE to_id='central-room-day' "
-        "AND kind='character_scene'").fetchone()[0]
+        "SELECT COUNT(*) FROM relations WHERE to_id='central-room-day' AND kind='character_scene'"
+    ).fetchone()[0]
     conn.close()
     assert n, "fixture scene should have a cast"
     _set_no_cast(project, "central-room-day", True)

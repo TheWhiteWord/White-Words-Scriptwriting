@@ -47,11 +47,16 @@ class TestResolution:
         monkeypatch.setenv(ENV, "banana")
         assert budget.max_response_chars() == 17000
 
-    @pytest.mark.parametrize("bad", ["max_response_chars = 10",
-                                     "max_response_chars = true",
-                                     "max_response_chars = 15000.5",
-                                     'max_response_chars = "lots"',
-                                     "max_response_chars = -3"])
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            "max_response_chars = 10",
+            "max_response_chars = true",
+            "max_response_chars = 15000.5",
+            'max_response_chars = "lots"',
+            "max_response_chars = -3",
+        ],
+    )
     def test_a_bad_file_value_means_not_set(self, home, bad):
         write_toml(home, f"[white_words]\n{bad}\n")
         assert budget.max_response_chars() == budget.DEFAULT_MAX_RESPONSE_CHARS
@@ -74,8 +79,7 @@ class TestCoreDoesNotReadHostConfig:
     def test_a_host_config_yaml_has_no_effect(self, tmp_path, monkeypatch):
         host = tmp_path / "host"
         host.mkdir()
-        (host / "config.yaml").write_text(
-            "tool_budget:\n  mcp_result_size_chars: 100000\n")
+        (host / "config.yaml").write_text("tool_budget:\n  mcp_result_size_chars: 100000\n")
         monkeypatch.setenv("HERMES_HOME", str(host))
         assert budget.max_response_chars() == budget.DEFAULT_MAX_RESPONSE_CHARS
 
@@ -87,14 +91,17 @@ class TestCoreDoesNotReadHostConfig:
 class TestHermesPercentage:
     # What Hermes enforces, computed from tools/budget_config.py:
     #   min(mcp cap (50000), clamp(0.15 * window_tokens * 4, 8000, 100000))
-    @pytest.mark.parametrize("ctx, threshold, suggested", [
-        (8_000,     8_000,  7_000),    # floor: a tiny model still gets 8k
-        (32_000,   19_200, 17_000),
-        (65_000,   39_000, 35_000),
-        (128_000,  50_000, 45_000),
-        (200_000,  50_000, 45_000),
-        (1_000_000, 50_000, 45_000),
-    ])
+    @pytest.mark.parametrize(
+        "ctx, threshold, suggested",
+        [
+            (8_000, 8_000, 7_000),  # floor: a tiny model still gets 8k
+            (32_000, 19_200, 17_000),
+            (65_000, 39_000, 35_000),
+            (128_000, 50_000, 45_000),
+            (200_000, 50_000, 45_000),
+            (1_000_000, 50_000, 45_000),
+        ],
+    )
     def test_known_windows(self, ctx, threshold, suggested):
         assert hb.hermes_spill_threshold(ctx) == threshold
         assert hb.suggest_budget(ctx) == suggested

@@ -9,6 +9,7 @@ and a later restore of the parent brought them all back.
 The rule now: a child belongs to a delete when it was live at that moment, and
 to a restore when it carries the parent's own deletion stamp.
 """
+
 import json
 import shutil
 import sqlite3
@@ -48,9 +49,17 @@ def _row(p, eid):
 
 def _restore(proj, etype, eid):
     p, vault = proj
-    return json.loads(admin({"action": "restore", "project": "save-the-children",
-                             "target": {"entity_type": etype, "id": eid},
-                             "summary": "t"}, root_path=str(vault)))
+    return json.loads(
+        admin(
+            {
+                "action": "restore",
+                "project": "save-the-children",
+                "target": {"entity_type": etype, "id": eid},
+                "summary": "t",
+            },
+            root_path=str(vault),
+        )
+    )
 
 
 SCENE, BEATS = "central-room-day", "central-room-day-beats"
@@ -91,9 +100,14 @@ class TestDeleteLeavesTrashedChildrenAlone:
 
     def test_a_trashed_scene_does_not_block_deleting_its_sequence(self, proj):
         p, _ = proj
-        scenes = [r[0] for r in _sql(
-            p, "SELECT id FROM entities WHERE parent_id='seq-discovery' "
-               "AND type='scene' AND is_deleted=0")]
+        scenes = [
+            r[0]
+            for r in _sql(
+                p,
+                "SELECT id FROM entities WHERE parent_id='seq-discovery' "
+                "AND type='scene' AND is_deleted=0",
+            )
+        ]
         assert scenes
         for sid in scenes:
             assert delete_entity(p, "scene", sid, "t", True)["success"]
@@ -149,6 +163,7 @@ class TestRestoreBringsBackOnlyWhatThatDeleteFlagged:
         _trash_beats_earlier(p)
         delete_entity(p, "scene", SCENE, "t", True)
         from white_words.scriptwriting.core.trash import purge_deleted
+
         res = purge_deleted(p, {"entity_type": "scene", "id": SCENE})
         assert res.get("success"), res
         assert [x["id"] for x in res["purged"]] == [SCENE]

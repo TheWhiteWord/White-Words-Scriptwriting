@@ -14,6 +14,7 @@ stored message is never rewritten by a read.
     open | failed      no row        discarded
     committed|discarded  anything    the snapshot's own value (terminal)
 """
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -64,14 +65,30 @@ def test_a_status_the_rule_does_not_know_is_left_alone():
 
 # ─── against a real database ───
 
+
 def _card(draft_id, status="open", **extra):
-    return {"id": draft_id, "status": status, "summary": "s", "created_at": "t",
-            "changes": [], "warnings": [], **extra}
+    return {
+        "id": draft_id,
+        "status": status,
+        "summary": "s",
+        "created_at": "t",
+        "changes": [],
+        "warnings": [],
+        **extra,
+    }
 
 
 def _stage(project, slug="newchar"):
-    ops = [{"op": "create", "type": "character", "id": slug,
-            "frontmatter": {"name": slug.title()}, "sections": {}, "summary": "new"}]
+    ops = [
+        {
+            "op": "create",
+            "type": "character",
+            "id": slug,
+            "frontmatter": {"name": slug.title()},
+            "sections": {},
+            "summary": "new",
+        }
+    ]
     return drafts.stage(project, ops, "a draft")["draft_id"]
 
 
@@ -100,8 +117,15 @@ def test_a_discarded_draft_shows_discarded(fixture_path):
 def test_a_failed_approve_keeps_failed_and_its_error(fixture_path):
     """After a failed commit (T5) the draft is still open in the table, so the
     card the approve route stored — failed, with the reason — must survive."""
-    bad = [{"op": "edit", "entity_type": "character", "entity_id": "nobody-at-all",
-            "data": {"one_sentence": "x"}, "summary": "edit a ghost"}]
+    bad = [
+        {
+            "op": "edit",
+            "entity_type": "character",
+            "entity_id": "nobody-at-all",
+            "data": {"one_sentence": "x"},
+            "summary": "edit a ghost",
+        }
+    ]
     draft_id = drafts.stage(fixture_path, bad, "bad")["draft_id"]
     result = drafts.commit(fixture_path, draft_id)
     assert result["success"] is False
@@ -132,9 +156,10 @@ def test_only_the_status_changes_and_the_input_is_not_touched(fixture_path):
 
     [shown] = drafts.reconcile_snapshots(fixture_path, [card])
 
-    assert card == before                                   # not mutated
-    assert {k: v for k, v in shown.items() if k != "status"} == \
-           {k: v for k, v in before.items() if k != "status"}
+    assert card == before  # not mutated
+    assert {k: v for k, v in shown.items() if k != "status"} == {
+        k: v for k, v in before.items() if k != "status"
+    }
 
 
 def test_the_same_draft_on_two_cards_each_follows_its_own_snapshot(fixture_path):
@@ -142,13 +167,17 @@ def test_the_same_draft_on_two_cards_each_follows_its_own_snapshot(fixture_path)
     draft_id = _stage(fixture_path)
     drafts.commit(fixture_path, draft_id)
     shown = drafts.reconcile_snapshots(
-        fixture_path, [_card(draft_id, "open"), _card(draft_id, "failed", error="e"),
-                       _card(draft_id, "discarded")])
+        fixture_path,
+        [
+            _card(draft_id, "open"),
+            _card(draft_id, "failed", error="e"),
+            _card(draft_id, "discarded"),
+        ],
+    )
     assert [s["status"] for s in shown] == ["committed", "committed", "discarded"]
 
 
-def test_many_cards_cost_one_lookup_and_none_when_nothing_can_be_stale(
-        fixture_path, monkeypatch):
+def test_many_cards_cost_one_lookup_and_none_when_nothing_can_be_stale(fixture_path, monkeypatch):
     ids = [_stage(fixture_path, f"c{i}") for i in range(4)]
     seen = []
     real = db.get_db
@@ -163,13 +192,14 @@ def test_many_cards_cost_one_lookup_and_none_when_nothing_can_be_stale(
     drafts.reconcile_snapshots(fixture_path, [_card(i) for i in ids])
     assert len([s for s in seen if "FROM drafts" in s]) == 1
 
-    seen.clear()                     # terminal cards need no lookup at all
+    seen.clear()  # terminal cards need no lookup at all
     drafts.reconcile_snapshots(fixture_path, [_card("a", "committed"), _card("b", "discarded")])
     drafts.reconcile_snapshots(fixture_path, [])
     assert seen == []
 
 
 # ─── the route that serves a conversation ───
+
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
@@ -201,12 +231,17 @@ def test_the_served_conversation_shows_the_tables_status(client):
     drafts.commit(proj, committed)
     drafts.discard(proj, discarded)
     cid, _ = _conversation_with_cards(
-        proj, [_card(committed), _card(discarded), _card(still_open), _card("d-gone")])
+        proj, [_card(committed), _card(discarded), _card(still_open), _card("d-gone")]
+    )
 
     shown = {d["id"]: d["status"] for d in _served(tc, cid)}
 
-    assert shown == {committed: "committed", discarded: "discarded",
-                     still_open: "open", "d-gone": "discarded"}
+    assert shown == {
+        committed: "committed",
+        discarded: "discarded",
+        still_open: "open",
+        "d-gone": "discarded",
+    }
 
 
 def test_serving_a_conversation_does_not_rewrite_the_stored_card(client):
@@ -227,13 +262,21 @@ def test_a_failed_approve_still_reads_failed_after_a_reload(client):
     """End to end through the real approve route: the card it stores says
     failed with the reason, the table says open, and the reload keeps both."""
     tc, proj = client
-    bad = [{"op": "edit", "entity_type": "character", "entity_id": "nobody-at-all",
-            "data": {"one_sentence": "x"}, "summary": "edit a ghost"}]
+    bad = [
+        {
+            "op": "edit",
+            "entity_type": "character",
+            "entity_id": "nobody-at-all",
+            "data": {"one_sentence": "x"},
+            "summary": "edit a ghost",
+        }
+    ]
     draft_id = drafts.stage(proj, bad, "bad")["draft_id"]
     cid, _ = _conversation_with_cards(proj, [_card(draft_id)])
 
-    r = tc.post(f"/api/projects/demo/drafts/{draft_id}/approve", headers=H,
-                json={"conversation_id": cid})
+    r = tc.post(
+        f"/api/projects/demo/drafts/{draft_id}/approve", headers=H, json={"conversation_id": cid}
+    )
     assert r.status_code == 200 and r.json()["status"] == "failed"
 
     [card] = _served(tc, cid)

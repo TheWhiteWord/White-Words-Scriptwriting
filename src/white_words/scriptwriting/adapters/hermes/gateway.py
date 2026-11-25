@@ -1,4 +1,5 @@
 """Agent (profile gateway) availability helpers."""
+
 from __future__ import annotations
 import time
 from typing import Any
@@ -27,6 +28,7 @@ def agent_state(config: Config, profile: str = PROFILE) -> dict[str, Any]:
         return {"state": "not_configured", "detail": "profile missing"}
     try:
         from white_words.scriptwriting.app import token as token_mod
+
         key = token_mod.load_api_key()
     except Exception:
         key = None
@@ -37,7 +39,11 @@ def agent_state(config: Config, profile: str = PROFILE) -> dict[str, Any]:
             import httpx
         except ImportError:
             import httpx2 as httpx
-        r = httpx.get(f"{_base_url(config, profile)}/v1/models", headers={"Authorization": f"Bearer {key}"}, timeout=2.0)
+        r = httpx.get(
+            f"{_base_url(config, profile)}/v1/models",
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=2.0,
+        )
     except Exception as e:
         return {"state": "gateway_stopped", "detail": str(e)}
     if r.status_code == 401:

@@ -2,6 +2,7 @@
 
 The approved draft runs `purge_deleted` (see test_purge_approval.py for the approval
 itself); these tests call it directly."""
+
 import json
 import sqlite3
 from pathlib import Path
@@ -39,15 +40,18 @@ def _exists(project, entity_id):
 
 
 def _scene_with_beat(project):
-    scene, = _sql(project, "SELECT parent_id FROM entities WHERE type='scene_beats' LIMIT 1")[0]
-    beat, = _sql(project, "SELECT id FROM entities WHERE type='scene_beats' AND parent_id=?",
-                 (scene,))[0]
+    (scene,) = _sql(project, "SELECT parent_id FROM entities WHERE type='scene_beats' LIMIT 1")[0]
+    (beat,) = _sql(
+        project, "SELECT id FROM entities WHERE type='scene_beats' AND parent_id=?", (scene,)
+    )[0]
     return scene, beat
 
 
 def _snapshot(project):
-    return {t: _sql(project, f"SELECT * FROM {t} ORDER BY 1, 2") for t in
-            ("entities", "relations", "sections")}
+    return {
+        t: _sql(project, f"SELECT * FROM {t} ORDER BY 1, 2")
+        for t in ("entities", "relations", "sections")
+    }
 
 
 def test_removes_that_entity_and_everything_attached_to_it(fixture_path):
@@ -59,8 +63,12 @@ def test_removes_that_entity_and_everything_attached_to_it(fixture_path):
     assert [p["id"] for p in out["purged"]] == ["kael"]
     assert not _exists(fixture_path, "kael")
     assert _sql(fixture_path, "SELECT count(*) FROM sections WHERE entity_id='kael'")[0][0] == 0
-    assert _sql(fixture_path, "SELECT count(*) FROM relations "
-                              "WHERE from_id='kael' OR to_id='kael'")[0][0] == 0
+    assert (
+        _sql(fixture_path, "SELECT count(*) FROM relations WHERE from_id='kael' OR to_id='kael'")[
+            0
+        ][0]
+        == 0
+    )
 
 
 def test_other_trashed_items_stay_even_when_they_are_old_enough_to_purge(fixture_path):
@@ -100,18 +108,18 @@ def test_takes_a_backup_first_and_it_still_has_the_entity(fixture_path):
 
 # ─── refusals: nothing may change ───
 
+
 def test_the_agents_request_removes_nothing(fixture_path):
     """The admin action only stages it; the person approves in the app."""
     delete_entity(fixture_path, "character", "kael", "t", True)
-    out = _admin(fixture_path, action="purge",
-                 target={"entity_type": "character", "id": "kael"})
+    out = _admin(fixture_path, action="purge", target={"entity_type": "character", "id": "kael"})
     assert out["purged"] is False and out["success"] is True
     assert _exists(fixture_path, "kael")
 
 
 def test_refuses_an_entity_that_is_not_in_the_trash(fixture_path):
     before = _snapshot(fixture_path)
-    out = _purge_one(fixture_path, "kael", "character")   # live
+    out = _purge_one(fixture_path, "kael", "character")  # live
     assert "not in the trash" in out["error"]
     assert _snapshot(fixture_path) == before
 
@@ -133,6 +141,7 @@ def test_refuses_a_wrong_type_rather_than_deleting_the_wrong_thing(fixture_path)
 
 # ─── what goes with it ───
 
+
 def test_things_deleted_in_the_same_operation_go_too(fixture_path):
     scene, beat = _scene_with_beat(fixture_path)
     delete_entity(fixture_path, "scene", scene, "t", True)
@@ -153,8 +162,12 @@ def test_a_child_deleted_separately_stays_in_the_trash_and_loses_its_dead_link(f
     assert _sql(fixture_path, "SELECT parent_id FROM entities WHERE id=?", (beat,)) == [("",)]
     # still in the trash, and restorable on its own
     assert beat in [d["id"] for d in _admin(fixture_path, action="list_deleted")["deleted"]]
-    restored = _admin(fixture_path, action="restore",
-                      target={"entity_type": "scene_beats", "id": beat}, summary="back")
+    restored = _admin(
+        fixture_path,
+        action="restore",
+        target={"entity_type": "scene_beats", "id": beat},
+        summary="back",
+    )
     assert restored["success"] is True
 
 
@@ -172,8 +185,10 @@ def test_the_bulk_purge_also_clears_dead_links_on_what_it_leaves_behind(fixture_
 def test_a_failure_part_way_removes_nothing(fixture_path):
     delete_entity(fixture_path, "character", "kael", "t", True)
     before = _snapshot(fixture_path)
-    _sql(fixture_path, "CREATE TRIGGER boom BEFORE DELETE ON entities "
-                       "BEGIN SELECT RAISE(ABORT, 'boom'); END")
+    _sql(
+        fixture_path,
+        "CREATE TRIGGER boom BEFORE DELETE ON entities BEGIN SELECT RAISE(ABORT, 'boom'); END",
+    )
     with pytest.raises(sqlite3.Error, match="boom"):
         _purge_one(fixture_path, "kael", "character")
     _sql(fixture_path, "DROP TRIGGER boom")
@@ -183,6 +198,10 @@ def test_a_failure_part_way_removes_nothing(fixture_path):
 def test_restore_after_purge_says_it_is_gone(fixture_path):
     delete_entity(fixture_path, "character", "kael", "t", True)
     _purge_one(fixture_path, "kael", "character")
-    out = _admin(fixture_path, action="restore",
-                 target={"entity_type": "character", "id": "kael"}, summary="x")
+    out = _admin(
+        fixture_path,
+        action="restore",
+        target={"entity_type": "character", "id": "kael"},
+        summary="x",
+    )
     assert "not found" in out["error"].lower()

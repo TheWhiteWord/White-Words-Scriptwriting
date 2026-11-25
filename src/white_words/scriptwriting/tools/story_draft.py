@@ -14,6 +14,7 @@ single target entity and no single action — which is why staging is a tool
 of its own rather than a parameter on any one write. Design of record:
 tasks/task_28/draft-staging-design.md.
 """
+
 import json
 
 from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
@@ -46,26 +47,26 @@ def _op_schemas() -> list[dict]:
                 "type": "string",
                 "enum": list(ENTITY_SCHEMAS),
                 "description": "Entity type to create. Projects cannot be drafted — "
-                               "call story_admin(action=\"create_project\") instead.",
+                'call story_admin(action="create_project") instead.',
             },
             "id": {
                 "type": "string",
                 "description": "The new entity's id — the slug every other op and "
-                               "every link refers to it by. Alphanumeric, hyphens "
-                               "and underscores only.",
+                "every link refers to it by. Alphanumeric, hyphens "
+                "and underscores only.",
             },
             "frontmatter": {
                 "type": "object",
                 "description": "Field values for the entity. Relations such as a "
-                               "scene's characters ride IN here, not in a separate "
-                               "key. Call story_describe for the fields this type "
-                               "has; omit the ones the user has not decided yet.",
+                "scene's characters ride IN here, not in a separate "
+                "key. Call story_describe for the fields this type "
+                "has; omit the ones the user has not decided yet.",
             },
             "sections": {
                 "type": "object",
                 "description": "Optional section prose, as {Section Name: body}. "
-                               "Standard headings per type are in "
-                               "references/model/entity-sections.md.",
+                "Standard headings per type are in "
+                "references/model/entity-sections.md.",
             },
             "summary": summary,
         },
@@ -76,9 +77,9 @@ def _op_schemas() -> list[dict]:
             "data": {
                 "type": "object",
                 "description": "Flat {field: value} for frontmatter, and/or "
-                               "{Section Name: prose} for body sections. Only the "
-                               "keys that change — this is a patch, not a "
-                               "replacement.",
+                "{Section Name: prose} for body sections. Only the "
+                "keys that change — this is a patch, not a "
+                "replacement.",
             },
             "summary": summary,
         },
@@ -99,7 +100,7 @@ def _op_schemas() -> list[dict]:
                 "type": "array",
                 "items": {"type": "string"},
                 "description": "The COMPLETE new order, every id included. This "
-                               "renumbers; it does not move one item.",
+                "renumbers; it does not move one item.",
             },
             "summary": summary,
         },
@@ -108,17 +109,19 @@ def _op_schemas() -> list[dict]:
             "target": {
                 "type": "object",
                 "description": "One DELETED entity to remove for good, as {entity_type, id}. "
-                               "Omit to remove everything deleted more than older_than_days ago.",
+                "Omit to remove everything deleted more than older_than_days ago.",
                 "properties": {"entity_type": {"type": "string"}, "id": {"type": "string"}},
             },
             "older_than_days": {
                 "type": "integer",
                 "description": "Without a target: only items deleted longer ago than this "
-                               "(default 30). Newer ones stay restorable.",
+                "(default 30). Newer ones stay restorable.",
             },
-            "summary": {"type": "string",
-                        "description": "One line the user reads on the approval card, naming "
-                                       "what is to be removed for good"},
+            "summary": {
+                "type": "string",
+                "description": "One line the user reads on the approval card, naming "
+                "what is to be removed for good",
+            },
         },
     }
     return [
@@ -133,22 +136,22 @@ def _op_schemas() -> list[dict]:
 
 SCHEMA = {
     "description": "Propose a batch of entity changes; writes nothing until the user confirms. "
-                   "RELAY preview_md VERBATIM. Report `validation` findings and fix before asking. "
-                   "`dry_run.status` 'clean' means the batch will commit — present the draft. "
-                   "'refused' means it will not: re-stage a corrected op list silently for a technical "
-                   "inconsistency, or relay the conflict when it is a story decision for the user. "
-                   "'unavailable' means the replay could not run — relay the `error`. "
-                   "Call action=list for open drafts. Soft delete. "
-                   "Projects can't be drafted — story_admin(action=\"create_project\").",
+    "RELAY preview_md VERBATIM. Report `validation` findings and fix before asking. "
+    "`dry_run.status` 'clean' means the batch will commit — present the draft. "
+    "'refused' means it will not: re-stage a corrected op list silently for a technical "
+    "inconsistency, or relay the conflict when it is a story decision for the user. "
+    "'unavailable' means the replay could not run — relay the `error`. "
+    "Call action=list for open drafts. Soft delete. "
+    'Projects can\'t be drafted — story_admin(action="create_project").',
     "type": "object",
     "properties": {
         "action": {
             "type": "string",
             "enum": ["stage", "commit", "discard", "list"],
             "description": "stage (propose ops and get a draft_id back — writes nothing to the "
-                           "story), commit (write a staged draft — all of it or none of it; only "
-                           "ever call this once the user has confirmed), discard (drop a draft; nothing it proposed was "
-                           "ever written), list (every open draft in the project)",
+            "story), commit (write a staged draft — all of it or none of it; only "
+            "ever call this once the user has confirmed), discard (drop a draft; nothing it proposed was "
+            "ever written), list (every open draft in the project)",
         },
         "project": {
             "type": "string",
@@ -156,21 +159,21 @@ SCHEMA = {
         },
         "ops": {
             "type": "array",
-            "description": "For action=\"stage\": the changes to propose, in any order — commit "
-                           "sorts them into create, edit, delete, reorder itself. Relations "
-                           "such as a scene's characters ride INSIDE frontmatter, there is no "
-                           "separate relations key. Re-stage with the same draft_id to replace.",
+            "description": 'For action="stage": the changes to propose, in any order — commit '
+            "sorts them into create, edit, delete, reorder itself. Relations "
+            "such as a scene's characters ride INSIDE frontmatter, there is no "
+            "separate relations key. Re-stage with the same draft_id to replace.",
             "items": _op_schemas(),
         },
         "draft_id": {
             "type": "string",
             "description": "For commit, discard, and re-staging: the draft to act on, as returned "
-                           "by stage or list.",
+            "by stage or list.",
         },
         "summary": {
             "type": "string",
-            "description": "For action=\"stage\": one line naming the whole batch, e.g. 'Mira "
-                           "tells Kael — goes badly'.",
+            "description": 'For action="stage": one line naming the whole batch, e.g. \'Mira '
+            "tells Kael — goes badly'.",
         },
     },
     "required": ["action", "project"],
@@ -179,7 +182,13 @@ SCHEMA = {
 
 def handler(args: dict, **kwargs) -> str:
     from white_words.scriptwriting.core.config import resolve_root
-    from white_words.scriptwriting.core.drafts import DraftError, commit, discard, list_drafts, stage
+    from white_words.scriptwriting.core.drafts import (
+        DraftError,
+        commit,
+        discard,
+        list_drafts,
+        stage,
+    )
     from .story_resolve import resolve_project
 
     action = args["action"]
@@ -192,12 +201,14 @@ def handler(args: dict, **kwargs) -> str:
 
     try:
         if action == "stage":
-            return json.dumps(stage(
-                project_path,
-                args.get("ops"),
-                summary=args.get("summary", ""),
-                draft_id=args.get("draft_id"),
-            ))
+            return json.dumps(
+                stage(
+                    project_path,
+                    args.get("ops"),
+                    summary=args.get("summary", ""),
+                    draft_id=args.get("draft_id"),
+                )
+            )
         if action == "commit":
             return json.dumps(commit(project_path, args.get("draft_id", "")))
         if action == "discard":

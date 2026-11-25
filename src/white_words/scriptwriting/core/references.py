@@ -23,6 +23,7 @@ hidden everywhere at once; a reader that does not call these shows the ghost.
 tests/test_live_references.py compares every reader against a project where the
 references were physically removed, which is how a missed reader is found.
 """
+
 from __future__ import annotations
 
 import json
@@ -39,8 +40,7 @@ REFERENCE_COLUMNS = ("location_id", "parent_id")
 
 def dead_ids(conn) -> frozenset:
     """Ids of every entity in the trash. Cheap: the trash is small."""
-    return frozenset(r[0] for r in conn.execute(
-        "SELECT id FROM entities WHERE is_deleted=1"))
+    return frozenset(r[0] for r in conn.execute("SELECT id FROM entities WHERE is_deleted=1"))
 
 
 def live_extra(extra: dict, dead) -> dict:
@@ -95,13 +95,13 @@ def scrub_live_extras(conn, ids) -> list:
         return []
     changed = []
     for entity_id, extra_json in conn.execute(
-            "SELECT id, extra FROM entities WHERE is_deleted=0").fetchall():
+        "SELECT id, extra FROM entities WHERE is_deleted=0"
+    ).fetchall():
         extra = json.loads(extra_json) if extra_json else {}
         shown = live_extra(extra, ids)
         if shown is extra:
             continue
-        conn.execute("UPDATE entities SET extra=? WHERE id=?",
-                     (json.dumps(shown), entity_id))
+        conn.execute("UPDATE entities SET extra=? WHERE id=?", (json.dumps(shown), entity_id))
         changed.append(entity_id)
     return changed
 
@@ -116,15 +116,22 @@ def references_to(conn, ids) -> tuple:
     ids = set(ids)
     holders, detached = [], []
     for entity_id, entity_type, extra_json, location_id in conn.execute(
-            "SELECT id, type, extra, location_id FROM entities WHERE is_deleted=0"):
+        "SELECT id, type, extra, location_id FROM entities WHERE is_deleted=0"
+    ):
         if entity_id in ids:
             continue
         extra = json.loads(extra_json) if extra_json else {}
         hit = live_extra(extra, ids) is not extra
         if location_id and location_id in ids:
             hit = True
-            detached.append({"entity_id": entity_id, "entity_type": entity_type,
-                             "field": "location", "was_pointing_at": location_id})
+            detached.append(
+                {
+                    "entity_id": entity_id,
+                    "entity_type": entity_type,
+                    "field": "location",
+                    "was_pointing_at": location_id,
+                }
+            )
         if hit:
             holders.append(entity_id)
     return holders, detached

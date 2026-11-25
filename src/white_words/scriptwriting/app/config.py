@@ -1,4 +1,5 @@
 """Application configuration for the standalone app."""
+
 from __future__ import annotations
 
 import os
@@ -66,6 +67,7 @@ def load_config(*, cli_root=None, cli_port=None, cli_no_open=False) -> Config:
             open_browser = bool(file_vals["open_browser"])
 
     from white_words.scriptwriting.app.state_store import load_state as _load_state
+
     agent_autostart = False
     env = os.environ.get(ENV_PREFIX + "AGENT_AUTOSTART")
     if env is not None:
@@ -77,4 +79,11 @@ def load_config(*, cli_root=None, cli_port=None, cli_no_open=False) -> Config:
         if "agent_autostart" in st:
             agent_autostart = bool(st["agent_autostart"])
 
-    return Config(root=Path(root_raw).expanduser(), port=int(port_raw), open_browser=open_browser, hermes_api_port=int(hermes_api_port_raw), hermes_profile=str(hermes_profile_raw), agent_autostart=agent_autostart)
+    return Config(
+        root=Path(root_raw).expanduser(),
+        port=int(port_raw),
+        open_browser=open_browser,
+        hermes_api_port=int(hermes_api_port_raw),
+        hermes_profile=str(hermes_profile_raw),
+        agent_autostart=agent_autostart,
+    )

@@ -4,6 +4,7 @@ Thin: parse the request, call `core.manual_edits`, map its errors to HTTP.
 Non-GET requests already pass through the Host / Origin / `X-White-Words`
 checks in `server.py`; this adds no second auth model.
 """
+
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -11,8 +12,9 @@ from fastapi.responses import JSONResponse
 
 
 def _err(status: int, code: str, message: str, **extra):
-    return JSONResponse(status_code=status,
-                        content={"error": {"code": code, "message": message, **extra}})
+    return JSONResponse(
+        status_code=status, content={"error": {"code": code, "message": message, **extra}}
+    )
 
 
 def make_router(config, app):
@@ -20,11 +22,13 @@ def make_router(config, app):
 
     def _project(slug):
         from white_words.scriptwriting.tools.story_resolve import resolve_project
+
         return resolve_project(slug, Path(config.root))
 
     @router.get("/api/projects/{slug}/scenes/{scene_id}/script")
     def get_script(slug: str, scene_id: str):
         from white_words.scriptwriting.core import manual_edits as me
+
         try:
             project = _project(slug)
             return me.load_scene_script(project, scene_id)
@@ -36,6 +40,7 @@ def make_router(config, app):
     @router.put("/api/projects/{slug}/scenes/{scene_id}/script")
     def put_script(slug: str, scene_id: str, body: dict):
         from white_words.scriptwriting.core import manual_edits as me
+
         try:
             project = _project(slug)
         except ValueError as e:
@@ -57,6 +62,7 @@ def make_router(config, app):
     def check_script(slug: str, scene_id: str, body: dict):
         """Findings/cast/stats for an unsaved draft. Writes nothing."""
         from white_words.scriptwriting.core import manual_edits as me
+
         try:
             return me.check_scene_script(_project(slug), scene_id, body)
         except me.ScriptNotFound as e:
@@ -68,6 +74,7 @@ def make_router(config, app):
     def parse_text(slug: str, body: dict):
         """Pasted Fountain -> blocks. Pure; used when text is pasted into the editor."""
         from white_words.scriptwriting.core import scene_script as ss
+
         text = (body or {}).get("text")
         if not isinstance(text, str):
             return _err(422, "invalid", "`text` must be a string.")

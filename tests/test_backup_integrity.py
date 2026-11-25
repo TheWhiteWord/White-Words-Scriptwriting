@@ -31,15 +31,19 @@ def vault(tmp_path, monkeypatch):
     dest.parent.mkdir(parents=True)
     shutil.copytree(str(FIXTURE), str(dest))
     import white_words.scriptwriting.core.config
-    monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
-                        lambda: {"root_path": str(v)})
+
+    monkeypatch.setattr(
+        white_words.scriptwriting.core.config, "load_plugin_config", lambda: {"root_path": str(v)}
+    )
     from white_words.scriptwriting.tools.story_import import handler
+
     handler({"project": "stc", "confirm": True}, root_path=str(v))
     return v
 
 
 def _backup(vault):
     from white_words.scriptwriting.tools.story_backup import handler
+
     return json.loads(handler({"project": "stc"}, root_path=str(vault)))
 
 
@@ -72,25 +76,23 @@ class TestWalSafety:
         finally:
             writer.close()
 
-        name = _query(Path(result["backup"]),
-                      "SELECT name FROM entities WHERE id='kael'")[0]
+        name = _query(Path(result["backup"]), "SELECT name FROM entities WHERE id='kael'")[0]
         assert name == "UNCHECKPOINTED", "backup is stale — it missed the WAL"
 
     def test_backup_holds_every_entity(self, vault):
         result = _backup(vault)
         project = vault / "projects" / "stc"
-        live = _query(project / ".story" / "story.db",
-                      "SELECT count(*) FROM entities")[0]
-        assert _query(Path(result["backup"]),
-                      "SELECT count(*) FROM entities")[0] == live
+        live = _query(project / ".story" / "story.db", "SELECT count(*) FROM entities")[0]
+        assert _query(Path(result["backup"]), "SELECT count(*) FROM entities")[0] == live
 
     def test_backup_is_a_complete_database(self, vault):
         """Usable, not just a byte copy: all tables, indexes and FTS present."""
         result = _backup(vault)
         conn = sqlite3.connect(result["backup"])
         try:
-            tables = {r[0] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'")}
+            tables = {
+                r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            }
         finally:
             conn.close()
         assert {"entities", "relations", "sections"} <= tables
@@ -113,6 +115,7 @@ class TestNoCollisions:
     def test_imports_own_backup_does_not_clobber_a_manual_one(self, vault):
         """story_import backs up too — the two paths share one implementation."""
         from white_words.scriptwriting.core.db import backup_database
+
         project = vault / "projects" / "stc"
         first = backup_database(project)
         second = backup_database(project)
@@ -129,6 +132,7 @@ class TestContract:
     def test_missing_database_is_an_error(self, vault):
         (vault / "projects" / "empty").mkdir()
         from white_words.scriptwriting.tools.story_backup import handler
+
         r = json.loads(handler({"project": "empty"}, root_path=str(vault)))
         assert "error" in r
 

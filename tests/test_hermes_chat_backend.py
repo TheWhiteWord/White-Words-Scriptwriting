@@ -25,7 +25,7 @@ class OkHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/event-stream")
         self.end_headers()
         self.wfile.write(b'data: {"id":"resp1","choices":[{"delta":{"content":"hi"}}]}\n\n')
-        self.wfile.write(b'event: hermes.tool.progress\n')
+        self.wfile.write(b"event: hermes.tool.progress\n")
         self.wfile.write(b'data: {"event":"hermes.tool.progress","data":{"tool":"lookup"}}\n\n')
         self.wfile.write(b'data: {"id":"resp1","choices":[{"delta":{"content":"!"}}]}\n\n')
         self.wfile.write(b"data: [DONE]\n\n")
@@ -47,7 +47,12 @@ def test_text_and_tool():
     try:
         b = HermesChatBackend(f"http://127.0.0.1:{port}", "key", model="m")
         events = asyncio.run(collect(b, {"project_slug": "s", "project_name": "N"}))
-        assert [type(e).__name__ for e in events] == ["TextDelta", "ToolStarted", "TextDelta", "Done"]
+        assert [type(e).__name__ for e in events] == [
+            "TextDelta",
+            "ToolStarted",
+            "TextDelta",
+            "Done",
+        ]
         assert events[0].text == "hi"
         assert events[1].name == "lookup"
         assert events[3].backend_state == "resp1"

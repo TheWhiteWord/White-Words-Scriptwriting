@@ -10,6 +10,7 @@ The cost is measurable: the dashboard's location→scenes view reports 0 for a
 location that two scenes are set in. Asserted below, with and without the
 relation, so the test cannot pass by accident.
 """
+
 import shutil
 import sqlite3
 from pathlib import Path
@@ -56,11 +57,15 @@ class TestLocationSceneRelationIsWritten:
     def test_creating_a_scene_writes_the_relation(self, proj):
         from white_words.scriptwriting.core.writes import create_entity
 
-        create_entity(proj, "scene", "new-scene",
-                      {"title": "New", "location": "the-central-room"})
-        rows = _db(proj).execute(
-            "SELECT from_id, to_id FROM relations WHERE kind='location_scene' "
-            "AND to_id='new-scene'").fetchall()
+        create_entity(proj, "scene", "new-scene", {"title": "New", "location": "the-central-room"})
+        rows = (
+            _db(proj)
+            .execute(
+                "SELECT from_id, to_id FROM relations WHERE kind='location_scene' "
+                "AND to_id='new-scene'"
+            )
+            .fetchall()
+        )
         assert rows == [("the-central-room", "new-scene")]
 
     def test_moving_a_scene_replaces_the_relation(self, proj):
@@ -70,9 +75,11 @@ class TestLocationSceneRelationIsWritten:
         create_entity(proj, "location", "cellar", {"name": "Cellar"})
         create_entity(proj, "scene", "moving", {"title": "M", "location": "the-central-room"})
         edit_entity(proj, "scene", "moving", {"location": "cellar"}, "move")
-        rows = _db(proj).execute(
-            "SELECT from_id FROM relations WHERE kind='location_scene' AND to_id='moving'"
-        ).fetchall()
+        rows = (
+            _db(proj)
+            .execute("SELECT from_id FROM relations WHERE kind='location_scene' AND to_id='moving'")
+            .fetchall()
+        )
         assert rows == [("cellar",)]
 
     def test_clearing_the_location_clears_the_relation(self, proj):
@@ -80,9 +87,14 @@ class TestLocationSceneRelationIsWritten:
 
         create_entity(proj, "scene", "clearing", {"title": "C", "location": "the-central-room"})
         edit_entity(proj, "scene", "clearing", {"location": ""}, "clear")
-        assert _db(proj).execute(
-            "SELECT count(*) FROM relations WHERE kind='location_scene' AND to_id='clearing'"
-        ).fetchone()[0] == 0
+        assert (
+            _db(proj)
+            .execute(
+                "SELECT count(*) FROM relations WHERE kind='location_scene' AND to_id='clearing'"
+            )
+            .fetchone()[0]
+            == 0
+        )
 
 
 class TestTheRelationIsLoadBearing:
@@ -99,12 +111,14 @@ class TestTheRelationIsLoadBearing:
         db = _db(proj)
         db.execute("DELETE FROM relations WHERE kind='location_scene'")
         rows = db.execute(
-            "SELECT id, location_id FROM entities "
-            "WHERE type='scene' AND location_id IS NOT NULL").fetchall()
+            "SELECT id, location_id FROM entities WHERE type='scene' AND location_id IS NOT NULL"
+        ).fetchall()
         for sid, lid in rows:
             db.execute(
-                "INSERT INTO relations (from_id,to_id,kind,note,\"order\") "
-                "VALUES (?,?,'location_scene','',1)", (lid, sid))
+                'INSERT INTO relations (from_id,to_id,kind,note,"order") '
+                "VALUES (?,?,'location_scene','',1)",
+                (lid, sid),
+            )
         db.commit()
         db.close()
         assert _location_scenes(proj)["the-central-room"] > 0

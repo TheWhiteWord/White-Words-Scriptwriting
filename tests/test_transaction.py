@@ -1,4 +1,5 @@
 """core.db.transaction: the one way to make a multi-statement write atomic."""
+
 import sqlite3
 import threading
 
@@ -41,6 +42,7 @@ def test_return_inside_the_block_commits(conn):
         with transaction(conn):
             conn.execute("INSERT INTO t VALUES (1, 10)")
             return "early"
+
     assert f() == "early"
     assert not conn.in_transaction
     assert _rows(conn) == [(1, 10)]
@@ -79,6 +81,7 @@ def test_connection_is_usable_after_a_failure(conn):
 
 # ─── nesting ───
 
+
 def test_nested_failure_undoes_only_the_inner_block(conn):
     with transaction(conn):
         conn.execute("INSERT INTO t VALUES (1, 10)")
@@ -110,6 +113,7 @@ def test_deeply_nested(conn):
 
 
 # ─── locking ───
+
 
 def test_holds_the_write_lock_from_the_first_statement(conn, tmp_path):
     """BEGIN IMMEDIATE: a second writer is shut out as soon as the block opens,

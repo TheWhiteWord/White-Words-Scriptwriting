@@ -4,6 +4,7 @@ The whole feature rests on one claim — a staged draft is not a change. If
 staging leaked a write, the user would be asked to confirm something that had
 already happened, and the confirmation loop would be theatre.
 """
+
 import json
 import sqlite3
 from pathlib import Path
@@ -32,21 +33,38 @@ def _counts(project_path):
 
 def _batch():
     return [
-        {"op": "create", "type": "scene", "id": "mira-tells-kael",
-         "frontmatter": {"title": "The Telling", "sequence_id": "seq-discovery",
-                         "act_id": "act-1", "characters": ["mira", "kael"]},
-         "sections": {"Objective": "Mira confesses."},
-         "summary": "New scene: The Telling"},
-        {"op": "edit", "entity_type": "location", "entity_id": "the-central-room",
-         "data": {"mood": "claustrophobic warmth"},
-         "summary": "The room tightens once Mira speaks"},
-        {"op": "reorder", "entity_type": "scene", "entity_id": "seq-discovery",
-         "ordered_ids": ["mira-tells-kael", "central-room-day", "central-room-night"],
-         "summary": "The Telling lands mid-sequence"},
+        {
+            "op": "create",
+            "type": "scene",
+            "id": "mira-tells-kael",
+            "frontmatter": {
+                "title": "The Telling",
+                "sequence_id": "seq-discovery",
+                "act_id": "act-1",
+                "characters": ["mira", "kael"],
+            },
+            "sections": {"Objective": "Mira confesses."},
+            "summary": "New scene: The Telling",
+        },
+        {
+            "op": "edit",
+            "entity_type": "location",
+            "entity_id": "the-central-room",
+            "data": {"mood": "claustrophobic warmth"},
+            "summary": "The room tightens once Mira speaks",
+        },
+        {
+            "op": "reorder",
+            "entity_type": "scene",
+            "entity_id": "seq-discovery",
+            "ordered_ids": ["mira-tells-kael", "central-room-day", "central-room-night"],
+            "summary": "The Telling lands mid-sequence",
+        },
     ]
 
 
 # ─── Guard 1: staging writes nothing ───
+
 
 def test_stage_writes_nothing_to_the_story(fixture_path):
     """Guard 1: row counts identical before and after a stage."""
@@ -72,6 +90,7 @@ def test_stage_writes_only_one_draft_row(fixture_path):
 
 # ─── Guard 3: discard ───
 
+
 def test_discard_removes_the_draft_and_leaves_the_story_alone(fixture_path):
     """Guard 3."""
     before = _counts(fixture_path)
@@ -91,12 +110,12 @@ def test_discard_of_an_unknown_draft_is_refused(fixture_path):
 
 # ─── Guard 4: restage replaces, and says what changed ───
 
+
 def test_restage_replaces_the_op_list_rather_than_appending(fixture_path):
     """Guard 4: staging is a proposal, not a queue."""
     ops = _batch()
     first = drafts.stage(fixture_path, ops, "three changes")
-    restaged = drafts.stage(fixture_path, ops[:2], "two changes",
-                            draft_id=first["draft_id"])
+    restaged = drafts.stage(fixture_path, ops[:2], "two changes", draft_id=first["draft_id"])
 
     assert restaged["restaged"] is True
     assert restaged["op_count"] == 2
@@ -104,11 +123,10 @@ def test_restage_replaces_the_op_list_rather_than_appending(fixture_path):
 
 
 def test_restage_reports_the_dropped_op(fixture_path):
-    """"Don't resequence" must not look like the reorder was never proposed."""
+    """ "Don't resequence" must not look like the reorder was never proposed."""
     ops = _batch()
     first = drafts.stage(fixture_path, ops, "three changes")
-    restaged = drafts.stage(fixture_path, ops[:2], "two changes",
-                            draft_id=first["draft_id"])
+    restaged = drafts.stage(fixture_path, ops[:2], "two changes", draft_id=first["draft_id"])
 
     assert restaged["changes"]["dropped"], restaged["changes"]
     assert "reorder" in restaged["changes"]["dropped"][0]
@@ -119,12 +137,17 @@ def test_restage_reports_the_dropped_op(fixture_path):
 def test_restage_reports_a_changed_op_and_an_added_one(fixture_path):
     ops = _batch()
     first = drafts.stage(fixture_path, ops, "three changes")
-    revised = [dict(ops[0], summary="The Telling, rewritten"), ops[1], {
-        "op": "delete", "entity_type": "world", "entity_id": "the-wetlands",
-        "summary": "Cut the wetlands world",
-    }]
-    restaged = drafts.stage(fixture_path, revised, "revised",
-                            draft_id=first["draft_id"])
+    revised = [
+        dict(ops[0], summary="The Telling, rewritten"),
+        ops[1],
+        {
+            "op": "delete",
+            "entity_type": "world",
+            "entity_id": "the-wetlands",
+            "summary": "Cut the wetlands world",
+        },
+    ]
+    restaged = drafts.stage(fixture_path, revised, "revised", draft_id=first["draft_id"])
 
     assert len(restaged["changes"]["changed"]) == 1
     assert "summary" in restaged["changes"]["changed"][0]["fields"]
@@ -164,8 +187,7 @@ def test_drafts_table_exists_on_a_fresh_project(tmp_path):
 
     conn = get_db(proj)
     try:
-        tables = {r[0] for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'")}
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert "drafts" in tables
     finally:
         conn.close()
@@ -176,6 +198,7 @@ def test_drafts_table_exists_on_a_fresh_project(tmp_path):
 
 
 # ─── list ───
+
 
 def test_list_reports_id_summary_age_and_op_count(fixture_path):
     """Decision 6: no staleness verdict, just the facts to ask a question on."""
@@ -190,29 +213,57 @@ def test_list_reports_id_summary_age_and_op_count(fixture_path):
 
 
 def test_list_on_a_project_with_no_drafts_is_empty_not_an_error(fixture_path):
-    assert drafts.list_drafts(fixture_path) == {
-        "success": True, "drafts": [], "count": 0}
+    assert drafts.list_drafts(fixture_path) == {"success": True, "drafts": [], "count": 0}
 
 
 # ─── op validation ───
 
-@pytest.mark.parametrize("bad,message", [
-    ([], "non-empty list"),
-    ([{"op": "explode", "summary": "x"}], "must be one of"),
-    ([{"op": "create", "type": "scene", "summary": "x"}], "missing: id, frontmatter"),
-    ([{"op": "edit", "entity_type": "scene", "summary": "x"}],
-     "missing: entity_id, data"),
-    ([{"op": "create", "type": "sculpture", "id": "x", "frontmatter": {},
-       "summary": "x"}], "unknown entity_type"),
-    ([{"op": "create", "type": "project", "id": "new-film", "frontmatter": {},
-       "summary": "x"}], "projects cannot be drafted"),
-    ([{"op": "create", "type": "scene", "id": "bad slug!", "frontmatter": {},
-       "summary": "x"}], "alphanumeric"),
-    ([{"op": "reorder", "entity_type": "sequence", "ordered_ids": [],
-       "summary": "x"}], "non-empty list"),
-    ([{"op": "reorder", "entity_type": "act", "ordered_ids": ["act-1"],
-       "summary": "x"}], "cannot reorder act"),
-])
+
+@pytest.mark.parametrize(
+    "bad,message",
+    [
+        ([], "non-empty list"),
+        ([{"op": "explode", "summary": "x"}], "must be one of"),
+        ([{"op": "create", "type": "scene", "summary": "x"}], "missing: id, frontmatter"),
+        ([{"op": "edit", "entity_type": "scene", "summary": "x"}], "missing: entity_id, data"),
+        (
+            [{"op": "create", "type": "sculpture", "id": "x", "frontmatter": {}, "summary": "x"}],
+            "unknown entity_type",
+        ),
+        (
+            [
+                {
+                    "op": "create",
+                    "type": "project",
+                    "id": "new-film",
+                    "frontmatter": {},
+                    "summary": "x",
+                }
+            ],
+            "projects cannot be drafted",
+        ),
+        (
+            [
+                {
+                    "op": "create",
+                    "type": "scene",
+                    "id": "bad slug!",
+                    "frontmatter": {},
+                    "summary": "x",
+                }
+            ],
+            "alphanumeric",
+        ),
+        (
+            [{"op": "reorder", "entity_type": "sequence", "ordered_ids": [], "summary": "x"}],
+            "non-empty list",
+        ),
+        (
+            [{"op": "reorder", "entity_type": "act", "ordered_ids": ["act-1"], "summary": "x"}],
+            "cannot reorder act",
+        ),
+    ],
+)
 def test_a_malformed_op_is_refused_at_stage_time(bad, message):
     with pytest.raises(drafts.DraftError, match=message):
         drafts.validate_ops(bad)
@@ -228,16 +279,20 @@ def test_every_reorderable_type_stages_and_commits(fixture_path):
     fail on commit with a raw ValueError.
     """
     from white_words.scriptwriting.core.writes import REORDERABLE_TYPES
+
     for entity_type in REORDERABLE_TYPES:
-        op = {"op": "reorder", "entity_type": entity_type,
-              "ordered_ids": ["a", "b"], "summary": "x"}
-        drafts.validate_ops([op])          # must not raise
+        op = {
+            "op": "reorder",
+            "entity_type": entity_type,
+            "ordered_ids": ["a", "b"],
+            "summary": "x",
+        }
+        drafts.validate_ops([op])  # must not raise
 
     for entity_type in ENTITY_SCHEMAS:
         if entity_type in REORDERABLE_TYPES:
             continue
-        op = {"op": "reorder", "entity_type": entity_type,
-              "ordered_ids": ["a"], "summary": "x"}
+        op = {"op": "reorder", "entity_type": entity_type, "ordered_ids": ["a"], "summary": "x"}
         with pytest.raises(drafts.DraftError, match="cannot reorder"):
             drafts.validate_ops([op])
 
@@ -251,25 +306,42 @@ def test_a_malformed_op_never_reaches_the_drafts_table(fixture_path):
 
 # ─── op vocabulary ───
 
+
 def test_op_order_is_create_edit_delete_reorder_purge():
     """Purge is last, and (validate_ops) alone in its draft."""
-    assert [k for k, _ in sorted(drafts.OP_ORDER.items(), key=lambda kv: kv[1])] == \
-        ["create", "edit", "delete", "reorder", "purge"]
+    assert [k for k, _ in sorted(drafts.OP_ORDER.items(), key=lambda kv: kv[1])] == [
+        "create",
+        "edit",
+        "delete",
+        "reorder",
+        "purge",
+    ]
 
 
 def test_a_batch_may_hold_two_ops_on_the_same_entity():
     """The diff must not collapse them — a dict keyed on identity would."""
     ops = [
-        {"op": "edit", "entity_type": "location", "entity_id": "the-central-room",
-         "data": {"mood": "warm"}, "summary": "first"},
-        {"op": "edit", "entity_type": "location", "entity_id": "the-central-room",
-         "data": {"mood": "cold"}, "summary": "second"},
+        {
+            "op": "edit",
+            "entity_type": "location",
+            "entity_id": "the-central-room",
+            "data": {"mood": "warm"},
+            "summary": "first",
+        },
+        {
+            "op": "edit",
+            "entity_type": "location",
+            "entity_id": "the-central-room",
+            "data": {"mood": "cold"},
+            "summary": "second",
+        },
     ]
     result = drafts.diff_ops(ops, ops[:1])
     assert result["dropped"], result
 
 
 # ─── commit ───
+
 
 def _rows(project_path, sql, *params):
     conn = get_db(project_path)
@@ -282,8 +354,14 @@ def _rows(project_path, sql, *params):
 def _create_scene(slug, sequence_id="seq-discovery", **frontmatter):
     fm = {"title": slug, "sequence_id": sequence_id, "act_id": "act-1"}
     fm.update(frontmatter)
-    return {"op": "create", "type": "scene", "id": slug,
-            "frontmatter": fm, "sections": {}, "summary": f"new {slug}"}
+    return {
+        "op": "create",
+        "type": "scene",
+        "id": slug,
+        "frontmatter": fm,
+        "sections": {},
+        "summary": f"new {slug}",
+    }
 
 
 def test_commit_writes_the_batch_and_clears_the_draft(fixture_path):
@@ -295,8 +373,7 @@ def test_commit_writes_the_batch_and_clears_the_draft(fixture_path):
     assert result["draft_id"] == staged["draft_id"]
     assert len(result["applied"]) == 3
     assert drafts.list_drafts(fixture_path)["count"] == 0
-    assert _rows(fixture_path, "SELECT name FROM entities WHERE id=?",
-                 "mira-tells-kael")
+    assert _rows(fixture_path, "SELECT name FROM entities WHERE id=?", "mira-tells-kael")
 
 
 def test_commit_of_an_unknown_draft_is_refused(fixture_path):
@@ -350,9 +427,15 @@ def test_restaging_a_committed_draft_id_reopens_it(fixture_path):
     staged = drafts.stage(fixture_path, _batch(), "Mira tells Kael")
     drafts.commit(fixture_path, staged["draft_id"])
 
-    edit_only = [{"op": "edit", "entity_type": "location",
-                  "entity_id": "the-central-room", "data": {"mood": "colder"},
-                  "summary": "The room cools"}]
+    edit_only = [
+        {
+            "op": "edit",
+            "entity_type": "location",
+            "entity_id": "the-central-room",
+            "data": {"mood": "colder"},
+            "summary": "The room cools",
+        }
+    ]
     drafts.stage(fixture_path, edit_only, "again", draft_id=staged["draft_id"])
     assert drafts.list_drafts(fixture_path)["count"] == 1
 
@@ -363,6 +446,7 @@ def test_restaging_a_committed_draft_id_reopens_it(fixture_path):
 
 # ─── Guard 2: a failing batch keeps the draft and lands nothing ───
 
+
 def test_a_failing_batch_keeps_the_draft_and_lands_nothing(fixture_path):
     """Guard 2. T5 rewrote this: it used to pin "atomic per op, resumable per
     batch" (the create landed, `committed` named it). A draft now lands all its
@@ -370,8 +454,13 @@ def test_a_failing_batch_keeps_the_draft_and_lands_nothing(fixture_path):
     ops = [
         _create_scene("mira-tells-kael"),
         # Fails: no such sequence.
-        {"op": "reorder", "entity_type": "sequence", "entity_id": "act-two",
-         "ordered_ids": ["a", "b"], "summary": "Resequence act two"},
+        {
+            "op": "reorder",
+            "entity_type": "sequence",
+            "entity_id": "act-two",
+            "ordered_ids": ["a", "b"],
+            "summary": "Resequence act two",
+        },
     ]
     staged = drafts.stage(fixture_path, ops, "two changes")
     result = drafts.commit(fixture_path, staged["draft_id"])
@@ -379,12 +468,13 @@ def test_a_failing_batch_keeps_the_draft_and_lands_nothing(fixture_path):
     assert result["success"] is False
     assert result["draft_kept"] is True
     assert result["committed"] == []
-    assert "act-two" in result["failed"]["error"] or \
-        "not found" in result["failed"]["error"]
+    assert "act-two" in result["failed"]["error"] or "not found" in result["failed"]["error"]
     # The draft survives, and the create that came first did NOT land.
     assert drafts.list_drafts(fixture_path)["count"] == 1
-    assert _rows(fixture_path, "SELECT COUNT(*) FROM entities WHERE id=?",
-                 "mira-tells-kael")[0][0] == 0
+    assert (
+        _rows(fixture_path, "SELECT COUNT(*) FROM entities WHERE id=?", "mira-tells-kael")[0][0]
+        == 0
+    )
 
 
 def test_a_recommitted_failing_draft_fails_the_same_way_again(fixture_path):
@@ -394,8 +484,13 @@ def test_a_recommitted_failing_draft_fails_the_same_way_again(fixture_path):
     failing op, not a create that was never written — and still lands nothing."""
     ops = [
         _create_scene("mira-tells-kael"),
-        {"op": "reorder", "entity_type": "sequence", "entity_id": "act-two",
-         "ordered_ids": ["a", "b"], "summary": "Resequence act two"},
+        {
+            "op": "reorder",
+            "entity_type": "sequence",
+            "entity_id": "act-two",
+            "ordered_ids": ["a", "b"],
+            "summary": "Resequence act two",
+        },
     ]
     staged = drafts.stage(fixture_path, ops, "two changes")
     drafts.commit(fixture_path, staged["draft_id"])
@@ -406,24 +501,35 @@ def test_a_recommitted_failing_draft_fails_the_same_way_again(fixture_path):
     assert again["committed"] == []
     assert again["failed"] == first["failed"]
     assert "already exists" not in again["failed"]["error"]
-    assert _rows(fixture_path, "SELECT COUNT(*) FROM entities WHERE id=?",
-                 "mira-tells-kael")[0][0] == 0
+    assert (
+        _rows(fixture_path, "SELECT COUNT(*) FROM entities WHERE id=?", "mira-tells-kael")[0][0]
+        == 0
+    )
 
 
 # ─── Guard 5: ordering ───
 
+
 def test_commit_orders_creates_before_edits_deletes_and_reorders(fixture_path):
     """Guard 5: written in the order that would fail, sorted by commit."""
     ops = [
-        {"op": "reorder", "entity_type": "scene", "entity_id": "seq-discovery",
-         "ordered_ids": ["mira-tells-kael", "central-room-day", "central-room-night"],
-         "summary": "order the new scene"},
-        {"op": "edit", "entity_type": "scene", "entity_id": "mira-tells-kael",
-         "data": {"status": "drafted"}, "summary": "mark it drafted"},
+        {
+            "op": "reorder",
+            "entity_type": "scene",
+            "entity_id": "seq-discovery",
+            "ordered_ids": ["mira-tells-kael", "central-room-day", "central-room-night"],
+            "summary": "order the new scene",
+        },
+        {
+            "op": "edit",
+            "entity_type": "scene",
+            "entity_id": "mira-tells-kael",
+            "data": {"status": "drafted"},
+            "summary": "mark it drafted",
+        },
         _create_scene("mira-tells-kael"),
     ]
-    assert [op["op"] for op in drafts.sorted_ops(ops)] == \
-        ["create", "edit", "reorder"]
+    assert [op["op"] for op in drafts.sorted_ops(ops)] == ["create", "edit", "reorder"]
 
     staged = drafts.stage(fixture_path, ops, "a new scene, in three parts")
     result = drafts.commit(fixture_path, staged["draft_id"])
@@ -437,6 +543,7 @@ def test_sorted_ops_is_stable_within_a_kind():
 
 
 # ─── Guard 6: relations ride inside the frontmatter ───
+
 
 def test_a_committed_create_carrying_cast_produces_relation_rows(fixture_path):
     """Guard 6: relations come from frontmatter, and an op that lost them would
@@ -454,43 +561,63 @@ def test_a_committed_create_carrying_cast_produces_relation_rows(fixture_path):
     )
     assert drafts.commit(fixture_path, staged["draft_id"])["success"] is True
 
-    rels = _rows(fixture_path,
-                 "SELECT from_id, to_id, kind FROM relations "
-                 "WHERE to_id='mira-tells-kael'")
+    rels = _rows(
+        fixture_path, "SELECT from_id, to_id, kind FROM relations WHERE to_id='mira-tells-kael'"
+    )
     assert ("mira", "mira-tells-kael", "character_scene") in rels
     assert ("kael", "mira-tells-kael", "character_scene") in rels
 
     # And the rows are readable by the tool that consumes them — the existence
     # assertion above passed even while every reader saw an empty cast.
     from white_words.scriptwriting.tools.story_retrieve import handler as retrieve_handler
-    out = json.loads(retrieve_handler({
-        "project": str(fixture_path), "entity_type": "scene",
-        "id": ["mira-tells-kael"], "fields": ["characters"],
-    }, vault_path=fixture_path.parent))
+
+    out = json.loads(
+        retrieve_handler(
+            {
+                "project": str(fixture_path),
+                "entity_type": "scene",
+                "id": ["mira-tells-kael"],
+                "fields": ["characters"],
+            },
+            vault_path=fixture_path.parent,
+        )
+    )
     assert out["entities"][0]["fields"]["characters"] == ["mira", "kael"]
     assert "characters" not in out["entities"][0]["unfilled_fields"]
 
 
 # ─── delete ───
 
+
 def test_a_committed_delete_soft_deletes_and_is_reversible(fixture_path):
     """The loop synthesises confirm=True; the delete is still a flag."""
-    ops = [{"op": "delete", "entity_type": "location",
-            "entity_id": "the-central-room", "summary": "Cut the room"}]
+    ops = [
+        {
+            "op": "delete",
+            "entity_type": "location",
+            "entity_id": "the-central-room",
+            "summary": "Cut the room",
+        }
+    ]
     staged = drafts.stage(fixture_path, ops, "cut a location")
     result = drafts.commit(fixture_path, staged["draft_id"])
 
     assert result["success"] is True, result
-    assert _rows(fixture_path,
-                 "SELECT is_deleted FROM entities WHERE id='the-central-room'"
-                 )[0][0] == 1
+    assert (
+        _rows(fixture_path, "SELECT is_deleted FROM entities WHERE id='the-central-room'")[0][0]
+        == 1
+    )
     # Prose survives, so `restore` is an exact inverse.
-    assert _rows(fixture_path,
-                 "SELECT COUNT(*) FROM sections WHERE entity_id='the-central-room'"
-                 )[0][0] > 0
+    assert (
+        _rows(fixture_path, "SELECT COUNT(*) FROM sections WHERE entity_id='the-central-room'")[0][
+            0
+        ]
+        > 0
+    )
 
 
 # ─── no flag-based drift (guard 8) ───
+
 
 def test_no_entity_is_flagged_as_a_draft():
     """Guard 8: `is_draft` anywhere means the design drifted to the flag approach."""

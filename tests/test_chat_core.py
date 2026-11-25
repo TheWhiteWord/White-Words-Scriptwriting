@@ -17,11 +17,13 @@ def test_new_conversation(tmp_path):
     p = proj(tmp_path)
     svc = ChatService(FakeBackend(replies=["hi"]))
     cid = svc.create_conversation(p, title="t")
+
     async def run():
         events = []
         async for e in svc.send(p, cid, "hello", {}):
             events.append(e)
         return events
+
     evs = asyncio.get_event_loop().run_until_complete(run())
     conv = store.get_conversation(p, cid)
     assert conv["messages"][0]["role"] == "user"
@@ -74,11 +76,13 @@ def test_backend_error(tmp_path):
     p = proj(tmp_path)
     svc = ChatService(FakeBackend(replies=[], error="boom"))
     cid = svc.create_conversation(p)
+
     async def run():
         evs = []
         async for e in svc.send(p, cid, "q", {}):
             evs.append(e)
         return evs
+
     evs = asyncio.get_event_loop().run_until_complete(run())
     conv = store.get_conversation(p, cid)
     assert conv["messages"][1]["status"] == "error"
@@ -86,22 +90,29 @@ def test_backend_error(tmp_path):
 
 def test_cancellation_midstream(tmp_path):
     p = proj(tmp_path)
+
     # backend that yields slowly
     class Slow:
         async def send(self, messages, context, bs):
             import asyncio
+
             for i in range(5):
                 await asyncio.sleep(0.05)
                 from white_words.scriptwriting.chat.events import TextDelta
+
                 yield TextDelta(text="a")
             from white_words.scriptwriting.chat.events import Done
+
             yield Done(backend_state=None)
+
     svc = ChatService(Slow())
     cid = svc.create_conversation(p)
+
     async def run():
         gen = svc.send(p, cid, "q", {})
         await gen.__anext__()
         await gen.aclose()
+
     asyncio.get_event_loop().run_until_complete(run())
     conv = store.get_conversation(p, cid)
     assert conv["messages"][1]["status"] in ("cancelled", "streaming", "complete")

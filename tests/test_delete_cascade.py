@@ -16,6 +16,7 @@ Every reference site in the schema, and what happens to it:
     parent_id            column        → set to ""
     relations rows       both directions → deleted
 """
+
 import json
 import shutil
 import sqlite3
@@ -50,12 +51,13 @@ def _references_to(project, target):
     has a deleted parent.
     """
     from white_words.scriptwriting.core.manual_entities import load_entity
+
     conn = sqlite3.connect(str(project / ".story" / "story.db"))
     found = []
     try:
         live = conn.execute(
-            "SELECT id, type, parent_id FROM entities WHERE is_deleted=0 "
-            "AND type != 'project'").fetchall()
+            "SELECT id, type, parent_id FROM entities WHERE is_deleted=0 AND type != 'project'"
+        ).fetchall()
     finally:
         conn.close()
     for eid, etype, parent in live:
@@ -81,29 +83,35 @@ def _references_to(project, target):
 def _shown(project, entity_type, entity_id):
     """What the web form shows for an entity: the values a person would edit."""
     from white_words.scriptwriting.core.manual_entities import load_entity
+
     return load_entity(project, entity_type, entity_id)["values"]
 
 
 def _extra(project, entity_id):
     conn = sqlite3.connect(str(project / ".story" / "story.db"))
     try:
-        return json.loads(conn.execute(
-            "SELECT extra FROM entities WHERE id=?", (entity_id,)).fetchone()[0] or "{}")
+        return json.loads(
+            conn.execute("SELECT extra FROM entities WHERE id=?", (entity_id,)).fetchone()[0]
+            or "{}"
+        )
     finally:
         conn.close()
 
 
-@pytest.mark.parametrize("entity_type,slug", [
-    ("character", "kael"),
-    ("character", "mira"),
-    ("scene", "central-room-day"),
-    ("scene", "the-core-day"),
-    ("world", "the-i"),
-    ("location", "the-garden"),
-    ("location", "the-central-room"),
-    ("plot", "the-resistance"),
-    ("relationship", "kael-mira"),
-])
+@pytest.mark.parametrize(
+    "entity_type,slug",
+    [
+        ("character", "kael"),
+        ("character", "mira"),
+        ("scene", "central-room-day"),
+        ("scene", "the-core-day"),
+        ("world", "the-i"),
+        ("location", "the-garden"),
+        ("location", "the-central-room"),
+        ("plot", "the-resistance"),
+        ("relationship", "kael-mira"),
+    ],
+)
 class TestNothingDangles:
     def test_no_reader_shows_a_reference_to_it(self, fixture_path, tmp_path, entity_type, slug):
         p, vault = _setup(fixture_path, tmp_path, f"v-{entity_type}-{slug}")
@@ -137,8 +145,7 @@ class TestRelationshipEntities:
         _delete(p, "character", "kael")
         conn = sqlite3.connect(str(p / ".story" / "story.db"))
         try:
-            assert conn.execute(
-                "SELECT 1 FROM entities WHERE id='kael-mira'").fetchone()
+            assert conn.execute("SELECT 1 FROM entities WHERE id='kael-mira'").fetchone()
         finally:
             conn.close()
 
@@ -164,7 +171,8 @@ class TestColumnReferences:
         conn = sqlite3.connect(str(p / ".story" / "story.db"))
         try:
             row = conn.execute(
-                "SELECT location_id FROM entities WHERE id='the-core-day'").fetchone()
+                "SELECT location_id FROM entities WHERE id='the-core-day'"
+            ).fetchone()
         finally:
             conn.close()
         assert row[0] == "the-garden"
@@ -223,9 +231,14 @@ class TestDetachedReporting:
     def test_detached_carries_the_entity_type(self, fixture_path, tmp_path):
         p, vault = _setup(fixture_path, tmp_path, "det-3")
         result = _delete(p, "location", "the-garden")
-        assert result["detached"] == [{"entity_id": "the-core-day",
-                                       "entity_type": "scene", "field": "location",
-                                       "was_pointing_at": "the-garden"}]
+        assert result["detached"] == [
+            {
+                "entity_id": "the-core-day",
+                "entity_type": "scene",
+                "field": "location",
+                "was_pointing_at": "the-garden",
+            }
+        ]
 
     def test_nothing_detached_when_nothing_pointed(self, fixture_path, tmp_path):
         p, vault = _setup(fixture_path, tmp_path, "det-4")
@@ -247,11 +260,20 @@ class TestDefaultsOnReset:
         """location_id is a column so it reads "", but location is optional —
         so unfilled_fields reports it and the UI has its signal."""
         from white_words.scriptwriting.tools.story_retrieve import handler as retrieve_handler
+
         p, vault = _setup(fixture_path, tmp_path, "def-2")
         _delete(p, "location", "the-garden")
-        r = json.loads(retrieve_handler(
-            {"project": "save-the-children", "entity_type": "scene", "id": ["the-core-day"],
-             "fields": ["location"]}, root_path=str(vault)))
+        r = json.loads(
+            retrieve_handler(
+                {
+                    "project": "save-the-children",
+                    "entity_type": "scene",
+                    "id": ["the-core-day"],
+                    "fields": ["location"],
+                },
+                root_path=str(vault),
+            )
+        )
         assert r["entities"][0]["fields"]["location"] == ""
         assert "location" in r["entities"][0]["unfilled_fields"]
 
@@ -261,7 +283,9 @@ class TestReporting:
         p, vault = _setup(fixture_path, tmp_path, "report")
         result = _delete(p, "character", "kael")
         assert "kael-mira" in result["references_hidden"]
-        assert "references_purged" not in result  # nothing is purged: purge is the irreversible action
+        assert (
+            "references_purged" not in result
+        )  # nothing is purged: purge is the irreversible action
 
     def test_reports_the_cascade(self, fixture_path, tmp_path):
         p, vault = _setup(fixture_path, tmp_path, "cascade")

@@ -18,6 +18,7 @@ def periodic_backup(root, slug: str) -> None:
         if Path(slug).name != slug:
             return
         from white_words.scriptwriting.core.backups import maybe_periodic_backup
+
         maybe_periodic_backup(Path(root) / "projects" / slug)
     except Exception:
         log.warning("periodic backup of %s failed", slug, exc_info=True)
@@ -45,9 +46,9 @@ class DbChangeWatcher:
 
     def _open(self):
         import sqlite3
+
         # mode=ro: never create an empty database file just by watching one.
-        conn = sqlite3.connect(f"file:{self._path}?mode=ro", uri=True,
-                               isolation_level=None)
+        conn = sqlite3.connect(f"file:{self._path}?mode=ro", uri=True, isolation_level=None)
         st = self._path.stat()
         self._ident = (st.st_dev, st.st_ino)
         return conn
@@ -103,17 +104,23 @@ def make_router(config, app):
     @router.get("/api/projects")
     def projects():
         from white_words.scriptwriting.app import services
+
         return {"projects": services.list_projects(config.root)}
 
     @router.get("/api/projects/{slug}/dashboard")
     def dashboard(slug: str, background: BackgroundTasks):
         from white_words.scriptwriting.app import services
+
         try:
             data = services.get_project_dashboard(config.root, slug)
         except services.ProjectNotFound as e:
-            return JSONResponse(status_code=404, content={"error": {"code": "not_found", "message": str(e)}})
+            return JSONResponse(
+                status_code=404, content={"error": {"code": "not_found", "message": str(e)}}
+            )
         except Exception as e:
-            return JSONResponse(status_code=500, content={"error": {"code": "error", "message": str(e)}})
+            return JSONResponse(
+                status_code=500, content={"error": {"code": "error", "message": str(e)}}
+            )
         background.add_task(periodic_backup, config.root, slug)
         return data
 
@@ -121,7 +128,7 @@ def make_router(config, app):
     async def project_events(slug: str, request: Request):
         db_path = Path(config.root) / "projects" / slug / ".story" / "story.db"
         return StreamingResponse(
-            event_stream(DbChangeWatcher(db_path), request),
-            media_type="text/event-stream")
+            event_stream(DbChangeWatcher(db_path), request), media_type="text/event-stream"
+        )
 
     return router

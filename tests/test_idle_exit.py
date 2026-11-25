@@ -1,4 +1,5 @@
 """The idle watcher: exit once the last page goes away, never while one is busy."""
+
 import time
 from types import SimpleNamespace
 
@@ -8,8 +9,11 @@ from white_words.scriptwriting.app import server
 
 
 def _app(last_heartbeat, busy=False):
-    return SimpleNamespace(state=SimpleNamespace(
-        last_heartbeat=last_heartbeat, active_replies={"c": object()} if busy else {}))
+    return SimpleNamespace(
+        state=SimpleNamespace(
+            last_heartbeat=last_heartbeat, active_replies={"c": object()} if busy else {}
+        )
+    )
 
 
 def test_a_fresh_heartbeat_keeps_the_server():
@@ -34,6 +38,7 @@ def client(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from white_words.scriptwriting.app.config import Config
     from white_words.scriptwriting.app.server import create_app
+
     monkeypatch.setattr("white_words.scriptwriting.app.token.load_api_key", lambda: "k")
     root = tmp_path / "root"
     (root / ".story").mkdir(parents=True)

@@ -4,6 +4,7 @@ The replay runs `commit` against a throwaway copy of the project database, so
 the verdict is the real one — op ordering, within-batch effects and every
 validator included — while the project itself is untouched.
 """
+
 import tempfile
 from pathlib import Path
 
@@ -15,33 +16,60 @@ from test_drafts import _counts
 
 
 def _file_set(root):
-    return sorted(str(p.relative_to(root)) for p in Path(root).rglob("*")
-                  if p.is_file())
+    return sorted(str(p.relative_to(root)) for p in Path(root).rglob("*") if p.is_file())
 
 
 def _take_climax():
     """Give `the-core-day` the climax `central-room-night` already holds."""
-    return [{
-        "op": "edit", "entity_type": "scene", "entity_id": "the-core-day",
-        "data": {"plot_roles": [
-            {"plot": "the-resistance", "role": "climax",
-             "description": "The children refuse the system's final offer."}]},
-        "summary": "The Core takes the climax",
-    }]
+    return [
+        {
+            "op": "edit",
+            "entity_type": "scene",
+            "entity_id": "the-core-day",
+            "data": {
+                "plot_roles": [
+                    {
+                        "plot": "the-resistance",
+                        "role": "climax",
+                        "description": "The children refuse the system's final offer.",
+                    }
+                ]
+            },
+            "summary": "The Core takes the climax",
+        }
+    ]
 
 
 def _free_climax():
     """Clear the climax on one scene, then give it to another — in one batch."""
     return [
-        {"op": "edit", "entity_type": "scene", "entity_id": "central-room-night",
-         "data": {"plot_roles": []}, "summary": "Night releases the climax"},
-        {"op": "edit", "entity_type": "scene", "entity_id": "the-core-day",
-         "data": {"plot_roles": [
-             {"plot": "the-resistance", "role": "resolution",
-              "description": "The children emerge into the real world."},
-             {"plot": "the-resistance", "role": "climax",
-              "description": "The children refuse the system's final offer."}]},
-         "summary": "The Core takes the climax"},
+        {
+            "op": "edit",
+            "entity_type": "scene",
+            "entity_id": "central-room-night",
+            "data": {"plot_roles": []},
+            "summary": "Night releases the climax",
+        },
+        {
+            "op": "edit",
+            "entity_type": "scene",
+            "entity_id": "the-core-day",
+            "data": {
+                "plot_roles": [
+                    {
+                        "plot": "the-resistance",
+                        "role": "resolution",
+                        "description": "The children emerge into the real world.",
+                    },
+                    {
+                        "plot": "the-resistance",
+                        "role": "climax",
+                        "description": "The children refuse the system's final offer.",
+                    },
+                ]
+            },
+            "summary": "The Core takes the climax",
+        },
     ]
 
 
@@ -80,6 +108,7 @@ def temp_dirs(monkeypatch):
 
 # ─── the verdict ───
 
+
 def test_a_conflict_is_caught_at_stage_time(fixture_path):
     result = drafts.stage(fixture_path, _take_climax(), "move the climax")
     dry = result["dry_run"]
@@ -98,13 +127,24 @@ def test_a_freeing_batch_is_clean(fixture_path):
 
 
 def test_a_clean_batch_is_clean(fixture_path):
-    result = drafts.stage(fixture_path, [{
-        "op": "edit", "entity_type": "location", "entity_id": "the-central-room",
-        "data": {"mood": "colder"}, "summary": "the room cools"}], "a mood")
+    result = drafts.stage(
+        fixture_path,
+        [
+            {
+                "op": "edit",
+                "entity_type": "location",
+                "entity_id": "the-central-room",
+                "data": {"mood": "colder"},
+                "summary": "the room cools",
+            }
+        ],
+        "a mood",
+    )
     assert result["dry_run"] == {"status": "clean"}
 
 
 # ─── isolation ───
+
 
 def test_the_real_project_is_untouched(fixture_path):
     before_counts = _counts(fixture_path)
@@ -121,12 +161,10 @@ def test_the_copy_is_untouched_apart_from_the_database(fixture_path, temp_dirs):
     assert len(temp_dirs) == 1
     _, files = temp_dirs[0]
     assert files, "the replay made no copy"
-    assert set(files) <= {".story/story.db", ".story/story.db-wal",
-                          ".story/story.db-shm"}, files
+    assert set(files) <= {".story/story.db", ".story/story.db-wal", ".story/story.db-shm"}, files
 
 
-def test_the_temp_dir_is_removed_on_every_path(fixture_path, temp_dirs,
-                                               monkeypatch):
+def test_the_temp_dir_is_removed_on_every_path(fixture_path, temp_dirs, monkeypatch):
     drafts.stage(fixture_path, _free_climax(), "clean")
     drafts.stage(fixture_path, _take_climax(), "refused")
 
@@ -158,10 +196,13 @@ def test_a_copy_failure_is_a_verdict_not_an_exception(fixture_path, monkeypatch)
     monkeypatch.setattr(tempfile, "TemporaryDirectory", _NoSandbox)
     result = drafts.stage(fixture_path, _free_climax(), "no sandbox")
     assert result["dry_run"] == {
-        "status": "unavailable", "error": "OSError: no usable temporary directory"}
+        "status": "unavailable",
+        "error": "OSError: no usable temporary directory",
+    }
 
 
 # ─── the backstop ───
+
 
 def test_commit_still_refuses_the_draft_the_dry_run_refused(fixture_path):
     staged = drafts.stage(fixture_path, _take_climax(), "move the climax")

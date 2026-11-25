@@ -6,6 +6,7 @@ one entity per value. These tests pin the round trip and the edges the bespoke
 block format introduces: order, the optional `note`, the empty file, and a
 hand-edited block that duplicates a ladder word.
 """
+
 import json
 import shutil
 import sqlite3
@@ -64,22 +65,36 @@ def _export(project, vault):
 
 def _reimport(project, vault):
     (project / ".story" / "story.db").unlink()
-    return json.loads(import_handler({"project": "p", "confirm": True},
-                                     root_path=str(vault)))
+    return json.loads(import_handler({"project": "p", "confirm": True}, root_path=str(vault)))
 
 
 def _seed(proj):
-    create_entity(proj, "value", "trust",
-                  {"name": "trust", "p": "open", "c": "wary", "cd": "deceived",
-                   "nn": "exploited", "note": "Whether the system tells the truth."},
-                  sections={"Definition": "Trust is the throughline.",
-                            "Notes": "Held by Kael."})
-    create_entity(proj, "value", "loyalty",
-                  {"name": "loyalty", "p": "devoted", "c": "bound",
-                   "cd": "false", "nn": "betrayed"})
-    create_entity(proj, "value", "betrayal",
-                  {"name": "betrayal", "p": "open", "c": "wary",
-                   "cd": "cruel", "nn": "used"})
+    create_entity(
+        proj,
+        "value",
+        "trust",
+        {
+            "name": "trust",
+            "p": "open",
+            "c": "wary",
+            "cd": "deceived",
+            "nn": "exploited",
+            "note": "Whether the system tells the truth.",
+        },
+        sections={"Definition": "Trust is the throughline.", "Notes": "Held by Kael."},
+    )
+    create_entity(
+        proj,
+        "value",
+        "loyalty",
+        {"name": "loyalty", "p": "devoted", "c": "bound", "cd": "false", "nn": "betrayed"},
+    )
+    create_entity(
+        proj,
+        "value",
+        "betrayal",
+        {"name": "betrayal", "p": "open", "c": "wary", "cd": "cruel", "nn": "used"},
+    )
 
 
 class TestExport:
@@ -97,8 +112,7 @@ class TestExport:
         text = (proj / "values.md").read_text()
         assert text.count("---\nid:") == 3
         # ORDER BY type, id in the export query keeps the file in id order.
-        assert text.index("id: betrayal") < text.index("id: loyalty") \
-            < text.index("id: trust")
+        assert text.index("id: betrayal") < text.index("id: loyalty") < text.index("id: trust")
 
     def test_field_order_is_schema_order_and_note_is_optional(self, proj, vault):
         _seed(proj)
@@ -110,8 +124,13 @@ class TestExport:
         assert "note" not in loyalty
         # The ladder reads p/c/cd/nn, not alphabetically.
         block = text.split("id: trust", 1)[1]
-        assert block.index("\np:") < block.index("\nc:") < block.index("\ncd:") \
-            < block.index("\nnn:") < block.index("\nnote:")
+        assert (
+            block.index("\np:")
+            < block.index("\nc:")
+            < block.index("\ncd:")
+            < block.index("\nnn:")
+            < block.index("\nnote:")
+        )
 
     def test_zero_values_writes_an_empty_present_file(self, proj, vault):
         _export(proj, vault)
@@ -134,19 +153,29 @@ class TestRoundTrip:
         assert [r[0] for r in rows] == ["betrayal", "loyalty", "trust"]
         by_id = {r[0]: r for r in rows}
         assert by_id["trust"][2] == {
-            "p": "open", "c": "wary", "cd": "deceived", "nn": "exploited",
-            "note": "Whether the system tells the truth."}
+            "p": "open",
+            "c": "wary",
+            "cd": "deceived",
+            "nn": "exploited",
+            "note": "Whether the system tells the truth.",
+        }
         # A value with no note comes back with no note key.
         assert "note" not in by_id["loyalty"][2]
         assert by_id["loyalty"][2] == {
-            "p": "devoted", "c": "bound", "cd": "false", "nn": "betrayed"}
+            "p": "devoted",
+            "c": "bound",
+            "cd": "false",
+            "nn": "betrayed",
+        }
 
     def test_sections_survive(self, proj, vault):
         _seed(proj)
         _export(proj, vault)
         _reimport(proj, vault)
         assert _sections(proj, "trust") == [
-            ("Definition", "Trust is the throughline."), ("Notes", "Held by Kael.")]
+            ("Definition", "Trust is the throughline."),
+            ("Notes", "Held by Kael."),
+        ]
 
     def test_values_import_before_scenes(self, fixture_path, tmp_path):
         """A scene's turn names a value, so the value must exist first.
@@ -162,10 +191,10 @@ class TestRoundTrip:
         _export(p, vault)
 
         import white_words.scriptwriting.tools.story_import as si
+
         order = []
         orig_values, orig_folder = si._import_values, si._import_folder
-        si._import_values = lambda conn, pp: (
-            order.append("values"), orig_values(conn, pp))[1]
+        si._import_values = lambda conn, pp: (order.append("values"), orig_values(conn, pp))[1]
 
         def _folder(conn, pp, folder, entity_type):
             if entity_type == "scene":
@@ -175,8 +204,11 @@ class TestRoundTrip:
         si._import_folder = _folder
         try:
             (p / ".story" / "story.db").unlink()
-            r = json.loads(import_handler(
-                {"project": "save-the-children", "confirm": True}, root_path=str(vault)))
+            r = json.loads(
+                import_handler(
+                    {"project": "save-the-children", "confirm": True}, root_path=str(vault)
+                )
+            )
         finally:
             si._import_values, si._import_folder = orig_values, orig_folder
         assert r["success"]
@@ -186,9 +218,12 @@ class TestRoundTrip:
         _seed(proj)
         _export(proj, vault)
         _reimport(proj, vault)
-        out = json.loads(retrieve_handler(
-            {"project": "p", "entity_type": "value", "id": ["trust"],
-             "fields": ["all"]}, root_path=str(vault)))
+        out = json.loads(
+            retrieve_handler(
+                {"project": "p", "entity_type": "value", "id": ["trust"], "fields": ["all"]},
+                root_path=str(vault),
+            )
+        )
         fields = out["entities"][0]["fields"]
         assert list(fields) == ["name", "p", "c", "cd", "nn", "note"]
         assert fields["p"] == "open"
@@ -215,8 +250,8 @@ class TestHandEditedValues:
         _seed(proj)
         _export(proj, vault)
         (proj / "values.md").write_text(
-            "---\nid: trust\nname: trust\np: open\nc: open\n"
-            "cd: deceived\nnn: exploited\n---\n")
+            "---\nid: trust\nname: trust\np: open\nc: open\ncd: deceived\nnn: exploited\n---\n"
+        )
         out = _reimport(proj, vault)
         assert "error" in out
         assert "four distinct words" in out["error"]
@@ -225,8 +260,8 @@ class TestHandEditedValues:
         _seed(proj)
         _export(proj, vault)
         (proj / "values.md").write_text(
-            "---\nid: trust-2\nname: trust\np: open\nc: wary\n"
-            "cd: deceived\nnn: exploited\n---\n")
+            "---\nid: trust-2\nname: trust\np: open\nc: wary\ncd: deceived\nnn: exploited\n---\n"
+        )
         out = _reimport(proj, vault)
         assert "error" in out
         assert "slug of its name" in out["error"]
@@ -237,7 +272,8 @@ class TestHandEditedValues:
         (proj / "values.md").write_text(
             "---\nid: trust\nname: trust\np: open\nc: wary\n"
             "cd: deceived\nnn: exploited\n---\n\n"
-            "---\nid: loyalty\nname: trust\np: a\nc: b\ncd: c\nnn: d\n---\n")
+            "---\nid: loyalty\nname: trust\np: a\nc: b\ncd: c\nnn: d\n---\n"
+        )
         out = _reimport(proj, vault)
         # The second block's id is not the slug of `trust`, so it is refused —
         # and a real duplicate name is refused too.
@@ -270,6 +306,5 @@ class TestDiffGuard:
     def test_exported_values_are_not_reported_at_risk(self, proj, vault):
         _seed(proj)
         _export(proj, vault)
-        report = json.loads(import_handler({"project": "p", "dry_run": True},
-                                           root_path=str(vault)))
+        report = json.loads(import_handler({"project": "p", "dry_run": True}, root_path=str(vault)))
         assert report["would_be_destroyed"] == []

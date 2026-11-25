@@ -9,6 +9,7 @@ The guard is deliberately one-directional. A missed warning is acceptable; a
 false "you will lose data" would block every legitimate re-import, which is why
 this file also pins the no-false-positive cases.
 """
+
 import json
 import shutil
 import sqlite3
@@ -29,8 +30,7 @@ def _ids(project_path):
 
 def _seed_nova(proj):
     """An entity with no Markdown behind it — exactly what an import destroys."""
-    create_entity(proj, "character", "nova",
-                  {"name": "Nova", "story_role": "Supporting"})
+    create_entity(proj, "character", "nova", {"name": "Nova", "story_role": "Supporting"})
 
 
 def _run(args, vault):
@@ -73,7 +73,7 @@ class TestGuard:
     def test_refuses_when_work_would_be_lost(self, imported):
         proj, vault = imported
         _seed_nova(proj)
-        result = _run({"project": str(proj)}, vault)          # no confirm
+        result = _run({"project": str(proj)}, vault)  # no confirm
         assert result["success"] is False
         assert "nova" in result["would_be_destroyed"]
         assert "nova" in _ids(proj), "refusal must not delete anything"
@@ -84,6 +84,7 @@ class TestGuard:
         result = _run({"project": str(proj)}, vault)
         assert (proj / ".story" / "backup_check").parent.exists()
         from pathlib import Path
+
         assert Path(result["backup_created"]).exists()
 
     def test_confirm_proceeds_and_really_destroys(self, imported):

@@ -25,6 +25,7 @@ from white_words.scriptwriting.core import budget
 from white_words.scriptwriting.core.db import get_project_summary
 from white_words.scriptwriting.tools.story_load import handler as load_handler
 
+
 @pytest.fixture(autouse=True)
 def _no_user_config(tmp_path, monkeypatch):
     """A developer's own ~/.config/white-words/config.toml must not change
@@ -34,9 +35,9 @@ def _no_user_config(tmp_path, monkeypatch):
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "save-the-children"
-N_SEQ, PER_SEQ = 6, 8          # 48 scenes: enough to overflow a small budget
-N_REL_COPIES = 10              # 3 real relationships x 10 = 33 total
-SMALL = "6000"                 # chars; forces compaction without a huge project
+N_SEQ, PER_SEQ = 6, 8  # 48 scenes: enough to overflow a small budget
+N_REL_COPIES = 10  # 3 real relationships x 10 = 33 total
+SMALL = "6000"  # chars; forces compaction without a huge project
 
 
 def _sub(text, **kv):
@@ -60,29 +61,46 @@ def _grow(project_dir: Path):
         tpl = tpl_file.read_text()
         for r in range(N_REL_COPIES):
             (project_dir / "relationships" / f"{tpl_file.stem} {r}.md").write_text(
-                _sub(_sub(tpl, id=f"{tpl_file.stem.lower().replace(' ', '-')}-{r}"),
-                     name=f"{tpl_file.stem} {r}"))
+                _sub(
+                    _sub(tpl, id=f"{tpl_file.stem.lower().replace(' ', '-')}-{r}"),
+                    name=f"{tpl_file.stem} {r}",
+                )
+            )
     n = 0
     for s in range(N_SEQ):
         (project_dir / "sequences" / f"Gen Seq {s}.md").write_text(
-            _sub(seq_tpl, id=f"gen-seq-{s}", order=100 + s, title=f"Gen Seq {s}"))
+            _sub(seq_tpl, id=f"gen-seq-{s}", order=100 + s, title=f"Gen Seq {s}")
+        )
         for _ in range(PER_SEQ):
             (project_dir / "scenes" / f"Gen Scene {n}.md").write_text(
-                _sub(scene_tpl, id=f"gen-scene-{n}", order=1000 + n,
-                     title=f"Gen Scene {n}", heading=f"INT. ROOM {n} - DAY",
-                     sequence_id=f"gen-seq-{s}"))
+                _sub(
+                    scene_tpl,
+                    id=f"gen-scene-{n}",
+                    order=1000 + n,
+                    title=f"Gen Scene {n}",
+                    heading=f"INT. ROOM {n} - DAY",
+                    sequence_id=f"gen-seq-{s}",
+                )
+            )
             (project_dir / "scene_beats" / f"Gen Scene {n}.md").write_text(
-                _sub(beats_tpl, id=f"gen-scene-{n}-beats", scene=f"gen-scene-{n}"))
+                _sub(beats_tpl, id=f"gen-scene-{n}-beats", scene=f"gen-scene-{n}")
+            )
             n += 1
 
 
 def _import(vault: Path, monkeypatch):
     import white_words.scriptwriting.core.config
-    monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
-                        lambda: {"root_path": str(vault)})
+
+    monkeypatch.setattr(
+        white_words.scriptwriting.core.config,
+        "load_plugin_config",
+        lambda: {"root_path": str(vault)},
+    )
     from white_words.scriptwriting.tools.story_import import handler as import_handler
-    result = json.loads(import_handler(
-        {"project": "save-the-children", "confirm": True}, root_path=str(vault)))
+
+    result = json.loads(
+        import_handler({"project": "save-the-children", "confirm": True}, root_path=str(vault))
+    )
     assert "error" not in result, result
 
 
@@ -106,13 +124,11 @@ def big(tmp_path, monkeypatch):
 
 def load(project, **args):
     vault = str(project.parent.parent)
-    return json.loads(load_handler({"project": "save-the-children", **args},
-                                   root_path=vault))
+    return json.loads(load_handler({"project": "save-the-children", **args}, root_path=vault))
 
 
 def scenes_of(result):
-    return {s["id"]: s for a in result["acts"] for q in a["sequences"]
-            for s in q["scenes"]}
+    return {s["id"]: s for a in result["acts"] for q in a["sequences"] for s in q["scenes"]}
 
 
 def seq_ids(result):
@@ -123,6 +139,7 @@ COMPACT_KEYS = {"id", "title", "status"}
 
 
 # ── the helper ──────────────────────────────────────────────────────────────
+
 
 class TestBudgetHelper:
     def test_default_when_unset(self, monkeypatch):
@@ -142,6 +159,7 @@ class TestBudgetHelper:
         # unit i costs 100 chars full, 10 compact; 10 units, budget for 4 full
         def build(k):
             return {"u": ["x" * 100 if i < k else "x" * 10 for i in range(10)]}
+
         base = budget.json_size(build(0))
         per_full = budget.json_size(build(1)) - base
         k, out = budget.largest_fitting(build, 10, base + 4 * per_full)
@@ -155,6 +173,7 @@ class TestBudgetHelper:
 
 # ── base map ────────────────────────────────────────────────────────────────
 
+
 class TestBaseMapBudget:
     def test_fitting_response_is_unchanged(self, small, monkeypatch):
         """A small project must not see the budget at all."""
@@ -162,20 +181,19 @@ class TestBaseMapBudget:
         assert load(small) == get_project_summary(small)
         assert "detail" not in load(small) and "scope" not in load(small)
 
-    def test_over_budget_compacts_from_the_end_and_removes_nothing(
-            self, big, monkeypatch):
-        full = get_project_summary(big)                       # unbudgeted truth
+    def test_over_budget_compacts_from_the_end_and_removes_nothing(self, big, monkeypatch):
+        full = get_project_summary(big)  # unbudgeted truth
         monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", SMALL)
         result = load(big)
 
-        assert scenes_of(result).keys() == scenes_of(full).keys()   # complete
+        assert scenes_of(result).keys() == scenes_of(full).keys()  # complete
         compacted = result["detail"]["compacted"]
         assert compacted, "this project should overflow a 6000-char budget"
         order = seq_ids(result)
-        assert compacted == order[len(order) - len(compacted):], \
+        assert compacted == order[len(order) - len(compacted) :], (
             "compaction must be a suffix of the story, not a scatter"
-        for q in (q for a in result["acts"] for q in a["sequences"]
-                  if q["id"] in compacted):
+        )
+        for q in (q for a in result["acts"] for q in a["sequences"] if q["id"] in compacted):
             for s in q["scenes"]:
                 assert set(s) <= COMPACT_KEYS | {"characters"}
         assert len(json.dumps(result)) < len(json.dumps(full))
@@ -185,8 +203,7 @@ class TestBaseMapBudget:
         monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "20000")
         result = load(big)
         compacted = set(result.get("detail", {}).get("compacted", []))
-        kept = [q for a in result["acts"] for q in a["sequences"]
-                if q["id"] not in compacted]
+        kept = [q for a in result["acts"] for q in a["sequences"] if q["id"] not in compacted]
         assert kept, "a 20000 budget should hold at least one full sequence"
         for q in kept:
             for s in q["scenes"]:
@@ -197,8 +214,13 @@ class TestBaseMapBudget:
         monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", SMALL)
         target = load(big)["detail"]["compacted"][-1]
         expanded = load(big, sequence=target)
-        rows = [s for a in expanded["acts"] for q in a["sequences"]
-                if q["id"] == target for s in q["scenes"]]
+        rows = [
+            s
+            for a in expanded["acts"]
+            for q in a["sequences"]
+            if q["id"] == target
+            for s in q["scenes"]
+        ]
         assert rows and all(s == full[s["id"]] for s in rows)
 
     def test_sequence_scope_ignores_the_budget(self, big, monkeypatch):
@@ -216,8 +238,7 @@ class TestBaseMapBudget:
 
     def test_scoped_map_is_still_complete(self, big):
         full = get_project_summary(big)
-        assert scenes_of(load(big, sequence="gen-seq-4")).keys() == \
-            scenes_of(full).keys()
+        assert scenes_of(load(big, sequence="gen-seq-4")).keys() == scenes_of(full).keys()
 
     def test_act_scope(self, big):
         act_id = load(big)["acts"][0]["id"]
@@ -232,6 +253,7 @@ class TestBaseMapBudget:
 
 
 # ── dramatic_elements ───────────────────────────────────────────────────────
+
 
 class TestDramaticElementsScopeAndBudget:
     @staticmethod
@@ -270,8 +292,7 @@ class TestDramaticElementsScopeAndBudget:
             else:
                 assert len(q["scenes"]) == n_full[q["id"]]
         # nothing vanished: every sequence is still listed
-        assert [q["id"] for q in self._seqs(result)] == \
-            [q["id"] for q in self._seqs(full)]
+        assert [q["id"] for q in self._seqs(result)] == [q["id"] for q in self._seqs(full)]
 
     def test_unknown_sequence_names_the_valid_ones(self, big):
         bad = load(big, view="dramatic_elements", sequence="nope")
@@ -280,10 +301,18 @@ class TestDramaticElementsScopeAndBudget:
 
 # ── story_retrieve ──────────────────────────────────────────────────────────
 
+
 def retrieve(project, ids, entity_type="scene", **extra):
     from white_words.scriptwriting.tools.story_retrieve import handler
-    args = {"project": "save-the-children", "entity_type": entity_type, "id": ids,
-            "sections": ["all"], "fields": ["all"], **extra}
+
+    args = {
+        "project": "save-the-children",
+        "entity_type": entity_type,
+        "id": ids,
+        "sections": ["all"],
+        "fields": ["all"],
+        **extra,
+    }
     return json.loads(handler(args, root_path=str(project.parent.parent)))
 
 
@@ -307,8 +336,7 @@ class TestRetrieveBudget:
         assert len(r["entities"]) == 2
         assert not {"truncated", "deferred_ids", "hint", "over_budget"} & r.keys()
 
-    def test_over_budget_returns_whole_entities_then_defers_the_tail(
-            self, big, monkeypatch):
+    def test_over_budget_returns_whole_entities_then_defers_the_tail(self, big, monkeypatch):
         ids = gen_ids()
         truth = unbudgeted(big, monkeypatch, ids)
         monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", SMALL)
@@ -323,8 +351,7 @@ class TestRetrieveBudget:
         assert len(json.dumps(r)) <= int(SMALL)
         assert "deferred_ids" in r["hint"]
 
-    def test_following_deferred_ids_reads_everything_exactly_once(
-            self, big, monkeypatch):
+    def test_following_deferred_ids_reads_everything_exactly_once(self, big, monkeypatch):
         ids = gen_ids()
         truth = unbudgeted(big, monkeypatch, ids)
         monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", SMALL)
@@ -338,15 +365,19 @@ class TestRetrieveBudget:
         assert seen == ids and calls > 1
         assert set(seen) == set(truth) and len(seen) == len(set(seen))
 
-    def test_first_entity_is_returned_even_if_it_alone_is_too_big(
-            self, big, monkeypatch):
+    def test_first_entity_is_returned_even_if_it_alone_is_too_big(self, big, monkeypatch):
         import sqlite3
+
         db = big / ".story" / "story.db"
         conn = sqlite3.connect(db)
-        conn.execute("UPDATE sections SET body=? WHERE entity_id='gen-scene-0' "
-                     "AND rowid=(SELECT min(rowid) FROM sections "
-                     "WHERE entity_id='gen-scene-0')", ("x" * 20000,))
-        conn.commit(); conn.close()
+        conn.execute(
+            "UPDATE sections SET body=? WHERE entity_id='gen-scene-0' "
+            "AND rowid=(SELECT min(rowid) FROM sections "
+            "WHERE entity_id='gen-scene-0')",
+            ("x" * 20000,),
+        )
+        conn.commit()
+        conn.close()
         monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "8000")
 
         r = retrieve(big, ["gen-scene-0", "gen-scene-1"])
@@ -376,6 +407,7 @@ class TestRetrieveBudget:
 
 # ── relationship view ───────────────────────────────────────────────────────
 
+
 class TestRelationshipViewBudget:
     @staticmethod
     def rels(project, **args):
@@ -387,8 +419,7 @@ class TestRelationshipViewBudget:
         assert "detail" not in r and r["relationships"]
         assert all("perspectives" in x for x in r["relationships"])
 
-    def test_over_budget_compacts_but_lists_every_relationship(
-            self, big, monkeypatch):
+    def test_over_budget_compacts_but_lists_every_relationship(self, big, monkeypatch):
         monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "100000000")
         full = self.rels(big)["relationships"]
         monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "6000")
@@ -406,8 +437,7 @@ class TestRelationshipViewBudget:
                 assert x == by_id[x["id"]]
         assert len(json.dumps(r)) < len(json.dumps({"relationships": full}))
 
-    def test_character_filter_returns_that_characters_relationships_in_full(
-            self, big, monkeypatch):
+    def test_character_filter_returns_that_characters_relationships_in_full(self, big, monkeypatch):
         monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "100000000")
         full = self.rels(big)["relationships"]
         monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", "2000")  # ignored
@@ -424,8 +454,7 @@ class TestRelationshipViewBudget:
         char = left_out[0]["characters"][0]
         again = self.rels(big, character=char)["relationships"]
         assert all("perspectives" in x for x in again)
-        assert {x["id"] for x in left_out if char in x["characters"]} <= \
-            {x["id"] for x in again}
+        assert {x["id"] for x in left_out if char in x["characters"]} <= {x["id"] for x in again}
 
     def test_unknown_character_says_so(self, big):
         r = self.rels(big, character="nobody")
@@ -434,6 +463,7 @@ class TestRelationshipViewBudget:
 
 # ── story_search ────────────────────────────────────────────────────────────
 
+
 class TestSearchLimit:
     """`maximum: 50` in the schema is advice; nothing enforces it upstream, and
     SQLite reads LIMIT -1 as "no limit"."""
@@ -441,8 +471,13 @@ class TestSearchLimit:
     @staticmethod
     def search(project, **args):
         from white_words.scriptwriting.tools.story_search import handler
-        return json.loads(handler({"project": "save-the-children", "query": "scene",
-                                   **args}, root_path=str(project.parent.parent)))
+
+        return json.loads(
+            handler(
+                {"project": "save-the-children", "query": "scene", **args},
+                root_path=str(project.parent.parent),
+            )
+        )
 
     def test_an_oversized_limit_is_capped_and_says_so(self, big):
         r = self.search(big, limit=500)
@@ -467,12 +502,16 @@ class TestSearchLimit:
 
     def test_worst_case_stays_small(self, big):
         from white_words.scriptwriting.tools.story_search import handler
-        raw = handler({"project": "save-the-children", "query": "scene", "limit": 9999},
-                      root_path=str(big.parent.parent))
+
+        raw = handler(
+            {"project": "save-the-children", "query": "scene", "limit": 9999},
+            root_path=str(big.parent.parent),
+        )
         assert len(raw) < 20_000
 
 
 # ── story_describe ──────────────────────────────────────────────────────────
+
 
 class TestDescribeBudget:
     """story_describe is the one answer that must never arrive cut: its section
@@ -482,6 +521,7 @@ class TestDescribeBudget:
     @staticmethod
     def describe(monkeypatch, budget=None, **args):
         from white_words.scriptwriting.tools.story_describe import handler
+
         if budget:
             monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", str(budget))
         return json.loads(handler(args))
@@ -490,6 +530,7 @@ class TestDescribeBudget:
     def truth():
         from white_words.scriptwriting.tools.story_describe import _entity_schemas
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+
         return _entity_schemas(list(ENTITY_SCHEMAS))
 
     def test_fitting_response_is_unchanged(self, monkeypatch):
@@ -500,12 +541,12 @@ class TestDescribeBudget:
 
     def test_over_budget_returns_complete_types_and_names_the_rest(self, monkeypatch):
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+
         truth = self.truth()
         r = self.describe(monkeypatch, budget=9000)
         assert r["truncated"] is True and r["deferred_types"]
         got = list(r["entity_schemas"])
-        assert got + r["deferred_types"] == list(ENTITY_SCHEMAS), \
-            "contiguous, in declared order"
+        assert got + r["deferred_types"] == list(ENTITY_SCHEMAS), "contiguous, in declared order"
         for name, schema in r["entity_schemas"].items():
             assert schema == truth[name], f"{name} must be whole, field for field"
         assert len(json.dumps(r)) <= 9000
@@ -516,6 +557,7 @@ class TestDescribeBudget:
         truth = self.truth()
         monkeypatch.setenv("WHITE_WORDS_MAX_RESPONSE_CHARS", str(budget))
         from white_words.scriptwriting.tools.story_describe import handler
+
         pending, seen, calls = None, [], 0
         while True:
             r = json.loads(handler({"entity_types": pending} if pending else {}))
@@ -537,8 +579,7 @@ class TestDescribeBudget:
             for name, fields in r["entity_schemas"].items():
                 assert fields["sections"]["standard_sections"], (name, budget)
 
-    def test_the_first_type_is_never_cut_even_if_it_alone_exceeds_the_budget(
-            self, monkeypatch):
+    def test_the_first_type_is_never_cut_even_if_it_alone_exceeds_the_budget(self, monkeypatch):
         r = self.describe(monkeypatch, budget=2000, entity_type="scene")
         assert list(r["entity_schemas"]) == ["scene"]
         assert r["entity_schemas"]["scene"] == self.truth()["scene"]
@@ -550,28 +591,34 @@ class TestDescribeBudget:
         assert "truncated" not in r
 
     def test_asking_for_several_types_still_defers_the_tail(self, monkeypatch):
-        r = self.describe(monkeypatch, budget=7000,
-                          entity_types=["scene", "plot", "project", "character"])
+        r = self.describe(
+            monkeypatch, budget=7000, entity_types=["scene", "plot", "project", "character"]
+        )
         assert r["truncated"] is True
-        assert list(r["entity_schemas"]) + r["deferred_types"] == \
-            ["scene", "plot", "project", "character"]
+        assert list(r["entity_schemas"]) + r["deferred_types"] == [
+            "scene",
+            "plot",
+            "project",
+            "character",
+        ]
 
     def test_entity_type_and_entity_types_combine_without_duplicates(self, monkeypatch):
-        r = self.describe(monkeypatch, entity_type="plot",
-                          entity_types=["plot", "scene"])
+        r = self.describe(monkeypatch, entity_type="plot", entity_types=["plot", "scene"])
         assert list(r["entity_schemas"]) == ["plot", "scene"]
 
     def test_a_bare_string_for_entity_types_is_read_as_one_item(self, monkeypatch):
         r = self.describe(monkeypatch, entity_types="character")
         assert list(r["entity_schemas"]) == ["character"]
 
-    @pytest.mark.parametrize("bad, shown", [
-        ({"entity_type": "nope"}, "nope"),
-        ({"entity_types": ["scene", "nope", "alsonope"]}, "nope, alsonope"),
-        ({"entity_types": [{"x": 1}]}, "x"),
-    ])
-    def test_unknown_types_fail_cleanly_and_name_the_valid_ones(
-            self, monkeypatch, bad, shown):
+    @pytest.mark.parametrize(
+        "bad, shown",
+        [
+            ({"entity_type": "nope"}, "nope"),
+            ({"entity_types": ["scene", "nope", "alsonope"]}, "nope, alsonope"),
+            ({"entity_types": [{"x": 1}]}, "x"),
+        ],
+    )
+    def test_unknown_types_fail_cleanly_and_name_the_valid_ones(self, monkeypatch, bad, shown):
         r = self.describe(monkeypatch, **bad)
         assert r["success"] is False and shown in r["error"]
         assert "scene" in r["error"] and "Available" in r["error"]
@@ -579,6 +626,7 @@ class TestDescribeBudget:
     def test_the_schema_offers_entity_types_and_cannot_drift_from_the_data(self):
         from white_words.scriptwriting.tools.story_describe import SCHEMA
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+
         prop = SCHEMA["properties"]["entity_types"]
         assert prop["type"] == "array"
         assert prop["items"]["enum"] == list(ENTITY_SCHEMAS)
@@ -589,5 +637,6 @@ class TestDescribeBudget:
         this, the floor (or the schema) needs a decision — not a silent cut."""
         from white_words.scriptwriting.tools.story_describe import _entity_schemas
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+
         biggest = max(len(json.dumps(_entity_schemas([t]))) for t in ENTITY_SCHEMAS)
         assert biggest < 8_000, f"largest single type is {biggest} chars"

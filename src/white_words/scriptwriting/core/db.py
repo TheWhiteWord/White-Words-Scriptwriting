@@ -1,4 +1,5 @@
 """Database connection, schema creation, and table existence checks."""
+
 import itertools
 import json
 import sqlite3
@@ -7,8 +8,13 @@ from contextlib import contextmanager
 import yaml
 from pathlib import Path
 
-from .constants import (MEMORY_CATEGORIES, MEMORY_CHAR_LIMIT, MEMORY_ENTRY_LIMIT,
-                        ENTITY_SCHEMAS, PLOT_ROLES)
+from .constants import (
+    MEMORY_CATEGORIES,
+    MEMORY_CHAR_LIMIT,
+    MEMORY_ENTRY_LIMIT,
+    ENTITY_SCHEMAS,
+    PLOT_ROLES,
+)
 from .references import dead_ids, live_column, live_extra
 from .entity import PLOT_BEAT_FIELDS
 from .scene_script import scene_heading
@@ -142,8 +148,9 @@ def _user_version(conn: sqlite3.Connection) -> int:
     return conn.execute("PRAGMA user_version").fetchone()[0]
 
 
-def apply_migrations(conn: sqlite3.Connection, migrations: list, *,
-                     baseline: int, name: str = "database") -> None:
+def apply_migrations(
+    conn: sqlite3.Connection, migrations: list, *, baseline: int, name: str = "database"
+) -> None:
     """Bring a database up to date with an ordered list of migration steps.
 
     ``migrations[k]`` upgrades version baseline+k to baseline+k+1; ``PRAGMA
@@ -173,7 +180,7 @@ def apply_migrations(conn: sqlite3.Connection, migrations: list, *,
             raise _too_new(name, version, target)
         if version < baseline:
             raise _too_old(name, version, baseline)
-        for step in migrations[version - baseline:]:
+        for step in migrations[version - baseline :]:
             step(conn)
         conn.execute(f"PRAGMA user_version = {target}")
 
@@ -182,13 +189,14 @@ def _too_new(name: str, version: int, target: int) -> SchemaTooNewError:
     return SchemaTooNewError(
         f"{name} has schema version {version}, but this build only understands "
         f"up to {target}. It was written by a newer version of White Words: "
-        f"update the app, or restore an older backup.")
+        f"update the app, or restore an older backup."
+    )
 
 
 def _too_old(name: str, version: int, baseline: int) -> SchemaTooOldError:
     return SchemaTooOldError(
-        f"{name} is older than this build supports (version {version}; the "
-        f"baseline is {baseline}).")
+        f"{name} is older than this build supports (version {version}; the baseline is {baseline})."
+    )
 
 
 def get_db(project_path: Path) -> sqlite3.Connection:
@@ -213,8 +221,12 @@ def get_db(project_path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys=ON")
     if _user_version(conn) != LATEST_VERSION:
         if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1").fetchone():
-            apply_migrations(conn, SCHEMA_MIGRATIONS, baseline=BASELINE_VERSION,
-                             name=f"{project_path.name}/.story/story.db")
+            apply_migrations(
+                conn,
+                SCHEMA_MIGRATIONS,
+                baseline=BASELINE_VERSION,
+                name=f"{project_path.name}/.story/story.db",
+            )
         else:
             # A file with no tables is a new project: create the schema, stamped.
             create_schema(conn)
@@ -297,8 +309,13 @@ def transaction(conn: sqlite3.Connection):
         raise
 
 
-def backup_database(project_path: Path, *, dest_dir: Path | None = None,
-                    prefix: str = "story", label: str | None = None) -> str:
+def backup_database(
+    project_path: Path,
+    *,
+    dest_dir: Path | None = None,
+    prefix: str = "story",
+    label: str | None = None,
+) -> str:
     """Snapshot story.db into a new file. Returns the backup's path.
 
     By default the file goes beside the database, as ``story_<date>_<time>_<id>.db``;
@@ -337,7 +354,9 @@ def backup_database(project_path: Path, *, dest_dir: Path | None = None,
     try:
         fd, partial = tempfile.mkstemp(
             prefix=f"{prefix}_{stamp}_{label + '_' if label else ''}",
-            suffix=".partial", dir=str(dest_dir))
+            suffix=".partial",
+            dir=str(dest_dir),
+        )
         os.close(fd)
         final = partial[: -len(".partial")] + ".db"
         try:
@@ -363,9 +382,12 @@ def create_schema(conn: sqlite3.Connection) -> None:
     database that already has tables is upgraded instead: ``CREATE TABLE IF NOT
     EXISTS`` leaves an old table as it is.
     """
-    is_new = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='entities'"
-    ).fetchone() is None
+    is_new = (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='entities'"
+        ).fetchone()
+        is None
+    )
     conn.executescript(SCHEMA_SQL)
     if is_new:
         conn.execute(f"PRAGMA user_version = {LATEST_VERSION}")
@@ -389,8 +411,14 @@ def has_schema(conn: sqlite3.Connection) -> bool:
 # a payload in the first place. `name`/`status` are excluded because the base
 # map emits them unconditionally (see the always_keep in get_project_summary).
 _PROJECT_TITLE_PAGE_FIELDS = {
-    "name", "status",
-    "screenplay_title", "credit", "author", "contact", "draft_date", "draft",
+    "name",
+    "status",
+    "screenplay_title",
+    "credit",
+    "author",
+    "contact",
+    "draft_date",
+    "draft",
 }
 
 _PROJECT_DEFAULTS = {
@@ -398,6 +426,7 @@ _PROJECT_DEFAULTS = {
     for k, v in ENTITY_SCHEMAS["project"].items()
     if k not in _PROJECT_TITLE_PAGE_FIELDS
 }
+
 
 def empty_memory() -> dict:
     """Return the canonical project memory shape."""
@@ -411,8 +440,11 @@ def milestone_label(plot_roles: list, plot_scopes: dict):
     a complication), so this returns a list. Only main-plot roles are
     milestones; sub-plot roles are tracked separately.
     """
-    return [entry["role"] for entry in plot_roles
-            if plot_scopes.get(entry.get("id") or entry.get("plot")) == "main"]
+    return [
+        entry["role"]
+        for entry in plot_roles
+        if plot_scopes.get(entry.get("id") or entry.get("plot")) == "main"
+    ]
 
 
 def validate_memory(memory: dict) -> dict:
@@ -482,10 +514,12 @@ def scene_order(act_id, seq_id, scene_id, act_key, seq_key, scene_key) -> tuple:
     act or sequence order (a scene with no sequence) sort first, and the id
     breaks ties, so the order is total and stable across calls.
     """
-    return (act_key if act_key is not None else 0,
-            seq_key if seq_key is not None else 0,
-            scene_key if scene_key is not None else 0,
-            scene_id)
+    return (
+        act_key if act_key is not None else 0,
+        seq_key if seq_key is not None else 0,
+        scene_key if scene_key is not None else 0,
+        scene_id,
+    )
 
 
 def get_scene_value_turns(project_path: Path) -> list[dict]:
@@ -514,10 +548,10 @@ def get_scene_value_turns(project_path: Path) -> list[dict]:
             "FROM entities e "
             "LEFT JOIN entities p ON e.parent_id = p.id "
             "LEFT JOIN entities pp ON p.parent_id = pp.id "
-            "WHERE e.type='scene' AND e.is_deleted=0").fetchall()
+            "WHERE e.type='scene' AND e.is_deleted=0"
+        ).fetchall()
         out: list[dict] = []
-        for scene_id, extra_json, seq_id, act_id, scene_key, \
-                seq_key, act_key in rows:
+        for scene_id, extra_json, seq_id, act_id, scene_key, seq_key, act_key in rows:
             extra = json.loads(extra_json) if extra_json else {}
             order = scene_order(act_id, seq_id, scene_id, act_key, seq_key, scene_key)
             for turn in extra.get("value_turns") or []:
@@ -530,24 +564,32 @@ def get_scene_value_turns(project_path: Path) -> list[dict]:
                 for effect in turn.get("effects") or []:
                     if not isinstance(effect, dict):
                         continue
-                    effects.append({
-                        "character": effect.get("character", ""),
-                        "levels": [
-                            {"conflict_level": lvl.get("conflict_level", ""),
-                             "effect": lvl.get("effect", "")}
-                            for lvl in effect.get("levels") or []
-                            if isinstance(lvl, dict)]})
-                out.append({
-                    "scene_id": scene_id,
-                    "plot": str(turn.get("plot") or "").strip(),
-                    "act_id": act_id,
-                    "sequence_id": seq_id,
-                    "order": order,
-                    "value": value,
-                    "from": turn.get("from", ""),
-                    "to": turn.get("to", ""),
-                    "effects": effects,
-                })
+                    effects.append(
+                        {
+                            "character": effect.get("character", ""),
+                            "levels": [
+                                {
+                                    "conflict_level": lvl.get("conflict_level", ""),
+                                    "effect": lvl.get("effect", ""),
+                                }
+                                for lvl in effect.get("levels") or []
+                                if isinstance(lvl, dict)
+                            ],
+                        }
+                    )
+                out.append(
+                    {
+                        "scene_id": scene_id,
+                        "plot": str(turn.get("plot") or "").strip(),
+                        "act_id": act_id,
+                        "sequence_id": seq_id,
+                        "order": order,
+                        "value": value,
+                        "from": turn.get("from", ""),
+                        "to": turn.get("to", ""),
+                        "effects": effects,
+                    }
+                )
         return out
     finally:
         conn.close()
@@ -619,9 +661,12 @@ def _coerce_number(value, default):
     return default if value is None else value
 
 
-def get_project_summary(project_path: Path, act: str | None = None,
-                        sequence: str | None = None,
-                        max_chars: int | None = None) -> dict:
+def get_project_summary(
+    project_path: Path,
+    act: str | None = None,
+    sequence: str | None = None,
+    max_chars: int | None = None,
+) -> dict:
     """Return nested project summary for story_load (spec §2).
 
     Shape: {loaded, confirmation, project, acts, characters, plots,
@@ -648,13 +693,23 @@ def get_project_summary(project_path: Path, act: str | None = None,
         if row:
             proj_name, proj_one_sentence, proj_extra_json = row
             proj_extra = json.loads(proj_extra_json) if proj_extra_json else {}
-            project = {"name": proj_name, "logline": proj_one_sentence, "status": proj_extra.get("status", "")}
+            project = {
+                "name": proj_name,
+                "logline": proj_one_sentence,
+                "status": proj_extra.get("status", ""),
+            }
             # name/logline/status are set above; the rest come from extra.
-            project.update({k: proj_extra.get(k, "") for k in _PROJECT_DEFAULTS if k not in project})
+            project.update(
+                {k: proj_extra.get(k, "") for k in _PROJECT_DEFAULTS if k not in project}
+            )
             project["act_count"] = _coerce_number(
-                proj_extra.get("act_count", 3), ENTITY_SCHEMAS["project"]["act_count"]["default"])
-            project = {k: v for k, v in project.items()
-                       if k in ("name", "status", "act_count") or (v and v != _PROJECT_DEFAULTS.get(k))}
+                proj_extra.get("act_count", 3), ENTITY_SCHEMAS["project"]["act_count"]["default"]
+            )
+            project = {
+                k: v
+                for k, v in project.items()
+                if k in ("name", "status", "act_count") or (v and v != _PROJECT_DEFAULTS.get(k))
+            }
         else:
             project = {"name": "Unknown", "logline": "", "status": ""}
 
@@ -665,14 +720,12 @@ def get_project_summary(project_path: Path, act: str | None = None,
         ).fetchall()
 
         # ── All relations ──
-        rel_rows = conn.execute(
-            "SELECT from_id, to_id, kind, note FROM live_relations"
-        ).fetchall()
+        rel_rows = conn.execute("SELECT from_id, to_id, kind, note FROM live_relations").fetchall()
 
         # ── Build cross-reference maps ──
         scene_chars = {}  # scene_id -> [char_slug, ...]
-        scene_loc = {}    # scene_id -> loc_slug
-        variant_of = {}   # entity_id -> base_slug (location_variant / world_variant)
+        scene_loc = {}  # scene_id -> loc_slug
+        variant_of = {}  # entity_id -> base_slug (location_variant / world_variant)
 
         scene_plot_roles = {}  # scene_id -> [{plot, role}, ...]
         for from_id, to_id, kind, note in rel_rows:
@@ -682,8 +735,7 @@ def get_project_summary(project_path: Path, act: str | None = None,
                 scene_loc[to_id] = from_id
             elif kind in PLOT_FIELD_BY_KIND:
                 role = kind.replace("plot_", "")
-                scene_plot_roles.setdefault(to_id, []).append(
-                    {"plot": from_id, "role": role})
+                scene_plot_roles.setdefault(to_id, []).append({"plot": from_id, "role": role})
             elif kind in ("location_variant", "world_variant"):
                 variant_of[from_id] = to_id
 
@@ -703,30 +755,43 @@ def get_project_summary(project_path: Path, act: str | None = None,
 
             if etype == "act":
                 acts[eid] = {
-                    "id": eid, "title": name, "status": status,
-                    "_order_key": order_key, "_parent_id": parent_id,
+                    "id": eid,
+                    "title": name,
+                    "status": status,
+                    "_order_key": order_key,
+                    "_parent_id": parent_id,
                 }
             elif etype == "sequence":
                 sequences[eid] = {
-                    "id": eid, "title": name, "status": status,
-                    "_order_key": order_key, "_parent_id": parent_id,
+                    "id": eid,
+                    "title": name,
+                    "status": status,
+                    "_order_key": order_key,
+                    "_parent_id": parent_id,
                 }
             elif etype == "scene":
                 scenes[eid] = {
-                    "id": eid, "title": name, "status": status,
+                    "id": eid,
+                    "title": name,
+                    "status": status,
                     "one_sentence": one_sentence,
                     "dramatic_role": extra.get("dramatic_role", ""),
-                    "_order_key": order_key, "_parent_id": parent_id,
+                    "_order_key": order_key,
+                    "_parent_id": parent_id,
                     "_extra": extra,
                 }
             elif etype == "character":
                 characters[eid] = {
-                    "id": eid, "name": name, "one_sentence": one_sentence,
+                    "id": eid,
+                    "name": name,
+                    "one_sentence": one_sentence,
                     "story_role": extra.get("story_role", ""),
                 }
             elif etype == "plot":
                 plots[eid] = {
-                    "id": eid, "name": name, "one_sentence": one_sentence,
+                    "id": eid,
+                    "name": name,
+                    "one_sentence": one_sentence,
                     "status": status,
                     "plot_type": extra.get("plot_type", ""),
                     "plot_scope": extra.get("plot_scope", ""),
@@ -735,29 +800,36 @@ def get_project_summary(project_path: Path, act: str | None = None,
                 }
             elif etype == "location":
                 locations[eid] = {
-                    "id": eid, "name": name, "one_sentence": one_sentence,
+                    "id": eid,
+                    "name": name,
+                    "one_sentence": one_sentence,
                     "mood": extra.get("mood", ""),
                     "dramatic_function": extra.get("dramatic_function", ""),
-                    "_order_key": order_key, "_parent_id": parent_id,
+                    "_order_key": order_key,
+                    "_parent_id": parent_id,
                 }
             elif etype == "world":
                 worlds[eid] = {
-                    "id": eid, "name": name, "one_sentence": one_sentence,
+                    "id": eid,
+                    "name": name,
+                    "one_sentence": one_sentence,
                     "rules": extra.get("rules", []),
                     "period": extra.get("period", ""),
                     "values": extra.get("values", []),
                     "power": extra.get("power", []),
-                    "_order_key": order_key, "_parent_id": parent_id,
+                    "_order_key": order_key,
+                    "_parent_id": parent_id,
                 }
             elif etype == "relationship":
                 relationships[eid] = {
-                    "id": eid, "name": name, "status": status,
+                    "id": eid,
+                    "name": name,
+                    "status": status,
                     "characters": extra.get("characters", []),
                     "perspectives": extra.get("perspectives", {}),
                     "scenes": extra.get("scenes", []),
                     "history": extra.get("history", ""),
                 }
-
 
         # ── A scene's scene_beats, keyed by the scene it belongs to ──
         # One record per scene (the write path refuses a second), so the key is
@@ -770,7 +842,9 @@ def get_project_summary(project_path: Path, act: str | None = None,
                 (row, json.loads(row[2]) if row[2] else {})
                 for row in conn.execute(
                     "SELECT id, parent_id, extra FROM entities "
-                    "WHERE type='scene_beats' AND is_deleted=0"))
+                    "WHERE type='scene_beats' AND is_deleted=0"
+                )
+            )
         }
 
         # ── Helpers ──
@@ -785,8 +859,7 @@ def get_project_summary(project_path: Path, act: str | None = None,
 
         def _omit(d, defaults, always_keep=None):
             always_keep = always_keep or set()
-            return {k: v for k, v in d.items()
-                    if k in always_keep or (v and v != defaults.get(k))}
+            return {k: v for k, v in d.items() if k in always_keep or (v and v != defaults.get(k))}
 
         # ── Build scene output ──
         def _build_scene(sid, lite=False):
@@ -820,17 +893,21 @@ def get_project_summary(project_path: Path, act: str | None = None,
                 # fallback, since the two keep identical names and drift.
                 "scene_objective": (
                     s["_extra"].get("scene_objective", "")
-                    or scene_beats.get(sid, {}).get("scene_objective", "")),
+                    or scene_beats.get(sid, {}).get("scene_objective", "")
+                ),
             }
-            return _omit(result, {"one_sentence": "", "characters": [], "location": None, "scene_objective": ""},
-                         always_keep={"status"})
+            return _omit(
+                result,
+                {"one_sentence": "", "characters": [], "location": None, "scene_objective": ""},
+                always_keep={"status"},
+            )
 
         # ── Build sequence output ──
         def _build_sequence(seq_id, lite=False):
             seq = sequences[seq_id]
             child_scene_ids = sorted(
                 [sid for sid, s in scenes.items() if s["_parent_id"] == seq_id],
-                key=lambda sid: (scenes[sid]["_order_key"], sid)
+                key=lambda sid: (scenes[sid]["_order_key"], sid),
             )
             # No value here: a value turn lives on its scene (value_turns),
             # and the values view reads them back. Repeating them here cost
@@ -847,36 +924,41 @@ def get_project_summary(project_path: Path, act: str | None = None,
             act = acts[act_id]
             child_seq_ids = sorted(
                 [sid for sid, s in sequences.items() if s["_parent_id"] == act_id],
-                key=lambda sid: (sequences[sid]["_order_key"], sid)
+                key=lambda sid: (sequences[sid]["_order_key"], sid),
             )
             return {
                 "id": act["id"],
                 "title": act["title"],
                 "status": act["status"],
-                "sequences": [_build_sequence(sid, lite=sid not in full_seqs)
-                              for sid in child_seq_ids],
+                "sequences": [
+                    _build_sequence(sid, lite=sid not in full_seqs) for sid in child_seq_ids
+                ],
             }
 
         # Build top-level acts (those without parent_id or parent not in acts)
         top_act_ids = sorted(
             [aid for aid, a in acts.items() if not a["_parent_id"] or a["_parent_id"] not in acts],
-            key=lambda aid: (acts[aid]["_order_key"], aid)
+            key=lambda aid: (acts[aid]["_order_key"], aid),
         )
+
         # ── Scope and budget: which sequences carry full scene rows ──
         # Story order across the whole map, so "from the end" means the end of
         # the story rather than the end of a dict.
         def _seq_children(act_id):
             return sorted(
                 [sid for sid, sq in sequences.items() if sq["_parent_id"] == act_id],
-                key=lambda sid: (sequences[sid]["_order_key"], sid))
+                key=lambda sid: (sequences[sid]["_order_key"], sid),
+            )
+
         ordered_seq_ids = [sid for aid in top_act_ids for sid in _seq_children(aid)]
 
         if sequence is not None and sequence not in sequences:
-            return {"error": f"No sequence with id '{sequence}'.",
-                    "valid_sequences": ordered_seq_ids}
+            return {
+                "error": f"No sequence with id '{sequence}'.",
+                "valid_sequences": ordered_seq_ids,
+            }
         if act is not None and act not in acts:
-            return {"error": f"No act with id '{act}'.",
-                    "valid_acts": top_act_ids}
+            return {"error": f"No act with id '{act}'.", "valid_acts": top_act_ids}
         if sequence is not None:
             scope_ids = [sequence]
         elif act is not None:
@@ -927,9 +1009,11 @@ def get_project_summary(project_path: Path, act: str | None = None,
             # own prose, and story_retrieve returns the plot whole. Repeating
             # the bare scene ids here bought nothing in the view that must stay
             # small.
-            return _omit(result, {"plot_type": "", "plot_scope": "", "value_arc": "",
-                                  "characters": []},
-                         always_keep={"status"})
+            return _omit(
+                result,
+                {"plot_type": "", "plot_scope": "", "value_arc": "", "characters": []},
+                always_keep={"status"},
+            )
 
         # ── Build location/world output ──
         def _build_location(loc_id):
@@ -945,8 +1029,12 @@ def get_project_summary(project_path: Path, act: str | None = None,
                 [lid for lid, loc in locations.items() if loc.get("_parent_id") == world_id],
                 key=lambda lid: (locations[lid]["_order_key"], lid),
             )
-            result = {"id": world_id, "name": w["name"], "one_sentence": w["one_sentence"],
-                      "locations": [_build_location(lid) for lid in child_loc_ids]}
+            result = {
+                "id": world_id,
+                "name": w["name"],
+                "one_sentence": w["one_sentence"],
+                "locations": [_build_location(lid) for lid in child_loc_ids],
+            }
             if w.get("period"):
                 result["period"] = w["period"]
             if world_id in variant_of:
@@ -962,8 +1050,11 @@ def get_project_summary(project_path: Path, act: str | None = None,
 
         # Orphaned locations (no world, or world doesn't exist) — top-level array
         orphaned_loc_ids = sorted(
-            [lid for lid, loc in locations.items()
-             if not loc.get("_parent_id") or loc["_parent_id"] not in worlds],
+            [
+                lid
+                for lid, loc in locations.items()
+                if not loc.get("_parent_id") or loc["_parent_id"] not in worlds
+            ],
             key=lambda lid: (locations[lid]["_order_key"], lid),
         )
         orphaned_locations = [_build_location(lid) for lid in orphaned_loc_ids]
@@ -1008,21 +1099,26 @@ def get_project_summary(project_path: Path, act: str | None = None,
             compacted = []
         else:
             from .budget import largest_fitting
+
             k, result = largest_fitting(
-                lambda n: _assemble(set(scope_ids[:n])), len(scope_ids), max_chars)
+                lambda n: _assemble(set(scope_ids[:n])), len(scope_ids), max_chars
+            )
             compacted = scope_ids[k:]
 
         if explicit_scope:
-            result["scope"] = {
-                k_: v for k_, v in (("act", act), ("sequence", sequence)) if v}
+            result["scope"] = {k_: v for k_, v in (("act", act), ("sequence", sequence)) if v}
             result["scope"]["note"] = (
                 "Scenes outside this scope are compact rows (id, title, status). "
-                "Call again with another act or sequence for their full rows.")
+                "Call again with another act or sequence for their full rows."
+            )
         if compacted:
             from .budget import compacted_note
+
             result["detail"] = compacted_note(
-                "sequence", compacted,
-                "story_load with sequence=<id> returns that sequence's full scene rows.")
+                "sequence",
+                compacted,
+                "story_load with sequence=<id> returns that sequence's full scene rows.",
+            )
         return result
     finally:
         conn.close()
@@ -1057,10 +1153,12 @@ def get_unfilled_map(project_path: Path) -> dict:
             elif kind == "location_scene":
                 scene_loc[to_id] = from_id
             elif kind in PLOT_FIELD_BY_KIND:
-                plot_beats.setdefault(from_id, {}).setdefault(
-                    PLOT_FIELD_BY_KIND[kind], []).append(to_id)
+                plot_beats.setdefault(from_id, {}).setdefault(PLOT_FIELD_BY_KIND[kind], []).append(
+                    to_id
+                )
 
         from .entity import unfilled_fields
+
         dead = dead_ids(conn)
         unfilled_inv = {}
         for eid, etype, name, one_sentence, status, extra_json, loc_id, parent_id in ent_rows:
@@ -1070,9 +1168,15 @@ def get_unfilled_map(project_path: Path) -> dict:
             # The row, so `unfilled_fields` can see the fields that live in
             # columns. Handing it `extra` alone leaves every column reported as
             # a gap on filled data.
-            row = {"id": eid, "type": etype, "name": name,
-                   "one_sentence": one_sentence, "status": status,
-                   "location_id": loc_id, "parent_id": parent_id}
+            row = {
+                "id": eid,
+                "type": etype,
+                "name": name,
+                "one_sentence": one_sentence,
+                "status": status,
+                "location_id": loc_id,
+                "parent_id": parent_id,
+            }
 
             if etype == "scene":
                 # `status == planned` only, matching `_is_scene_stub` above.
@@ -1101,7 +1205,8 @@ def get_unfilled_map(project_path: Path) -> dict:
                 if dramatic_role in ("", "plot_role"):
                     has_sb = conn.execute(
                         "SELECT 1 FROM entities WHERE type='scene_beats' AND parent_id=? AND is_deleted=0",
-                        (eid,)).fetchone()
+                        (eid,),
+                    ).fetchone()
                     if not has_sb:
                         unfilled_inv.setdefault("scene_beats", []).append(eid)
             elif etype == "plot":
@@ -1123,14 +1228,12 @@ def get_unfilled_map(project_path: Path) -> dict:
                 pass
 
 
-
 def get_entity_sections(project_path: Path, entity_id: str) -> dict:
     """Return {heading: body} for an entity's sections. story_retrieve uses this."""
     conn = get_db(project_path)
     try:
         rows = conn.execute(
-            "SELECT heading, body FROM sections WHERE entity_id=? ORDER BY rowid",
-            (entity_id,)
+            "SELECT heading, body FROM sections WHERE entity_id=? ORDER BY rowid", (entity_id,)
         ).fetchall()
         return {heading: body for heading, body in rows}
     finally:
@@ -1159,7 +1262,7 @@ def _snippet(body: str, query: str, limit: int = 200) -> str:
     if pos < 0:
         return body[:limit] + ("…" if len(body) > limit else "")
     start = max(0, pos - limit // 3)
-    text = body[start:start + limit]
+    text = body[start : start + limit]
     return ("…" if start else "") + text + ("…" if start + limit < len(body) else "")
 
 
@@ -1180,7 +1283,7 @@ def search_sections(project_path: Path, query: str, limit: int = 10) -> dict:
             f"SELECT count(*) FROM sections_fts f "
             f"JOIN sections s ON f.rowid = s.rowid "
             f"WHERE f.body MATCH ? AND {live}",
-            (match,)
+            (match,),
         ).fetchone()[0]
         # Join back to sections for entity_id + heading
         cursor = conn.execute(
@@ -1189,7 +1292,7 @@ def search_sections(project_path: Path, query: str, limit: int = 10) -> dict:
                JOIN sections s ON f.rowid = s.rowid
                WHERE f.body MATCH ? AND {live}
                ORDER BY rank LIMIT ?""",
-            (match, limit)
+            (match, limit),
         )
         results = [
             {"entity_id": r[0], "heading": r[1], "snippet": _snippet(r[2], query)}
@@ -1233,7 +1336,9 @@ def get_dashboard_data(project_path: Path) -> dict:
                 for row in conn.execute(
                     "SELECT id, parent_id, extra FROM entities "
                     "WHERE type='scene_beats' AND is_deleted=0 "
-                    "ORDER BY parent_id, id"))
+                    "ORDER BY parent_id, id"
+                )
+            )
         ]
         scene_beats_by_scene = {r["parent_id"]: r for r in scene_beats}
 
@@ -1248,16 +1353,19 @@ def get_dashboard_data(project_path: Path) -> dict:
         dead = dead_ids(conn)
         for r in ent_rows:
             entity_by_id[r[0]] = {
-                "id": r[0], "type": r[1], "name": r[2], "one_sentence": r[3],
-                "order": r[4], "status": r[5], "parent_id": r[6],
+                "id": r[0],
+                "type": r[1],
+                "name": r[2],
+                "one_sentence": r[3],
+                "order": r[4],
+                "status": r[5],
+                "parent_id": r[6],
                 "location_id": live_column(r[7], dead),
                 "extra": live_extra(json.loads(r[8]) if r[8] else {}, dead),
             }
 
         # Load all relations for denormalization (note carries the plot role's prose)
-        rel_rows = conn.execute(
-            "SELECT from_id, to_id, kind, note FROM live_relations"
-        ).fetchall()
+        rel_rows = conn.execute("SELECT from_id, to_id, kind, note FROM live_relations").fetchall()
         # Build lookup: entity_id -> {kind -> [{to_id, note}]}
         rel_map = {}
         for from_id, to_id, kind, note in rel_rows:
@@ -1363,28 +1471,44 @@ def get_dashboard_data(project_path: Path) -> dict:
             extra = live_extra(json.loads(e[8]) if e[8] else {}, dead)
 
             if etype == "character":
-                d = _entity_dict({
-                    "id": eid, "name": e[2], "one_sentence": e[3], "order": e[4],
-                    "status": e[5], "parent_id": e[6], "extra": extra,
-                })
+                d = _entity_dict(
+                    {
+                        "id": eid,
+                        "name": e[2],
+                        "one_sentence": e[3],
+                        "order": e[4],
+                        "status": e[5],
+                        "parent_id": e[6],
+                        "extra": extra,
+                    }
+                )
                 # scenes: [{id, title, heading}] (from character_scene relations)
                 scene_objs = []
                 for sid in char_scenes.get(eid, []):
                     if sid in entity_by_id:
                         s = entity_by_id[sid]
-                        scene_objs.append({
-                            "id": sid,
-                            "title": s.get("name", ""),
-                            "heading": scene_headings.get(sid, ""),
-                        })
+                        scene_objs.append(
+                            {
+                                "id": sid,
+                                "title": s.get("name", ""),
+                                "heading": scene_headings.get(sid, ""),
+                            }
+                        )
                 d["scenes"] = scene_objs
                 characters.append(d)
 
             elif etype == "scene":
-                d = _entity_dict({
-                    "id": eid, "name": e[2], "one_sentence": e[3], "order": e[4],
-                    "status": e[5], "parent_id": e[6], "extra": extra,
-                })
+                d = _entity_dict(
+                    {
+                        "id": eid,
+                        "name": e[2],
+                        "one_sentence": e[3],
+                        "order": e[4],
+                        "status": e[5],
+                        "parent_id": e[6],
+                        "extra": extra,
+                    }
+                )
                 d["title"] = e[2]  # alias for dashboard (reads s.title)
                 d["sequence_id"] = e[6]  # alias for dashboard (reads s.sequence_id)
                 d["act_id"] = extra.get("act_id", "")
@@ -1402,17 +1526,24 @@ def get_dashboard_data(project_path: Path) -> dict:
                 # that has only the scene must still be able to show it. Same
                 # rule as the base `story_load` map — the scene's own value
                 # first, the record's as the fallback.
-                d["scene_objective"] = (
-                    extra.get("scene_objective", "")
-                    or scene_beats_by_scene.get(eid, {}).get("scene_objective", ""))
+                d["scene_objective"] = extra.get("scene_objective", "") or scene_beats_by_scene.get(
+                    eid, {}
+                ).get("scene_objective", "")
                 d["heading"] = scene_headings.get(eid, "")
                 scenes.append(d)
 
             elif etype == "location":
-                d = _entity_dict({
-                    "id": eid, "name": e[2], "one_sentence": e[3], "order": e[4],
-                    "status": e[5], "parent_id": live_column(e[6], dead), "extra": extra,
-                })
+                d = _entity_dict(
+                    {
+                        "id": eid,
+                        "name": e[2],
+                        "one_sentence": e[3],
+                        "order": e[4],
+                        "status": e[5],
+                        "parent_id": live_column(e[6], dead),
+                        "extra": extra,
+                    }
+                )
                 if eid in variant_map:
                     d["variant_of"] = variant_map[eid]
                 # scenes: [{id, title, heading}] (from location_scene relations)
@@ -1421,20 +1552,30 @@ def get_dashboard_data(project_path: Path) -> dict:
                     sid = rel.get("to_id", "") if isinstance(rel, dict) else rel
                     if sid in entity_by_id:
                         s = entity_by_id[sid]
-                        scene_objs.append({
-                            "id": sid,
-                            "title": s.get("name", ""),
-                            "heading": scene_headings.get(sid, ""),
-                        })
+                        scene_objs.append(
+                            {
+                                "id": sid,
+                                "title": s.get("name", ""),
+                                "heading": scene_headings.get(sid, ""),
+                            }
+                        )
                 d["scenes"] = scene_objs
                 d["places"] = places_by_location.get(eid, [])
                 locations.append(d)
 
             elif etype == "plot":
-                d = _entity_dict({
-                    "id": eid, "name": e[2], "one_sentence": e[3], "order": e[4],
-                    "status": e[5], "parent_id": e[6], "extra": extra,
-                })
+                d = _entity_dict(
+                    {
+                        "id": eid,
+                        "name": e[2],
+                        "one_sentence": e[3],
+                        "order": e[4],
+                        "status": e[5],
+                        "parent_id": e[6],
+                        "extra": extra,
+                    }
+                )
+
                 # Normalize all plot beat fields to [{scene_id, description}] objects
                 def _normalize_beats(beats):
                     result = []
@@ -1442,13 +1583,16 @@ def get_dashboard_data(project_path: Path) -> dict:
                         if isinstance(b, dict):
                             if "to_id" in b:
                                 # New format: {to_id, note}
-                                result.append({"scene_id": b["to_id"], "description": b.get("note", "")})
+                                result.append(
+                                    {"scene_id": b["to_id"], "description": b.get("note", "")}
+                                )
                             else:
                                 # Already normalized: {scene_id, description}
                                 result.append(b)
                         else:
                             result.append({"scene_id": str(b), "description": ""})
                     return result
+
                 for field, kind in PLOT_BEAT_FIELDS.items():
                     d[field] = _normalize_beats(rel_map.get(eid, {}).get(kind, []))
                 # characters from character list (stored in extra.characters)
@@ -1456,36 +1600,64 @@ def get_dashboard_data(project_path: Path) -> dict:
                 plots.append(d)
 
             elif etype == "world":
-                d = _entity_dict({
-                    "id": eid, "name": e[2], "one_sentence": e[3], "order": e[4],
-                    "status": e[5], "parent_id": e[6], "extra": extra,
-                })
+                d = _entity_dict(
+                    {
+                        "id": eid,
+                        "name": e[2],
+                        "one_sentence": e[3],
+                        "order": e[4],
+                        "status": e[5],
+                        "parent_id": e[6],
+                        "extra": extra,
+                    }
+                )
                 if eid in variant_map:
                     d["variant_of"] = variant_map[eid]
                 worlds.append(d)
 
             elif etype == "act":
-                d = _entity_dict({
-                    "id": eid, "name": e[2], "one_sentence": e[3], "order": e[4],
-                    "status": e[5], "parent_id": e[6], "extra": extra,
-                })
+                d = _entity_dict(
+                    {
+                        "id": eid,
+                        "name": e[2],
+                        "one_sentence": e[3],
+                        "order": e[4],
+                        "status": e[5],
+                        "parent_id": e[6],
+                        "extra": extra,
+                    }
+                )
                 d["title"] = e[2]  # alias for dashboard (reads act.title)
                 acts.append(d)
 
             elif etype == "sequence":
-                d = _entity_dict({
-                    "id": eid, "name": e[2], "one_sentence": e[3], "order": e[4],
-                    "status": e[5], "parent_id": e[6], "extra": extra,
-                })
+                d = _entity_dict(
+                    {
+                        "id": eid,
+                        "name": e[2],
+                        "one_sentence": e[3],
+                        "order": e[4],
+                        "status": e[5],
+                        "parent_id": e[6],
+                        "extra": extra,
+                    }
+                )
                 d["title"] = e[2]  # alias for dashboard (reads seq.title)
                 d["act_id"] = e[6]  # alias for dashboard (reads seq.act_id)
                 sequences.append(d)
 
             elif etype == "relationship":
-                d = _entity_dict({
-                    "id": eid, "name": e[2], "one_sentence": e[3], "order": e[4],
-                    "status": e[5], "parent_id": e[6], "extra": extra,
-                })
+                d = _entity_dict(
+                    {
+                        "id": eid,
+                        "name": e[2],
+                        "one_sentence": e[3],
+                        "order": e[4],
+                        "status": e[5],
+                        "parent_id": e[6],
+                        "extra": extra,
+                    }
+                )
                 d["characters"] = extra.get("characters", [])
                 d["perspectives"] = extra.get("perspectives", {})
                 d["scenes"] = extra.get("scenes", [])
@@ -1493,15 +1665,17 @@ def get_dashboard_data(project_path: Path) -> dict:
                 relationships.append(d)
 
             elif etype == "value":
-                values.append({
-                    "id": eid,
-                    "name": e[2],
-                    "p": extra.get("p", ""),
-                    "c": extra.get("c", ""),
-                    "cd": extra.get("cd", ""),
-                    "nn": extra.get("nn", ""),
-                    "note": extra.get("note", ""),
-                })
+                values.append(
+                    {
+                        "id": eid,
+                        "name": e[2],
+                        "p": extra.get("p", ""),
+                        "c": extra.get("c", ""),
+                        "cd": extra.get("cd", ""),
+                        "nn": extra.get("nn", ""),
+                        "note": extra.get("note", ""),
+                    }
+                )
 
         # A scene's number is its position in its sequence, not its raw
         # `order_key`. The key is a sort key and can hold a hole — a scene
@@ -1525,12 +1699,14 @@ def get_dashboard_data(project_path: Path) -> dict:
                 if not others:
                     continue
                 p = rel["perspectives"].get(char_id, {})
-                char_rel_summary.setdefault(char_id, []).append({
-                    "with": others[0],
-                    "label": p.get("label", ""),
-                    "type": p.get("type", ""),
-                    "strength": p.get("strength", 0),
-                })
+                char_rel_summary.setdefault(char_id, []).append(
+                    {
+                        "with": others[0],
+                        "label": p.get("label", ""),
+                        "type": p.get("type", ""),
+                        "strength": p.get("strength", 0),
+                    }
+                )
         for c in characters:
             c["relationships"] = char_rel_summary.get(c["id"], [])
 
@@ -1539,7 +1715,7 @@ def get_dashboard_data(project_path: Path) -> dict:
         for seq in sequences:
             scenes_in_seq = sorted(
                 [s for s in scenes if s.get("parent_id") == seq["id"]],
-                key=lambda s: (s.get("order", 0), s["id"])
+                key=lambda s: (s.get("order", 0), s["id"]),
             )
             seq["scenes_list"] = [s["id"] for s in scenes_in_seq]
             seq["scene_count"] = len(seq["scenes_list"])
@@ -1560,7 +1736,9 @@ def get_dashboard_data(project_path: Path) -> dict:
                     role = p.get("role", "") if isinstance(p, dict) else ""
                     if role in PLOT_ROLES:
                         seq_plots[pid][f"has_{role}"] = True
-            seq["plots"] = sorted(seq_plots.values(), key=lambda x: (0 if x["plot_scope"] == "main" else 1, x["id"]))
+            seq["plots"] = sorted(
+                seq_plots.values(), key=lambda x: (0 if x["plot_scope"] == "main" else 1, x["id"])
+            )
 
         # Act enrichment: sequences_list, scenes_list (via sequences), counts, plots
         # In the new DB, scenes point to sequences (parent_id), not acts directly.
@@ -1568,7 +1746,7 @@ def get_dashboard_data(project_path: Path) -> dict:
         for act in acts:
             seqs_in_act = sorted(
                 [s for s in sequences if s.get("parent_id") == act["id"]],
-                key=lambda s: (s.get("order", 0), s["id"])
+                key=lambda s: (s.get("order", 0), s["id"]),
             )
             act["sequences_list"] = [s["id"] for s in seqs_in_act]
             # Gather all scene IDs from child sequences, preserving sort order
@@ -1576,8 +1754,7 @@ def get_dashboard_data(project_path: Path) -> dict:
             act_scene_ids = []
             for seq in seqs_in_act:
                 act_scene_ids.extend(seq.get("scenes_list", []))
-            act["scenes_list"] = sorted(act_scene_ids,
-                                        key=lambda sid: (seq_order.get(sid, 0), sid))
+            act["scenes_list"] = sorted(act_scene_ids, key=lambda sid: (seq_order.get(sid, 0), sid))
             act["sequence_count"] = len(act["sequences_list"])
             act["scene_count"] = len(act["scenes_list"])
             # Aggregate plots from all scenes in child sequences
@@ -1597,10 +1774,14 @@ def get_dashboard_data(project_path: Path) -> dict:
                     role = p.get("role", "") if isinstance(p, dict) else ""
                     if role in PLOT_ROLES:
                         act_plots[pid][f"has_{role}"] = True
-            act["plots"] = sorted(act_plots.values(), key=lambda x: (0 if x["plot_scope"] == "main" else 1, x["id"]))
+            act["plots"] = sorted(
+                act_plots.values(), key=lambda x: (0 if x["plot_scope"] == "main" else 1, x["id"])
+            )
 
         story_memory = get_memory_block(project_path)
-        proj_dict = entity_by_id.get(conn.execute("SELECT id FROM entities WHERE type='project' LIMIT 1").fetchone()[0], {})
+        proj_dict = entity_by_id.get(
+            conn.execute("SELECT id FROM entities WHERE type='project' LIMIT 1").fetchone()[0], {}
+        )
         if proj_dict:
             if not proj_dict.get("logline") and proj_dict.get("one_sentence"):
                 proj_dict["logline"] = proj_dict["one_sentence"]
@@ -1618,8 +1799,7 @@ def get_dashboard_data(project_path: Path) -> dict:
             # Coerced on read: a `number` field stored as a string ('3') makes
             # this max() raise, and the dashboard is the only reader that
             # compares it. See _coerce_number.
-            proj_dict["act_count"] = max(
-                _coerce_number(proj_dict.get("act_count"), 3), len(acts))
+            proj_dict["act_count"] = max(_coerce_number(proj_dict.get("act_count"), 3), len(acts))
 
         # Computed value focus: major/minor values per unit, recounted from
         # the scenes' value_turns on every load (nothing stored). The
@@ -1631,8 +1811,8 @@ def get_dashboard_data(project_path: Path) -> dict:
         focus_by_sequence = {}
         focus_by_act = {}
         try:
-            from .value_focus import (for_act, for_plot, for_project,
-                                      for_sequence)
+            from .value_focus import for_act, for_plot, for_project, for_sequence
+
             for pl in plots:
                 focus_by_plot[pl["id"]] = for_plot(project_path, pl["id"])
             for sq in sequences:
@@ -1648,10 +1828,19 @@ def get_dashboard_data(project_path: Path) -> dict:
             "characters": characters,
             "scenes": scenes,
             "locations": locations,
-            "plots": [{**pl, "value_focus": focus_by_plot.get(pl["id"], {"major": [], "minor": []})} for pl in plots],
+            "plots": [
+                {**pl, "value_focus": focus_by_plot.get(pl["id"], {"major": [], "minor": []})}
+                for pl in plots
+            ],
             "worlds": worlds,
-            "acts": [{**ac, "value_focus": focus_by_act.get(ac["id"], {"major": [], "minor": []})} for ac in acts],
-            "sequences": [{**sq, "value_focus": focus_by_sequence.get(sq["id"], {"major": [], "minor": []})} for sq in sequences],
+            "acts": [
+                {**ac, "value_focus": focus_by_act.get(ac["id"], {"major": [], "minor": []})}
+                for ac in acts
+            ],
+            "sequences": [
+                {**sq, "value_focus": focus_by_sequence.get(sq["id"], {"major": [], "minor": []})}
+                for sq in sequences
+            ],
             "relationships": relationships,
             "story_memory": story_memory,
             "values": values,
@@ -1693,7 +1882,7 @@ def get_dashboard_data(project_path: Path) -> dict:
             "AND to_id IN (SELECT id FROM entities WHERE type='scene' AND is_deleted=0) "
             "GROUP BY kind"
         ).fetchall()
-        scene_roles = {r[0][len("plot_"):]: r[1] for r in role_rows}
+        scene_roles = {r[0][len("plot_") :]: r[1] for r in role_rows}
         # transition / non-event are counted too, or the chart silently omits
         # every scene that serves no plot — the very ones a reader is looking
         # for when a role looks thin.
@@ -1722,17 +1911,21 @@ def get_dashboard_data(project_path: Path) -> dict:
         for act_id, act_name, act_order in act_rows:
             seq_c = conn.execute(
                 "SELECT COUNT(*) FROM entities WHERE type='sequence' AND parent_id=? AND is_deleted=0 ",
-                (act_id,)
+                (act_id,),
             ).fetchone()[0]
             scene_c = conn.execute(
                 """SELECT COUNT(*) FROM entities WHERE type='scene' 
                    AND parent_id IN (SELECT id FROM entities WHERE type='sequence' AND parent_id=? )""",
-                (act_id,)
+                (act_id,),
             ).fetchone()[0]
-            acts_stats.append({
-                "id": act_id, "title": act_name,
-                "sceneCount": scene_c, "sequenceCount": seq_c,
-            })
+            acts_stats.append(
+                {
+                    "id": act_id,
+                    "title": act_name,
+                    "sceneCount": scene_c,
+                    "sequenceCount": seq_c,
+                }
+            )
 
         # Plot coverage: count unique scenes per plot
         plot_scene_sets = {}
@@ -1743,17 +1936,21 @@ def get_dashboard_data(project_path: Path) -> dict:
                     plot_scene_sets[pid] = set()
                 plot_scene_sets[pid].add(scene["id"])
         plot_coverage = []
-        for pid, scene_set in sorted(plot_scene_sets.items(), key=lambda x: len(x[1]), reverse=True):
+        for pid, scene_set in sorted(
+            plot_scene_sets.items(), key=lambda x: len(x[1]), reverse=True
+        ):
             pl = plot_lookup.get(pid, {})
-            plot_coverage.append({
-                "id": pid,
-                "name": pl.get("name", pid),
-                "plot_scope": pl.get("plot_scope", ""),
-                "plot_type": pl.get("plot_type", ""),
-                "value_arc": pl.get("value_arc", ""),
-                "sceneCount": len(scene_set),
-                "coveragePct": round((len(scene_set) / len(scenes)) * 100) if scenes else 0,
-            })
+            plot_coverage.append(
+                {
+                    "id": pid,
+                    "name": pl.get("name", pid),
+                    "plot_scope": pl.get("plot_scope", ""),
+                    "plot_type": pl.get("plot_type", ""),
+                    "value_arc": pl.get("value_arc", ""),
+                    "sceneCount": len(scene_set),
+                    "coveragePct": round((len(scene_set) / len(scenes)) * 100) if scenes else 0,
+                }
+            )
 
         structural_stats = {
             "sceneCount": scene_count,

@@ -1,4 +1,5 @@
 """story_admin action=list_deleted: the trash, and the ids restore/purge need."""
+
 import json
 import sqlite3
 from pathlib import Path
@@ -46,15 +47,18 @@ def test_a_deleted_entity_is_listed_with_what_restore_needs(fixture_path):
     assert item["name"]
     assert item["deleted_at"]
     assert item["includes"] == []
-    assert item["purge_eligible"] is False   # just deleted: under the 30-day floor
+    assert item["purge_eligible"] is False  # just deleted: under the 30-day floor
 
 
 def test_listed_type_and_id_feed_straight_into_restore(fixture_path):
     delete_entity(fixture_path, "character", "kael", "t", True)
     item = _list(fixture_path)["deleted"][0]
-    restored = _admin(fixture_path, action="restore",
-                      target={"entity_type": item["type"], "id": item["id"]},
-                      summary="restore from the list")
+    restored = _admin(
+        fixture_path,
+        action="restore",
+        target={"entity_type": item["type"], "id": item["id"]},
+        summary="restore from the list",
+    )
     assert restored.get("success") is True
     assert _list(fixture_path)["deleted"] == []
 
@@ -67,9 +71,14 @@ def test_live_entities_are_not_listed(fixture_path):
 
 def test_children_deleted_with_a_parent_fold_under_it(fixture_path):
     scene = _first_scene_with_beats(fixture_path)
-    beats = [r[0] for r in _sql(
-        fixture_path, "SELECT id FROM entities WHERE type='scene_beats' AND parent_id=?",
-        (scene,))]
+    beats = [
+        r[0]
+        for r in _sql(
+            fixture_path,
+            "SELECT id FROM entities WHERE type='scene_beats' AND parent_id=?",
+            (scene,),
+        )
+    ]
     assert beats
     assert delete_entity(fixture_path, "scene", scene, "t", True)["success"]
 
@@ -91,8 +100,9 @@ def test_a_child_with_its_own_deletion_time_is_its_own_entry(fixture_path):
     not skip rows already in the trash), which is task D1's to settle.
     """
     scene = _first_scene_with_beats(fixture_path)
-    beat = _sql(fixture_path, "SELECT id FROM entities WHERE type='scene_beats' "
-                              "AND parent_id=?", (scene,))[0][0]
+    beat = _sql(
+        fixture_path, "SELECT id FROM entities WHERE type='scene_beats' AND parent_id=?", (scene,)
+    )[0][0]
     assert delete_entity(fixture_path, "scene", scene, "t", True)["success"]
     _sql(fixture_path, "UPDATE entities SET deleted_at='2020-01-01T00:00:00' WHERE id=?", (beat,))
 
@@ -119,11 +129,16 @@ def test_purge_eligible_follows_the_age_floor(fixture_path):
 
 
 def test_unknown_project_is_an_error_not_a_crash(fixture_path):
-    out = json.loads(handler({"action": "list_deleted", "project": "no-such-project"},
-                             root_path=str(fixture_path.parent)))
+    out = json.loads(
+        handler(
+            {"action": "list_deleted", "project": "no-such-project"},
+            root_path=str(fixture_path.parent),
+        )
+    )
     assert "error" in out
 
 
 def test_action_is_advertised_in_the_tool_schema():
     from white_words.scriptwriting.tools.story_admin import SCHEMA
+
     assert "list_deleted" in SCHEMA["properties"]["action"]["enum"]

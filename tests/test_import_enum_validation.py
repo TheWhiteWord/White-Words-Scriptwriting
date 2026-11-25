@@ -14,6 +14,7 @@ one of its two perspectives) and a note is allowed to be mid-shape. Filtering
 too much turns the check into a no-op that still looks present.
 
 """
+
 import json
 import shutil
 import sqlite3
@@ -34,8 +35,7 @@ def make_project(tmp_path):
     root = tmp_path / "projects"
     root.mkdir(exist_ok=True)
     proj = root / "stc"
-    shutil.copytree(
-        str(Path(__file__).parent / "fixtures" / "save-the-children"), str(proj))
+    shutil.copytree(str(Path(__file__).parent / "fixtures" / "save-the-children"), str(proj))
     return proj
 
 
@@ -49,8 +49,7 @@ def run_import(proj, root):
     real = white_words.scriptwriting.core.config.load_plugin_config
     white_words.scriptwriting.core.config.load_plugin_config = lambda: {"root_path": str(root)}
     try:
-        return json.loads(handler({"project": str(proj), "confirm": True,
-                                   "root_path": str(root)}))
+        return json.loads(handler({"project": str(proj), "confirm": True, "root_path": str(root)}))
     finally:
         white_words.scriptwriting.core.config.load_plugin_config = real
 
@@ -91,8 +90,7 @@ def _strip_yaml_block(text: str, key: str) -> str:
 def set_dramatic_role(value, clear_roles=False):
     def mutate(proj):
         note = proj / "scenes" / "Central Room - Day.md"
-        text = note.read_text().replace(
-            "dramatic_role: plot_role", f"dramatic_role: {value}")
+        text = note.read_text().replace("dramatic_role: plot_role", f"dramatic_role: {value}")
         if clear_roles:
             # `transition` / `non-event` are mutually exclusive with carrying
             # plot roles, so a scene that keeps its roles and claims to be a
@@ -101,6 +99,7 @@ def set_dramatic_role(value, clear_roles=False):
             # value vocabulary, so the roles go too.
             text = _strip_yaml_block(text, "plot_roles")
         note.write_text(text)
+
     return mutate
 
 
@@ -134,23 +133,24 @@ class TestTheValueCheck:
         after, still carrying their original values.
         """
         proj = make_project(tmp_path)
-        assert run_import(proj, tmp_path).get("success") is True, \
+        assert run_import(proj, tmp_path).get("success") is True, (
             "the fixture must import clean first"
+        )
 
         db = proj / ".story" / "story.db"
 
         def snapshot():
             conn = sqlite3.connect(str(db))
-            rows = conn.execute(
-                "SELECT id, extra FROM entities ORDER BY id").fetchall()
+            rows = conn.execute("SELECT id, extra FROM entities ORDER BY id").fetchall()
             conn.close()
             return rows
 
         before = snapshot()
 
         note = proj / "scenes" / "Central Room - Day.md"
-        note.write_text(note.read_text().replace(
-            "dramatic_role: plot_role", "dramatic_role: climax"))
+        note.write_text(
+            note.read_text().replace("dramatic_role: plot_role", "dramatic_role: climax")
+        )
         result = run_import(proj, tmp_path)
         assert result.get("success") is not True
         assert snapshot() == before, "a refused import changed the project"
@@ -159,12 +159,13 @@ class TestTheValueCheck:
         """`empty_ok` must not swallow the whole check: an unrecognised ROLE
         is still a value the schema forbids, and a retired one must not import
         as a silent corruption."""
+
         def mutate(proj):
             note = proj / "characters" / "Kael.md"
             text = note.read_text()
             assert "story_role: Protagonist" in text, "fixture changed"
-            note.write_text(text.replace("story_role: Protagonist",
-                                         "story_role: Sidekick"))
+            note.write_text(text.replace("story_role: Protagonist", "story_role: Sidekick"))
+
         result = import_project(tmp_path, mutate)
         assert result.get("success") is not True
         assert "Invalid character frontmatter" in result.get("error", "")
@@ -175,11 +176,12 @@ class TestTheValueCheck:
         the write path stores and the exporter writes. Without this a
         DB -> markdown -> DB round-trip failed on a value the write path
         had already accepted."""
+
         def mutate(proj):
             note = proj / "characters" / "Kael.md"
             text = note.read_text()
-            note.write_text(text.replace("story_role: Protagonist",
-                                         "story_role: ''"))
+            note.write_text(text.replace("story_role: Protagonist", "story_role: ''"))
+
         result = import_project(tmp_path, mutate)
         assert result.get("success") is True, result
         # Empty is DROPPED, not stored: `_extra_for` skips "" like every
@@ -190,8 +192,7 @@ class TestTheValueCheck:
         # refusal is gone, and nothing is stored for a role that was blank.
         db = tmp_path / "projects" / "stc" / ".story" / "story.db"
         conn = sqlite3.connect(str(db))
-        extra = conn.execute(
-            "SELECT extra FROM entities WHERE id='kael'").fetchone()[0]
+        extra = conn.execute("SELECT extra FROM entities WHERE id='kael'").fetchone()[0]
         conn.close()
         assert not json.loads(extra).get("story_role")
 
@@ -203,6 +204,7 @@ class TestTheValueCheck:
         proj = make_project(tmp_path)
         assert run_import(proj, tmp_path).get("success") is True
         from white_words.scriptwriting.tools.story_export import handler as export_handler
+
         export_handler({"project": str(proj)}, root_path=str(tmp_path))
         shutil.rmtree(proj / ".story")
         result = run_import(proj, tmp_path)
@@ -223,6 +225,7 @@ class TestTheStructuralChecksAreNotFatal:
             note = proj / "characters" / "Kael.md"
             text = note.read_text()
             note.write_text(text.replace("story_role: Protagonist\n", ""))
+
         result = import_project(tmp_path, mutate)
         assert result.get("success") is True, result
 
@@ -230,10 +233,12 @@ class TestTheStructuralChecksAreNotFatal:
         """The case that caught this: enforcing the structural checks broke
         the fixture import outright, 306 errors, because perspectives arrive
         after the characters they reference."""
-        assert validate_entity("relationship", {
-            "characters": ["kael", "mira"], "perspectives": {"kael": {}}})
-        assert not value_problems("relationship", {
-            "characters": ["kael", "mira"], "perspectives": {"kael": {}}})
+        assert validate_entity(
+            "relationship", {"characters": ["kael", "mira"], "perspectives": {"kael": {}}}
+        )
+        assert not value_problems(
+            "relationship", {"characters": ["kael", "mira"], "perspectives": {"kael": {}}}
+        )
 
     def test_the_fixture_imports_clean(self, tmp_path):
         """The whole fixture, through the real check. Every structural warning

@@ -17,6 +17,7 @@ shape back. Three steps, all here, so the browser holds no rules:
 
 Nothing is invented: a move is `edit_entity`, a renumber is `reorder`.
 """
+
 from __future__ import annotations
 
 import json
@@ -41,16 +42,22 @@ class StructureConflict(StructureError):
 
 # ─── Reading ─────────────────────────────────────────────────────────────────
 
+
 def _rows(conn):
-    acts = conn.execute("SELECT id, name, order_key FROM entities WHERE type='act' AND is_deleted=0 "
-                        "ORDER BY order_key, name, id").fetchall()
-    seqs = conn.execute("SELECT id, name, parent_id FROM entities WHERE type='sequence' AND is_deleted=0 "
-                        "ORDER BY order_key, name, id").fetchall()
+    acts = conn.execute(
+        "SELECT id, name, order_key FROM entities WHERE type='act' AND is_deleted=0 "
+        "ORDER BY order_key, name, id"
+    ).fetchall()
+    seqs = conn.execute(
+        "SELECT id, name, parent_id FROM entities WHERE type='sequence' AND is_deleted=0 "
+        "ORDER BY order_key, name, id"
+    ).fetchall()
     scenes = conn.execute(
         "SELECT s.id, s.name, s.parent_id, s.extra, l.name "
         "FROM entities s LEFT JOIN entities l ON s.location_id = l.id AND l.is_deleted=0 "
         "WHERE s.type='scene' AND s.is_deleted=0 "
-        "ORDER BY s.order_key, s.name, s.id").fetchall()
+        "ORDER BY s.order_key, s.name, s.id"
+    ).fetchall()
     return acts, seqs, scenes
 
 
@@ -63,9 +70,13 @@ def _shape(acts, seqs, scenes) -> dict:
     seq_node = {q["id"]: q for qs in by_act.values() for q in qs}
     for sc in scenes:
         ex = json.loads(sc[3]) if sc[3] else {}
-        heading = scene_heading(ex.get("int_ext") or "", sc[4] or "",
-                                ex.get("place") or "", ex.get("time_of_day") or "",
-                                ex.get("forced_heading") or "")
+        heading = scene_heading(
+            ex.get("int_ext") or "",
+            sc[4] or "",
+            ex.get("place") or "",
+            ex.get("time_of_day") or "",
+            ex.get("forced_heading") or "",
+        )
         node = {"id": sc[0], "title": sc[1] or sc[0], "heading": heading}
         if sc[2] in seq_node:
             seq_node[sc[2]]["scenes"].append(node)
@@ -77,7 +88,10 @@ def _shape(acts, seqs, scenes) -> dict:
 
 
 def _version(tree: dict) -> str:
-    flat = [[a["id"], [[q["id"], [s["id"] for s in q["scenes"]]] for q in a["sequences"]]] for a in tree["acts"]]
+    flat = [
+        [a["id"], [[q["id"], [s["id"] for s in q["scenes"]]] for q in a["sequences"]]]
+        for a in tree["acts"]
+    ]
     flat.append([s["id"] for s in tree["unassigned"]])
     return token(flat)
 
@@ -97,6 +111,7 @@ def load_tree(project_path: Path, *, conn=None) -> dict:
 
 # ─── Planning ────────────────────────────────────────────────────────────────
 
+
 def _lis_keep(old_positions: list[int | None]) -> set[int]:
     """Indices of the longest increasing run among entries that have an old position.
 
@@ -104,7 +119,7 @@ def _lis_keep(old_positions: list[int | None]) -> set[int]:
     in the list is what the person actually moved.
     """
     idx = [i for i, p in enumerate(old_positions) if p is not None]
-    best: dict[int, tuple[int, int | None]] = {}        # i -> (length, previous i)
+    best: dict[int, tuple[int, int | None]] = {}  # i -> (length, previous i)
     for pos, i in enumerate(idx):
         length, prev = 1, None
         for j in idx[:pos]:
@@ -147,19 +162,22 @@ def _validate_target(cur: dict, target) -> dict:
 
     def dupes(xs):
         return sorted({x for x in xs if xs.count(x) > 1})
+
     for kind, xs in (("act", seen_a), ("sequence", seen_q), ("scene", seen_s)):
         if dupes(xs):
             raise StructureError(f"A {kind} appears in two places: {', '.join(dupes(xs))}.")
     if set(seen_a) != cur_acts or set(seen_q) != cur_seqs:
-        raise StructureError("Acts and sequences can be moved here, not added or removed. "
-                             "Reload and try again.")
+        raise StructureError(
+            "Acts and sequences can be moved here, not added or removed. Reload and try again."
+        )
     unknown = set(seen_s) - cur_assigned - cur_unassigned
     if unknown:
         raise StructureError(f"Not found: {', '.join(sorted(unknown))}.")
     lost = cur_assigned - set(seen_s)
     if lost:
-        raise StructureError("A scene can't be taken out of the story here: "
-                             + ", ".join(sorted(lost)) + ".")
+        raise StructureError(
+            "A scene can't be taken out of the story here: " + ", ".join(sorted(lost)) + "."
+        )
     return {"acts": acts}
 
 
@@ -198,7 +216,7 @@ def plan(project_path: Path, payload: dict, *, conn=None) -> dict:
             act_of_seq.setdefault(q["id"], a["id"])
     new_act_of_seq = {q["id"]: a["id"] for a in target["acts"] for q in a["sequences"]}
 
-    def where_is(parent, kind):                 # words for a place
+    def where_is(parent, kind):  # words for a place
         if parent == "_unassigned":
             return "Unassigned"
         if kind == "scene":
@@ -208,8 +226,11 @@ def plan(project_path: Path, payload: dict, *, conn=None) -> dict:
     def old_place(eid, kind):
         parent, pos = old[eid]
         if kind == "scene":
-            return "Unassigned" if parent == "_unassigned" else \
-                f"{title[act_of_seq[parent]]} › {title[parent]} · {pos + 1}"
+            return (
+                "Unassigned"
+                if parent == "_unassigned"
+                else f"{title[act_of_seq[parent]]} › {title[parent]} · {pos + 1}"
+            )
         if kind == "sequence":
             return f"{title[parent]} · {pos + 1}"
         return f"position {pos + 1}"
@@ -223,10 +244,19 @@ def plan(project_path: Path, payload: dict, *, conn=None) -> dict:
             if pos in stable:
                 continue
             was_parent = old[eid][0]
-            new_place = (f"{where_is(parent, kind)} · {pos + 1}" if kind != "act" else f"position {pos + 1}")
+            new_place = (
+                f"{where_is(parent, kind)} · {pos + 1}" if kind != "act" else f"position {pos + 1}"
+            )
             text = f"Move {kind} “{title[eid]}” from {old_place(eid, kind)} to {new_place}"
-            changes.append({"type": kind, "id": eid, "title": title[eid], "text": text,
-                            "moved": was_parent != parent})
+            changes.append(
+                {
+                    "type": kind,
+                    "id": eid,
+                    "title": title[eid],
+                    "text": text,
+                    "moved": was_parent != parent,
+                }
+            )
 
     visit("act", None, [a["id"] for a in target["acts"]])
     for a in target["acts"]:
@@ -236,13 +266,18 @@ def plan(project_path: Path, payload: dict, *, conn=None) -> dict:
     # A sequence that changed act carries its scenes' act with it; say so once.
     for c in changes:
         if c["type"] == "sequence" and c["moved"]:
-            n = sum(len(q["scenes"]) for a in cur["acts"] for q in a["sequences"] if q["id"] == c["id"])
+            n = sum(
+                len(q["scenes"]) for a in cur["acts"] for q in a["sequences"] if q["id"] == c["id"]
+            )
             if n:
-                c["text"] += f" (its {n} scene{'s' if n != 1 else ''} {'move' if n != 1 else 'moves'} with it)"
+                c["text"] += (
+                    f" (its {n} scene{'s' if n != 1 else ''} {'move' if n != 1 else 'moves'} with it)"
+                )
     return {"changes": changes, "unchanged": not changes, "target": target, "current": cur}
 
 
 # ─── Applying ────────────────────────────────────────────────────────────────
+
 
 def apply(project_path: Path, payload: dict, *, conn=None) -> dict:
     """Write a planned shape. Everything is validated first; the writes then go in an
@@ -270,24 +305,46 @@ def apply(project_path: Path, payload: dict, *, conn=None) -> dict:
                 # 1. Sequences into their new acts.
                 for q, act in new_act_of_seq.items():
                     if old[q][0] != act:
-                        edit_entity(project_path, "sequence", q, {"act_id": act}, SUMMARY, conn=conn)
+                        edit_entity(
+                            project_path, "sequence", q, {"act_id": act}, SUMMARY, conn=conn
+                        )
                 # 2. Scenes into their new sequence — and the act that sequence is now in.
-                cur_act = {sid: (json.loads(ex) if ex else {}).get("act_id", "")
-                           for sid, ex in conn.execute("SELECT id, extra FROM entities WHERE type='scene' AND is_deleted=0")}
+                cur_act = {
+                    sid: (json.loads(ex) if ex else {}).get("act_id", "")
+                    for sid, ex in conn.execute(
+                        "SELECT id, extra FROM entities WHERE type='scene' AND is_deleted=0"
+                    )
+                }
                 for a in target["acts"]:
                     for q in a["sequences"]:
                         for sid in q["scenes"]:
                             if old[sid][0] != q["id"] or cur_act.get(sid) != a["id"]:
-                                edit_entity(project_path, "scene", sid,
-                                            {"sequence_id": q["id"], "act_id": a["id"]}, SUMMARY, conn=conn)
+                                edit_entity(
+                                    project_path,
+                                    "scene",
+                                    sid,
+                                    {"sequence_id": q["id"], "act_id": a["id"]},
+                                    SUMMARY,
+                                    conn=conn,
+                                )
                 # 3. Renumber every list whose membership or order changed.
                 for a in target["acts"]:
                     ids = [q["id"] for q in a["sequences"]]
-                    if ids and ids != [q["id"] for ca in cur["acts"] if ca["id"] == a["id"] for q in ca["sequences"]]:
+                    if ids and ids != [
+                        q["id"]
+                        for ca in cur["acts"]
+                        if ca["id"] == a["id"]
+                        for q in ca["sequences"]
+                    ]:
                         reorder(project_path, "sequence", ids, SUMMARY, conn=conn)
                     for q in a["sequences"]:
-                        before = [s["id"] for ca in cur["acts"] for cq in ca["sequences"] if cq["id"] == q["id"]
-                                  for s in cq["scenes"]]
+                        before = [
+                            s["id"]
+                            for ca in cur["acts"]
+                            for cq in ca["sequences"]
+                            if cq["id"] == q["id"]
+                            for s in cq["scenes"]
+                        ]
                         if q["scenes"] and q["scenes"] != before:
                             reorder(project_path, "scene", q["scenes"], SUMMARY, conn=conn)
                 # 4. Acts have no parent, so `reorder` does not cover them: number them directly.

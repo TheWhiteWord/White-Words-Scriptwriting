@@ -1,4 +1,5 @@
 """Test suite for Fountain lexer — port of Better Fountain."""
+
 import pytest
 from pathlib import Path
 from white_words.scriptwriting.core.fountain_lexer import (
@@ -27,6 +28,7 @@ from white_words.scriptwriting.core.fountain_lexer import (
 
 # ---- Fixtures ----
 
+
 @pytest.fixture
 def save_the_children_fountain():
     """Load the Save the Children screenplay."""
@@ -39,10 +41,12 @@ def expected_output():
     """Load the expected output from Better Fountain."""
     path = Path(__file__).parent / "fixtures" / "save-the-children" / "expected_output.json"
     import json
+
     return json.load(open(path))
 
 
 # ---- Character Extension Tests ----
+
 
 class TestCharacterExtension:
     def test_simple_name(self):
@@ -76,6 +80,7 @@ class TestCharacterExtension:
 
 
 # ---- Regex Tests ----
+
 
 class TestRegexPatterns:
     def test_scene_heading_int(self):
@@ -141,6 +146,7 @@ class TestRegexPatterns:
 
 # ---- Token Classification Tests ----
 
+
 class TestTokenClassification:
     def test_scene_heading(self):
         assert classify_line("INT. ROOM - DAY") == "scene_heading"
@@ -194,6 +200,7 @@ class TestTokenClassification:
 
 # ---- Full Tokenization Tests ----
 
+
 class TestTokenization:
     def test_save_the_children_scenes(self, save_the_children_fountain):
         tokens = tokenize(save_the_children_fountain)
@@ -220,8 +227,8 @@ class TestTokenization:
     def test_save_the_children_title_page(self, save_the_children_fountain):
         result = parse(save_the_children_fountain)
         all_title = []
-        for pos in ['tl', 'tc', 'tr', 'cc', 'bl', 'br', 'hidden']:
-            all_title.extend(result['title_page'].get(pos, []))
+        for pos in ["tl", "tc", "tr", "cc", "bl", "br", "hidden"]:
+            all_title.extend(result["title_page"].get(pos, []))
         title_page = [t for t in all_title if t["type"] in ("title", "credit", "author", "source")]
         assert len(title_page) == 4
         # Verify title page content
@@ -253,14 +260,18 @@ class TestTokenization:
     def test_save_the_children_boneyard_stripped(self, save_the_children_fountain):
         tokens = tokenize(save_the_children_fountain)
         # Lines 97-110 are boneyard — should be stripped (become separators)
-        boneyard_content = [t for t in tokens if t.get("line") and 97 <= t["line"] <= 110 and t["type"] not in ("separator",)]
+        boneyard_content = [
+            t
+            for t in tokens
+            if t.get("line") and 97 <= t["line"] <= 110 and t["type"] not in ("separator",)
+        ]
         assert len(boneyard_content) == 0
 
     def test_save_the_children_note(self, save_the_children_fountain):
         result = parse(save_the_children_fountain)
         notes = []
-        for s in result['properties']['structure']:
-            notes.extend(s.get('notes', []))
+        for s in result["properties"]["structure"]:
+            notes.extend(s.get("notes", []))
         assert len(notes) == 1
         assert "writer's note" in notes[0]["note"]
 
@@ -307,6 +318,7 @@ class TestTokenization:
 
 # ---- Scene Extraction Tests ----
 
+
 class TestSceneExtraction:
     def test_extract_scene_content(self, save_the_children_fountain):
         # Test scene 0 (action + note, no chars)
@@ -314,7 +326,7 @@ class TestSceneExtraction:
         assert "EXT. THE INSTITUTE - DAY" in content
         assert "A vast decaying building" in content
         assert "[[This is a writer's note about the scene]]" in content
-        
+
         # Test scene 1 (chars + dialogue + parenthetical)
         content = extract_scene_content(save_the_children_fountain, 1)
         assert "INT. CENTRAL ROOM - DAY" in content
@@ -323,13 +335,13 @@ class TestSceneExtraction:
         assert "Something's wrong" in content
         assert "You're feeling it too?" in content
         assert "(chosen)" in content
-        
+
         # Test scene 2 (action + note, no chars)
         content = extract_scene_content(save_the_children_fountain, 2)
         assert "EXT. THE GARDEN - NIGHT" in content
         assert "Kael walks through simulated moonlight" in content
         assert "[[Another note about the garden]]" in content
-        
+
         # Test scene 3 (chars + dialogue + parenthetical)
         content = extract_scene_content(save_the_children_fountain, 3)
         assert "INT. THE CORE - DAY (400 YEARS EARLIER)" in content
@@ -338,12 +350,12 @@ class TestSceneExtraction:
         assert "They're at the gates" in content
         assert "The project is too fragile" in content
         assert "(almost to herself)" in content
-        
+
         # Test scene 4 (action only, no transition)
         content = extract_scene_content(save_the_children_fountain, 4)
         assert "EXT. THE INSTITUTE - NIGHT (400 YEARS EARLIER)" in content
         assert "Outsiders gather" in content
-        
+
         # Test scene 5 (chars + dialogue + transition)
         content = extract_scene_content(save_the_children_fountain, 5)
         assert "INT. CENTRAL ROOM - NIGHT" in content
@@ -352,12 +364,12 @@ class TestSceneExtraction:
         assert "You don't understand" in content
         assert "I understand I was chosen" in content
         assert "CUT TO:" in content
-        
+
         # Test scene 6 (centered + page break)
         content = extract_scene_content(save_the_children_fountain, 6)
         assert "OPENING TITLES" in content
         assert "THE END" in content
-        
+
         # Test scene 7 (chars + dual dialogue + transition)
         content = extract_scene_content(save_the_children_fountain, 7)
         assert "INT. THE CORE - DAY" in content
@@ -366,7 +378,7 @@ class TestSceneExtraction:
         assert "You were never meant to escape" in content
         assert "Then why show us the door?" in content
         assert "SMASH CUT TO:" in content
-        
+
         # Test scene 8 (action + transition)
         content = extract_scene_content(save_the_children_fountain, 8)
         assert "EXT. THE INSTITUTE - DAY" in content
@@ -375,6 +387,7 @@ class TestSceneExtraction:
 
     def test_extract_all_scenes(self, save_the_children_fountain):
         from white_words.scriptwriting.core.screenplay import extract_scenes
+
         scenes = extract_scenes(save_the_children_fountain)
         assert len(scenes) == 9
         # Verify all scene headings
@@ -394,6 +407,7 @@ class TestSceneExtraction:
 
     def test_scene_characters(self, save_the_children_fountain):
         from white_words.scriptwriting.core.screenplay import extract_scenes
+
         scenes = extract_scenes(save_the_children_fountain)
         # Verify characters in each scene
         assert "KAEL" in scenes[1]["characters"]
@@ -420,6 +434,7 @@ class TestSceneExtraction:
 
 # ---- Duration Tests ----
 
+
 class TestDuration:
     def test_dialogue_duration_calculated(self, save_the_children_fountain):
         """Test that dialogue tokens have time set."""
@@ -443,25 +458,28 @@ class TestDuration:
         """Test that total action and dialogue duration match expected output."""
         result = parse(save_the_children_fountain)
         # Compare with tolerance for floating point
-        assert abs(result["lengthAction"] - expected_output["lengthAction"]) < 0.01, \
+        assert abs(result["lengthAction"] - expected_output["lengthAction"]) < 0.01, (
             f"Action length mismatch: {result['lengthAction']} != {expected_output['lengthAction']}"
-        assert abs(result["lengthDialogue"] - expected_output["lengthDialogue"]) < 0.01, \
+        )
+        assert abs(result["lengthDialogue"] - expected_output["lengthDialogue"]) < 0.01, (
             f"Dialogue length mismatch: {result['lengthDialogue']} != {expected_output['lengthDialogue']}"
+        )
 
     def test_scene_durations(self, save_the_children_fountain, expected_output):
         """Test that per-scene action/dialogue durations match expected output."""
         result = parse(save_the_children_fountain)
         for i, scene in enumerate(result["properties"]["scenes"]):
             expected_scene = expected_output["properties"]["scenes"][i]
-            assert abs(scene["actionLength"] - expected_scene["actionLength"]) < 0.01, \
+            assert abs(scene["actionLength"] - expected_scene["actionLength"]) < 0.01, (
                 f"Scene {i} action length mismatch: {scene['actionLength']} != {expected_scene['actionLength']}"
-            assert abs(scene["dialogueLength"] - expected_scene["dialogueLength"]) < 0.01, \
+            )
+            assert abs(scene["dialogueLength"] - expected_scene["dialogueLength"]) < 0.01, (
                 f"Scene {i} dialogue length mismatch: {scene['dialogueLength']} != {expected_scene['dialogueLength']}"
-
-
+            )
 
 
 # ---- HTML Rendering Tests ----
+
 
 class TestHtmlRendering:
     def test_tokens_to_html_scene_heading(self):
@@ -490,6 +508,3 @@ class TestHtmlRendering:
         html = fountain_to_html(fountain)
         assert "fountain-scene_heading" in html
         assert "fountain-action" in html
-
-
-

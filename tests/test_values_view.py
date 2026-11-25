@@ -32,15 +32,20 @@ def project(tmp_path):
     shutil.copytree(FIXTURE, vault / "projects" / "save-the-children")
     import white_words.scriptwriting.core.config
     from white_words.scriptwriting.tools.story_import import handler as import_handler
-    import_handler({"project": "save-the-children", "confirm": True},
-                   root_path=str(vault))
+
+    import_handler({"project": "save-the-children", "confirm": True}, root_path=str(vault))
     return vault / "projects" / "save-the-children"
 
 
 def load(project, **args):
     from white_words.scriptwriting.tools.story_load import handler
-    return json.loads(handler({"project": "save-the-children", "view": "values",
-                               **args}, root_path=str(project.parent.parent)))
+
+    return json.loads(
+        handler(
+            {"project": "save-the-children", "view": "values", **args},
+            root_path=str(project.parent.parent),
+        )
+    )
 
 
 def _db(project):
@@ -84,26 +89,29 @@ class TestScene:
 
     def test_first_turn_of_a_value_has_no_last_left(self, project):
         # central-room-day is the earliest scene, so nothing precedes it.
-        entry = {v["value"]: v
-                 for v in load(project, scene="central-room-day")
-                 ["plots"]["the-resistance"]["values"]}
+        entry = {
+            v["value"]: v
+            for v in load(project, scene="central-room-day")["plots"]["the-resistance"]["values"]
+        }
         assert "last_left" not in entry["freedom"]
         assert "last_left" not in entry["trust"]
 
     def test_a_middle_scene_reports_last_left_and_next(self, project):
         # central-room-night sits between central-room-day and the-core-day.
-        entry = {v["value"]: v
-                 for v in load(project, scene="central-room-night")
-                 ["plots"]["the-resistance"]["values"]}
+        entry = {
+            v["value"]: v
+            for v in load(project, scene="central-room-night")["plots"]["the-resistance"]["values"]
+        }
         freedom = entry["freedom"]
         assert freedom["last_left"] == {"scene": "central-room-day", "to": "free"}
         assert freedom["next"] == {"scene": "the-core-day", "from": "free"}
 
     def test_last_turn_of_a_value_has_no_next(self, project):
         # the-core-day is the final scene: it was left, nothing follows.
-        entry = {v["value"]: v
-                 for v in load(project, scene="the-core-day")
-                 ["plots"]["the-resistance"]["values"]}
+        entry = {
+            v["value"]: v
+            for v in load(project, scene="the-core-day")["plots"]["the-resistance"]["values"]
+        }
         assert entry["freedom"]["last_left"]["scene"] == "central-room-night"
         assert "next" not in entry["freedom"]
 
@@ -156,6 +164,7 @@ class TestEdges:
         # A scene whose sequence names no primary_plot and which has no
         # plot_roles relations serves no plot: `plots` is empty, no crash.
         from white_words.scriptwriting.core.writes import create_project, create_entity
+
         root = tmp_path / "v"
         (root / "projects").mkdir(parents=True)
         assert create_project("solo", {"name": "Solo"}, root)["success"]
@@ -163,22 +172,47 @@ class TestEdges:
         create_entity(proj, "act", "act-1", {"title": "Act I"})
         create_entity(proj, "sequence", "seq-1", {"title": "Seq", "act_id": "act-1"})
         create_entity(proj, "character", "kael", {"name": "Kael"})
-        create_entity(proj, "plot", "main",
-                      {"name": "Main", "characters": ["kael"], "plot_scope": "main"})
-        create_entity(proj, "value", "trust",
-                      {"name": "trust", "p": "open", "c": "wary",
-                       "cd": "deceived", "nn": "exploited"})
-        create_entity(proj, "scene", "s1",
-                      {"title": "S1", "sequence_id": "seq-1", "act_id": "act-1",
-                       "value_turns": [{"plot": "main", "value": "trust",
-                                        "from": "open", "to": "wary",
-                                        "effects": [{"character": "kael",
-                                                     "levels": [{"conflict_level": "inner",
-                                                                 "effect": "He notices."}]}]}]})
+        create_entity(
+            proj, "plot", "main", {"name": "Main", "characters": ["kael"], "plot_scope": "main"}
+        )
+        create_entity(
+            proj,
+            "value",
+            "trust",
+            {"name": "trust", "p": "open", "c": "wary", "cd": "deceived", "nn": "exploited"},
+        )
+        create_entity(
+            proj,
+            "scene",
+            "s1",
+            {
+                "title": "S1",
+                "sequence_id": "seq-1",
+                "act_id": "act-1",
+                "value_turns": [
+                    {
+                        "plot": "main",
+                        "value": "trust",
+                        "from": "open",
+                        "to": "wary",
+                        "effects": [
+                            {
+                                "character": "kael",
+                                "levels": [{"conflict_level": "inner", "effect": "He notices."}],
+                            }
+                        ],
+                    }
+                ],
+            },
+        )
         from white_words.scriptwriting.tools.story_load import handler
-        out = json.loads(handler(
-            {"project": "solo", "view": "values", "scene": "s1"},
-            root_path=str(proj.parent.parent)))
+
+        out = json.loads(
+            handler(
+                {"project": "solo", "view": "values", "scene": "s1"},
+                root_path=str(proj.parent.parent),
+            )
+        )
         assert out["plots"] == {}
 
 
@@ -188,6 +222,7 @@ class TestEmptyProject:
     @pytest.fixture
     def empty(self, tmp_path):
         from white_words.scriptwriting.core.writes import create_project
+
         root = tmp_path / "v"
         (root / "projects").mkdir(parents=True)
         assert create_project("empty", {"name": "Empty"}, root)["success"]
@@ -195,16 +230,21 @@ class TestEmptyProject:
 
     def test_no_args_on_empty_project(self, empty):
         from white_words.scriptwriting.tools.story_load import handler
-        out = json.loads(handler(
-            {"project": "empty", "view": "values"},
-            root_path=str(empty.parent.parent)))
+
+        out = json.loads(
+            handler({"project": "empty", "view": "values"}, root_path=str(empty.parent.parent))
+        )
         assert out["values"] == []
         assert out.get("message")
 
     def test_unit_on_empty_project(self, empty):
         from white_words.scriptwriting.tools.story_load import handler
-        out = json.loads(handler(
-            {"project": "empty", "view": "values", "plot": "none"},
-            root_path=str(empty.parent.parent)))
+
+        out = json.loads(
+            handler(
+                {"project": "empty", "view": "values", "plot": "none"},
+                root_path=str(empty.parent.parent),
+            )
+        )
         assert out["value_focus"] == {"major": [], "minor": []}
         assert out["values"] == []

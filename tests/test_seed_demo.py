@@ -1,4 +1,5 @@
 """`white-words seed-demo` must leave a project that opens."""
+
 from white_words.scriptwriting.app.launcher import main
 from white_words.scriptwriting.core.db import LATEST_VERSION, get_db
 
@@ -11,8 +12,7 @@ def test_seed_demo_creates_an_openable_project(tmp_path, capsys):
     conn = get_db(proj)
     try:
         assert conn.execute("PRAGMA user_version").fetchone()[0] == LATEST_VERSION
-        row = conn.execute(
-            "SELECT name FROM entities WHERE type='project'").fetchone()
+        row = conn.execute("SELECT name FROM entities WHERE type='project'").fetchone()
         assert row[0] == "Demo"
     finally:
         conn.close()

@@ -16,6 +16,7 @@ Concurrency: nothing in the schema is versioned, so each load hands back a
 harness committed in between, the save is refused (`ScriptConflict`) and the
 person decides, rather than one side's work silently overwriting the other's.
 """
+
 from __future__ import annotations
 
 import json
@@ -50,10 +51,12 @@ class ScriptConflict(ScriptError):
 
 # ─── Reading ─────────────────────────────────────────────────────────────────
 
+
 def _scene_state(conn, scene_id: str) -> dict:
     row = conn.execute(
         "SELECT id, name, one_sentence, order_key, status, parent_id, location_id, extra "
-        "FROM entities WHERE type='scene' AND id=? AND is_deleted=0", (scene_id,)
+        "FROM entities WHERE type='scene' AND id=? AND is_deleted=0",
+        (scene_id,),
     ).fetchone()
     if not row:
         raise ScriptNotFound(f"Scene not found: {scene_id}")
@@ -61,60 +64,86 @@ def _scene_state(conn, scene_id: str) -> dict:
     extra = live_extra(json.loads(row[7]) if row[7] else {}, dead)
     location_id = live_column(row[6], dead)
     body = conn.execute(
-        "SELECT body FROM sections WHERE entity_id=? AND heading='Content'",
-        (scene_id,)).fetchone()
-    chars = [r[0] for r in conn.execute(
-        "SELECT from_id FROM live_relations WHERE to_id=? AND kind='character_scene' "
-        "ORDER BY \"order\", from_id", (scene_id,))]
+        "SELECT body FROM sections WHERE entity_id=? AND heading='Content'", (scene_id,)
+    ).fetchone()
+    chars = [
+        r[0]
+        for r in conn.execute(
+            "SELECT from_id FROM live_relations WHERE to_id=? AND kind='character_scene' "
+            'ORDER BY "order", from_id',
+            (scene_id,),
+        )
+    ]
     n_roles = conn.execute(
         "SELECT COUNT(*) FROM live_relations WHERE to_id=? AND kind IN (%s)"
         % ",".join("?" * len(PLOT_ROLES)),
-        (scene_id, *[f"plot_{r}" for r in PLOT_ROLES])).fetchone()[0]
+        (scene_id, *[f"plot_{r}" for r in PLOT_ROLES]),
+    ).fetchone()[0]
     return {
-        "row": {"name": row[1], "one_sentence": row[2], "order_key": row[3],
-                "status": row[4], "parent_id": row[5], "location_id": location_id},
-        "id": row[0], "title": row[1], "status": row[4],
-        "order": row[3] or 0, "sequence_id": row[5],
-        "location": location_id or "", "extra": extra,
+        "row": {
+            "name": row[1],
+            "one_sentence": row[2],
+            "order_key": row[3],
+            "status": row[4],
+            "parent_id": row[5],
+            "location_id": location_id,
+        },
+        "id": row[0],
+        "title": row[1],
+        "status": row[4],
+        "order": row[3] or 0,
+        "sequence_id": row[5],
+        "location": location_id or "",
+        "extra": extra,
         "int_ext": extra.get("int_ext", ""),
         "place": extra.get("place", ""),
         "time_of_day": extra.get("time_of_day", ""),
         "forced_heading": extra.get("forced_heading", ""),
         "raw_content": body[0] if body else "",
-        "characters": chars, "plot_role_count": n_roles,
+        "characters": chars,
+        "plot_role_count": n_roles,
     }
 
 
 def _registry(conn) -> tuple[list[dict], dict]:
     chars = []
     for cid, name, extra in conn.execute(
-            "SELECT id, name, extra FROM entities WHERE type='character' AND is_deleted=0 "
-            "ORDER BY name"):
+        "SELECT id, name, extra FROM entities WHERE type='character' AND is_deleted=0 ORDER BY name"
+    ):
         ex = json.loads(extra) if extra else {}
-        chars.append({"id": cid, "name": name or cid,
-                      "story_role": ex.get("story_role", "")})
-    names = {r[0]: r[1] for r in conn.execute(
-        "SELECT id, name FROM entities WHERE type='world' AND is_deleted=0")}
+        chars.append({"id": cid, "name": name or cid, "story_role": ex.get("story_role", "")})
+    names = {
+        r[0]: r[1]
+        for r in conn.execute("SELECT id, name FROM entities WHERE type='world' AND is_deleted=0")
+    }
     dead = dead_ids(conn)
-    locs = [{"id": i, "name": n or i,
-             "world": ({"id": w, "name": names.get(w, w)} if live_column(w, dead) else None)}
-            for i, n, w in conn.execute(
-                "SELECT id, name, parent_id FROM entities "
-                "WHERE type='location' AND is_deleted=0 ORDER BY name")]
+    locs = [
+        {
+            "id": i,
+            "name": n or i,
+            "world": ({"id": w, "name": names.get(w, w)} if live_column(w, dead) else None),
+        }
+        for i, n, w in conn.execute(
+            "SELECT id, name, parent_id FROM entities "
+            "WHERE type='location' AND is_deleted=0 ORDER BY name"
+        )
+    ]
     return chars, {l["id"]: l for l in locs}
 
 
 def content_hash(state: dict) -> str:
     """The change token: what the editor sees, and what a save overwrites."""
-    return token({
-        "content": state["raw_content"],
-        "int_ext": state["int_ext"],
-        "place": state["place"],
-        "location": state["location"],
-        "time_of_day": state["time_of_day"],
-        "forced_heading": state["forced_heading"],
-        "characters": sorted(state["characters"]),
-    })
+    return token(
+        {
+            "content": state["raw_content"],
+            "int_ext": state["int_ext"],
+            "place": state["place"],
+            "location": state["location"],
+            "time_of_day": state["time_of_day"],
+            "forced_heading": state["forced_heading"],
+            "characters": sorted(state["characters"]),
+        }
+    )
 
 
 def _adhoc_elsewhere(conn, characters: list[dict], skip: str) -> list[dict]:
@@ -122,46 +151,60 @@ def _adhoc_elsewhere(conn, characters: list[dict], skip: str) -> list[dict]:
     written once is offered again instead of being retyped (and mistyped)."""
     counts: dict[str, int] = {}
     for sid, body in conn.execute(
-            "SELECT e.id, s.body FROM sections s JOIN entities e ON e.id=s.entity_id "
-            "WHERE e.type='scene' AND e.is_deleted=0 AND s.heading='Content' AND e.id<>?",
-            (skip,)):
+        "SELECT e.id, s.body FROM sections s JOIN entities e ON e.id=s.entity_id "
+        "WHERE e.type='scene' AND e.is_deleted=0 AND s.heading='Content' AND e.id<>?",
+        (skip,),
+    ):
         _, rest = ss.split_heading(body)
         for c in ss.script_cast(ss.parse_blocks(rest), characters):
             if not c["registered"]:
                 counts[c["cue"]] = counts.get(c["cue"], 0) + 1
-    return [{"cue": k, "name": k.title(), "scenes": n}
-            for k, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+    return [
+        {"cue": k, "name": k.title(), "scenes": n}
+        for k, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
 
 
-def _view(st: dict, characters: list[dict], locations: dict, *, content: str,
-          lossless: bool = True) -> dict:
+def _view(
+    st: dict, characters: list[dict], locations: dict, *, content: str, lossless: bool = True
+) -> dict:
     """Everything derived from one scene state. Shared by `load_scene_script`
     (the stored state) and `check_scene_script` (an unsaved draft), so a warning
     means the same thing before and after a save."""
     _, body = ss.split_heading(content)
-    return _view_from_blocks(st, characters, locations, blocks=ss.parse_blocks(body),
-                             content=content, lossless=lossless)
+    return _view_from_blocks(
+        st, characters, locations, blocks=ss.parse_blocks(body), content=content, lossless=lossless
+    )
 
 
 def _composed_heading(st: dict, loc: dict | None) -> str:
     """The scene's heading line, for readers that still show one."""
-    return ss.scene_heading(st["int_ext"], loc["name"] if loc else "",
-                            st["place"], st["time_of_day"], st["forced_heading"])
+    return ss.scene_heading(
+        st["int_ext"],
+        loc["name"] if loc else "",
+        st["place"],
+        st["time_of_day"],
+        st["forced_heading"],
+    )
 
 
-def _view_from_blocks(st, characters, locations, *, blocks, content,
-                      lossless=True) -> dict:
+def _view_from_blocks(st, characters, locations, *, blocks, content, lossless=True) -> dict:
     extra = st["extra"]
     loc = locations.get(st["location"])
     cast = ss.script_cast(blocks, characters)
     in_script = {c["id"] for c in cast if c["id"]}
     by_id = {c["id"]: c for c in characters}
     registered_cast = [
-        {"id": cid, "name": by_id[cid]["name"], "story_role": by_id[cid]["story_role"],
-         "in_script": cid in in_script,
-         "cues": next((c["cues"] for c in cast if c["id"] == cid), 0)}
+        {
+            "id": cid,
+            "name": by_id[cid]["name"],
+            "story_role": by_id[cid]["story_role"],
+            "in_script": cid in in_script,
+            "cues": next((c["cues"] for c in cast if c["id"] == cid), 0),
+        }
         for cid in dict.fromkeys(list(st["characters"]) + sorted(in_script))
-        if cid in by_id]
+        if cid in by_id
+    ]
     # Per character block: what it resolved to. The editor underlines the ones
     # that resolved to nothing without re-implementing the matching rules.
     cues = []
@@ -171,30 +214,46 @@ def _view_from_blocks(st, characters, locations, *, blocks, content,
             cues.append({"block": i, "id": r["id"], "candidates": r["candidates"]})
 
     scene = {
-        "id": st["id"], "title": st["title"], "status": st["status"],
-        "order": st["order"], "sequence_id": st["sequence_id"],
+        "id": st["id"],
+        "title": st["title"],
+        "status": st["status"],
+        "order": st["order"],
+        "sequence_id": st["sequence_id"],
         "location": st["location"],
-        "int_ext": st["int_ext"], "place": st["place"],
-        "time_of_day": st["time_of_day"], "forced_heading": st["forced_heading"],
+        "int_ext": st["int_ext"],
+        "place": st["place"],
+        "time_of_day": st["time_of_day"],
+        "forced_heading": st["forced_heading"],
         "heading": _composed_heading(st, loc),
         "dramatic_role": extra.get("dramatic_role", ""),
         "no_cast": bool(extra.get("no_cast")),
         "scene_objective": extra.get("scene_objective", ""),
     }
-    unfilled = unfilled_fields("scene", {
-        **extra,
-        "characters": st["characters"] or [],
-        "plot_roles": [1] * st["plot_role_count"],
-    }, st["row"])
+    unfilled = unfilled_fields(
+        "scene",
+        {
+            **extra,
+            "characters": st["characters"] or [],
+            "plot_roles": [1] * st["plot_role_count"],
+        },
+        st["row"],
+    )
     return {
-        "scene": scene, "blocks": blocks, "location": loc,
+        "scene": scene,
+        "blocks": blocks,
+        "location": loc,
         "cast": registered_cast,
         "adhoc": [c for c in cast if not c["registered"]],
         "cues": cues,
         "findings": ss.findings(
-            scene=scene, blocks=blocks, cast=cast, location=loc,
+            scene=scene,
+            blocks=blocks,
+            cast=cast,
+            location=loc,
             has_plot_roles=st["plot_role_count"] > 0,
-            unfilled=unfilled, lossless=lossless),
+            unfilled=unfilled,
+            lossless=lossless,
+        ),
         "stats": ss.script_stats(content, cast),
     }
 
@@ -219,15 +278,16 @@ def load_scene_script(project_path: Path, scene_id: str, *, conn=None) -> dict:
     placeholder = ss.is_placeholder(raw)
     heading_line, body = ss.split_heading(raw)
     blocks = ss.parse_blocks(body)
-    lossless = (ss.is_lossless(raw, heading_line, blocks)
-                if raw.strip() and not placeholder else True)
-    view = _view(st, characters, locations, content="" if placeholder else raw,
-                 lossless=lossless)
+    lossless = (
+        ss.is_lossless(raw, heading_line, blocks) if raw.strip() and not placeholder else True
+    )
+    view = _view(st, characters, locations, content="" if placeholder else raw, lossless=lossless)
     return {
         **view,
         "locked": st["status"] == "locked" or not lossless,
-        "locked_reason": ("status" if st["status"] == "locked"
-                          else "not_roundtrippable" if not lossless else None),
+        "locked_reason": (
+            "status" if st["status"] == "locked" else "not_roundtrippable" if not lossless else None
+        ),
         "hash": content_hash(st),
         "content": "" if placeholder else raw,
         "adhoc_elsewhere": adhoc,
@@ -258,14 +318,21 @@ def _heading_fields(hd: dict, locations: dict) -> dict:
         raise ScriptError("place cannot contain ' - '.")
     if forced:
         if not SCENE_HEADING_RE.match(forced):
-            raise ScriptError("A forced heading must be a scene heading "
-                              "(INT./EXT. … or a forced '.HEADING').")
+            raise ScriptError(
+                "A forced heading must be a scene heading (INT./EXT. … or a forced '.HEADING')."
+            )
         if int_ext or place or tod:
             raise ScriptError(
                 "forced_heading is exclusive with the composed heading — "
-                "clear int_ext, place and time_of_day, or unset forced_heading")
-    return {"int_ext": int_ext, "place": place, "time_of_day": tod,
-            "forced_heading": forced, "location": slug}
+                "clear int_ext, place and time_of_day, or unset forced_heading"
+            )
+    return {
+        "int_ext": int_ext,
+        "place": place,
+        "time_of_day": tod,
+        "forced_heading": forced,
+        "location": slug,
+    }
 
 
 def check_scene_script(project_path: Path, scene_id: str, payload: dict, *, conn=None) -> dict:
@@ -292,25 +359,29 @@ def check_scene_script(project_path: Path, scene_id: str, payload: dict, *, conn
             conn.close()
 
     fields = _heading_fields(hd, locations)
-    extra_cast = [c for c in (payload.get("extra_cast") or [])
-                  if any(c == x["id"] for x in characters)]
-    draft = {**st, **fields, "characters": extra_cast,
-             "extra": {**st["extra"], **fields}}
-    view = _view_from_blocks(draft, characters, locations, blocks=blocks,
-                             content=ss.serialize_blocks(blocks))
-    return {k: view[k] for k in ("scene", "location", "cast", "adhoc", "cues",
-                                 "findings", "stats")}
+    extra_cast = [
+        c for c in (payload.get("extra_cast") or []) if any(c == x["id"] for x in characters)
+    ]
+    draft = {**st, **fields, "characters": extra_cast, "extra": {**st["extra"], **fields}}
+    view = _view_from_blocks(
+        draft, characters, locations, blocks=blocks, content=ss.serialize_blocks(blocks)
+    )
+    return {k: view[k] for k in ("scene", "location", "cast", "adhoc", "cues", "findings", "stats")}
 
 
 # ─── Writing ─────────────────────────────────────────────────────────────────
+
 
 def _validate_blocks(blocks) -> list[dict]:
     if not isinstance(blocks, list):
         raise ScriptError("`blocks` must be a list.")
     clean = []
     for i, b in enumerate(blocks):
-        if not isinstance(b, dict) or b.get("type") not in ss.BLOCK_TYPES \
-                or not isinstance(b.get("text", ""), str):
+        if (
+            not isinstance(b, dict)
+            or b.get("type") not in ss.BLOCK_TYPES
+            or not isinstance(b.get("text", ""), str)
+        ):
             raise ScriptError(f"blocks[{i}] must be {{type, text}} with a known type.")
         clean.append({"type": b["type"], "text": b.get("text", "")})
     return clean
@@ -370,8 +441,13 @@ def save_scene_script(project_path: Path, scene_id: str, payload: dict, *, conn=
             previous = st["raw_content"]
             try:
                 result = edit_entity(
-                    project_path, "scene", scene_id, data,
-                    "Script edited by hand in the script editor", conn=conn)
+                    project_path,
+                    "scene",
+                    scene_id,
+                    data,
+                    "Script edited by hand in the script editor",
+                    conn=conn,
+                )
             except ValueError as e:
                 # The write boundary refuses a scene whose merged state has no heading.
                 raise ScriptError(str(e))

@@ -1,4 +1,5 @@
 """A backup is taken when a project is opened, at most once a day, only if it changed."""
+
 import logging
 import os
 import re
@@ -11,8 +12,11 @@ from pathlib import Path
 import pytest
 
 from white_words.scriptwriting.core import backups
-from white_words.scriptwriting.core.backups import (create_backup, list_backups,
-                                          maybe_periodic_backup)
+from white_words.scriptwriting.core.backups import (
+    create_backup,
+    list_backups,
+    maybe_periodic_backup,
+)
 from white_words.scriptwriting.core.writes import edit_entity
 
 
@@ -45,6 +49,7 @@ def _make_db_look_untouched_for(project, days):
 
 
 # ─── the rule ───
+
 
 def test_the_first_open_takes_a_backup(fixture_path):
     path = maybe_periodic_backup(fixture_path)
@@ -138,6 +143,7 @@ def test_several_simultaneous_opens_make_one_backup(fixture_path):
 
 # ─── the hook: opening a project in the web app ───
 
+
 @pytest.fixture
 def web(tmp_path, fixture_path, monkeypatch):
     from fastapi.testclient import TestClient
@@ -160,7 +166,7 @@ def test_opening_the_dashboard_takes_the_backup(web):
     assert r.status_code == 200
     assert len(_automatic(proj)) == 1
     web.get("/api/projects/stc/dashboard")
-    assert len(_automatic(proj)) == 1            # not again the same day
+    assert len(_automatic(proj)) == 1  # not again the same day
 
 
 def test_an_unknown_project_makes_nothing(web):
@@ -172,6 +178,7 @@ def test_an_unknown_project_makes_nothing(web):
 def test_a_failing_backup_never_breaks_the_page(web, monkeypatch, caplog):
     def boom(project_path):
         raise OSError("disk full")
+
     monkeypatch.setattr(backups, "maybe_periodic_backup", boom)
     with caplog.at_level(logging.WARNING):
         r = web.get("/api/projects/stc/dashboard")
@@ -183,6 +190,7 @@ def test_a_slug_with_a_path_in_it_is_not_followed(tmp_path):
     """root/projects/../outside is tmp_path/outside: a real project, but not one
     the slug may reach."""
     from white_words.scriptwriting.app.routes.projects import periodic_backup
+
     outside = tmp_path / "outside"
     (outside / ".story").mkdir(parents=True)
     c = sqlite3.connect(str(outside / ".story" / "story.db"))

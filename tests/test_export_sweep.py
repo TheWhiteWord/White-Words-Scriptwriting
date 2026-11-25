@@ -10,6 +10,7 @@ only ever remove files this tool created. A hand-authored note the database has
 never seen is never a candidate — that is the property most worth protecting,
 because the alternative is export silently eating a user's own writing.
 """
+
 import json
 import shutil
 import sqlite3
@@ -87,7 +88,7 @@ class TestIdempotent:
 class TestDeleteSurvivesRoundTrip:
     def test_deleted_note_is_swept(self, proj):
         p, vault = proj
-        _export(p, vault)                       # establishes the manifest
+        _export(p, vault)  # establishes the manifest
         # The filename is the title, so the path is looked up by id before the
         # note is deleted — after that there is nothing left to find.
         kael_note = note_rel(p, "characters", "kael")
@@ -111,6 +112,7 @@ class TestDeleteSurvivesRoundTrip:
         _reimport(p, vault)
         ids = _ids(p)
         assert "mira" in ids and "dr-elena-voss" in ids
+
 
 class TestSceneBeatsSweep:
     """T2.3 — the export sweep removes an orphaned scene_beats note."""
@@ -182,8 +184,7 @@ class TestNestedFieldsKeepTheirDeclaredOrder:
         _export(p, vault)
         text = note_for(p, "scenes", "central-room-day").read_text()
         turn = text.split("value_turns:", 1)[1]
-        order = [k for k in ("plot:", "value:", "from:", "to:", "effects:")
-                 if k in turn]
+        order = [k for k in ("plot:", "value:", "from:", "to:", "effects:") if k in turn]
         assert order == ["plot:", "value:", "from:", "to:", "effects:"], order
 
     def test_nested_effects_and_levels_keep_their_order(self, proj):
@@ -200,8 +201,14 @@ class TestNestedFieldsKeepTheirDeclaredOrder:
         from white_words.scriptwriting.tools.story_export import _ordered
 
         meta = ENTITY_SCHEMAS["scene"]["value_turns"]
-        turn = {"effects": [], "plot": "x", "surprise": "keep me", "to": "b",
-                "value": "v", "from": "a"}
+        turn = {
+            "effects": [],
+            "plot": "x",
+            "surprise": "keep me",
+            "to": "b",
+            "value": "v",
+            "from": "a",
+        }
         out = _ordered([turn], meta)[0]
         assert list(out) == ["plot", "value", "from", "to", "effects", "surprise"]
         assert out["surprise"] == "keep me"

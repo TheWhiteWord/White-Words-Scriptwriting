@@ -12,6 +12,7 @@ major; minor is the rest. Story scope follows the plot scopes: major is the
 main plot's major list, minor is the subplots' major values not already
 major (design §4).
 """
+
 from collections import defaultdict
 
 from .constants import VALUE_MAJOR_COUNT
@@ -32,8 +33,10 @@ def _counts(rows, key) -> dict:
         if key(row):
             scenes[row["value"]].add(row["scene_id"])
             plots[row["value"]].add(row["plot"])
-    return {value: {"scenes": len(scene_ids), "plots": sorted(plots[value])}
-            for value, scene_ids in scenes.items()}
+    return {
+        value: {"scenes": len(scene_ids), "plots": sorted(plots[value])}
+        for value, scene_ids in scenes.items()
+    }
 
 
 def _major_minor(counts: dict) -> dict:
@@ -52,16 +55,18 @@ def _major_minor(counts: dict) -> dict:
         cut = ordered[VALUE_MAJOR_COUNT - 1][1]["scenes"]
         major = [kv for kv in ordered if kv[1]["scenes"] >= cut]
     minor = [kv for kv in ordered if kv not in major]
+
     def _entry(v, n):
         return {"value": v, "scenes": n["scenes"], "plots": n["plots"]}
-    return {"major": [_entry(v, n) for v, n in major],
-            "minor": [_entry(v, n) for v, n in minor]}
+
+    return {"major": [_entry(v, n) for v, n in major], "minor": [_entry(v, n) for v, n in minor]}
 
 
 def _plot_scopes(project_path) -> dict:
     """Plot id → plot_scope ('main'/'sub'/''), read from the entities."""
     import json
     import sqlite3
+
     db_path = project_path / ".story" / "story.db"
     conn = sqlite3.connect(str(db_path))
     try:
@@ -70,8 +75,7 @@ def _plot_scopes(project_path) -> dict:
         ).fetchall()
     finally:
         conn.close()
-    return {pid: (json.loads(extra) or {}).get("plot_scope", "")
-            for pid, extra in rows}
+    return {pid: (json.loads(extra) or {}).get("plot_scope", "") for pid, extra in rows}
 
 
 def for_plot(project_path, plot_id) -> dict:
@@ -103,8 +107,7 @@ def for_project(project_path) -> dict:
     """
     rows = get_scene_value_turns(project_path)
     scopes = _plot_scopes(project_path)
-    main = _major_minor(_counts(
-        rows, lambda r: scopes.get(r["plot"]) == "main"))
+    main = _major_minor(_counts(rows, lambda r: scopes.get(r["plot"]) == "main"))
     major_names = {item["value"] for item in main["major"]}
     minor_counts = {}
     minor_plots = defaultdict(set)
@@ -115,8 +118,11 @@ def for_project(project_path) -> dict:
         for item in sub["major"]:
             if item["value"] not in major_names:
                 minor_counts[item["value"]] = max(
-                    minor_counts.get(item["value"], 0), item["scenes"])
+                    minor_counts.get(item["value"], 0), item["scenes"]
+                )
                 minor_plots[item["value"]].add(plot_id)
-    minor = [{"value": v, "scenes": n, "plots": sorted(minor_plots[v])}
-             for v, n in sorted(minor_counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+    minor = [
+        {"value": v, "scenes": n, "plots": sorted(minor_plots[v])}
+        for v, n in sorted(minor_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
     return {"major": main["major"], "minor": minor}

@@ -6,6 +6,7 @@ the net under the write paths: tests run it after every kind of write. A
 flagged-deleted entity still exists, so a reference to it is not an orphan;
 only a reference to a *missing row* is.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -14,26 +15,20 @@ import sqlite3
 # never NULL, so NOT IN is safe; the referencing column may be NULL or ''
 # (parent_id, location_id), which mean "no link", not a dangling one.
 _CHECKS = {
-    "sections":
-        "SELECT entity_id, heading FROM sections "
-        "WHERE entity_id NOT IN (SELECT id FROM entities)",
-    "revisions":
-        "SELECT id, entity_id FROM revisions "
-        "WHERE entity_id NOT IN (SELECT id FROM entities)",
-    "relations_from":
-        "SELECT from_id, to_id, kind FROM relations "
-        "WHERE from_id NOT IN (SELECT id FROM entities)",
-    "relations_to":
-        "SELECT from_id, to_id, kind FROM relations "
-        "WHERE to_id NOT IN (SELECT id FROM entities)",
-    "parent_id":
-        "SELECT id, parent_id FROM entities "
-        "WHERE parent_id IS NOT NULL AND parent_id != '' "
-        "AND parent_id NOT IN (SELECT id FROM entities)",
-    "location_id":
-        "SELECT id, location_id FROM entities "
-        "WHERE location_id IS NOT NULL AND location_id != '' "
-        "AND location_id NOT IN (SELECT id FROM entities)",
+    "sections": "SELECT entity_id, heading FROM sections "
+    "WHERE entity_id NOT IN (SELECT id FROM entities)",
+    "revisions": "SELECT id, entity_id FROM revisions "
+    "WHERE entity_id NOT IN (SELECT id FROM entities)",
+    "relations_from": "SELECT from_id, to_id, kind FROM relations "
+    "WHERE from_id NOT IN (SELECT id FROM entities)",
+    "relations_to": "SELECT from_id, to_id, kind FROM relations "
+    "WHERE to_id NOT IN (SELECT id FROM entities)",
+    "parent_id": "SELECT id, parent_id FROM entities "
+    "WHERE parent_id IS NOT NULL AND parent_id != '' "
+    "AND parent_id NOT IN (SELECT id FROM entities)",
+    "location_id": "SELECT id, location_id FROM entities "
+    "WHERE location_id IS NOT NULL AND location_id != '' "
+    "AND location_id NOT IN (SELECT id FROM entities)",
 }
 
 

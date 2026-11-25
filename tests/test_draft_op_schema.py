@@ -39,8 +39,9 @@ def test_entity_types_enumerated_not_left_open():
     """A bare string lets the model invent an entity type that cannot commit."""
     branches = _branches()
     for kind in ("create", "edit", "delete"):
-        assert branches[kind]["properties"]["entity_type" if kind != "create" else "type"]["enum"] \
-            == list(ENTITY_SCHEMAS), kind
+        assert branches[kind]["properties"]["entity_type" if kind != "create" else "type"][
+            "enum"
+        ] == list(ENTITY_SCHEMAS), kind
 
 
 def test_reorder_is_restricted_to_reorderable_types():

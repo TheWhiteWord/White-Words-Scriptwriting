@@ -5,6 +5,7 @@ or completing an entity. It must NOT describe the other tools: tool schemas are
 already in the model's context at all times, so echoing them here would spend
 tokens repeating what the model already knows.
 """
+
 import importlib
 import json
 
@@ -13,8 +14,13 @@ import pytest
 from white_words.scriptwriting.tools import story_describe
 
 ALL_TOOLS = [
-    "story_draft", "story_export", "story_import", "story_load",
-    "story_memory", "story_retrieve", "story_search",
+    "story_draft",
+    "story_export",
+    "story_import",
+    "story_load",
+    "story_memory",
+    "story_retrieve",
+    "story_search",
 ]
 
 
@@ -34,7 +40,9 @@ class TestDescribeScope:
             assert len(schema.get("description", "")) > 20, f"{name} has no description"
 
     def test_destructive_tool_says_so(self):
-        desc = importlib.import_module("white_words.scriptwriting.tools.story_import").SCHEMA["description"]
+        desc = importlib.import_module("white_words.scriptwriting.tools.story_import").SCHEMA[
+            "description"
+        ]
         assert "DESTRUCTIVE" in desc
 
     def test_no_description_promises_a_missing_parameter(self):
@@ -47,8 +55,9 @@ class TestDescribeScope:
                 # not an input parameter; this guard is about inputs.
                 if claim == "dry_run" and name == "story_draft":
                     continue
-                assert claim not in description, \
+                assert claim not in description, (
                     f"{name} advertises '{claim}' but does not accept it"
+                )
 
 
 class TestEntityFields:
@@ -60,11 +69,19 @@ class TestEntityFields:
         # added after this test first ran, and a literal count is exactly how a
         # new type silently stops being described.
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+
         assert len(_handler({})["entity_schemas"]) == len(ENTITY_SCHEMAS)
 
     def test_relation_backed_fields_are_flagged(self):
         fields = _handler({"entity_type": "plot"})["entity_schemas"]["plot"]
-        for name in ("setups", "inciting_incident", "complications", "crisis", "climax", "resolutions"):
+        for name in (
+            "setups",
+            "inciting_incident",
+            "complications",
+            "crisis",
+            "climax",
+            "resolutions",
+        ):
             assert fields[name]["stored_as"] == "relation"
 
     def test_computed_fields_say_do_not_set(self):
@@ -115,10 +132,11 @@ class TestStructuredFieldShapesAreVisible:
         assert got == expected
 
     def test_an_object_sub_field_says_which_keys_it_takes(self):
-        perspectives = _handler({"entity_type": "relationship"})["entity_schemas"]["relationship"]["perspectives"]
+        perspectives = _handler({"entity_type": "relationship"})["entity_schemas"]["relationship"][
+            "perspectives"
+        ]
         assert perspectives["type"] == "object"
-        assert set(perspectives["sub_fields"]) == {
-            "label", "feeling", "type", "strength", "secret"}
+        assert set(perspectives["sub_fields"]) == {"label", "feeling", "type", "strength", "secret"}
         assert perspectives["sub_fields"]["strength"]["type"] == "number"
 
     def test_a_list_sub_field_says_what_each_item_holds(self):
@@ -163,8 +181,7 @@ class TestStorageLabelsAreTrue:
                 claim = entry.get("stored_as")
                 if not claim:
                     continue
-                truth = ("relation" if field in rels
-                         else "column" if field in cols else None)
+                truth = "relation" if field in rels else "column" if field in cols else None
                 if claim != truth:
                     wrong.append(f"{et}.{field}: says {claim}, is {truth}")
         assert not wrong, wrong
@@ -179,16 +196,14 @@ class TestStorageLabelsAreTrue:
             declared |= {(et, f) for f, c in cols.items() if c.endswith("_id")}
         for et in ENTITY_SCHEMAS:
             declared |= {(et, f) for f in relation_fields(et)}
-        unlabelled = [f"{et}.{f}" for et, f in declared
-                      if not out[et][f].get("stored_as")]
+        unlabelled = [f"{et}.{f}" for et, f in declared if not out[et][f].get("stored_as")]
         assert not unlabelled, unlabelled
 
     def test_a_link_in_extra_is_still_marked_as_a_reference(self):
         """The nine `extra` links have no special storage, but the agent still
         needs to know the value is another entity's slug, not a display name."""
         out = _handler({})["entity_schemas"]
-        for et, field in [("scene", "act_id"),
-                          ("plot", "characters")]:
+        for et, field in [("scene", "act_id"), ("plot", "characters")]:
             assert out[et][field]["is_reference"] is True, f"{et}.{field}"
 
     def test_a_declared_ref_is_a_reference_even_when_computed(self):
@@ -212,17 +227,23 @@ class TestStorageLabelsAreTrue:
         left to act on today, and stays only as a backstop should one reappear.
         """
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+
         for et in ("scene", "act"):
             assert "id" not in ENTITY_SCHEMAS[et], (
                 f"{et} declares an id field, which the write path discards "
-                f"and the read path can only render empty")
+                f"and the read path can only render empty"
+            )
 
     def test_a_plain_value_is_not_labelled(self):
         """`name`, `order`, `status` are columns like everything else; saying so
         for 25 fields is noise that buries the 12 that matter."""
         out = _handler({})["entity_schemas"]
-        for et, field in [("act", "title"), ("act", "order"),
-                          ("character", "one_sentence"), ("project", "logline")]:
+        for et, field in [
+            ("act", "title"),
+            ("act", "order"),
+            ("character", "one_sentence"),
+            ("project", "logline"),
+        ]:
             assert "stored_as" not in out[et][field], f"{et}.{field}"
             assert not out[et][field].get("is_reference"), f"{et}.{field}"
 
@@ -238,6 +259,7 @@ class TestOneVocabularyAcrossReadAndWrite:
 
     def _load_payload(self, project):
         from white_words.scriptwriting.core.db import get_project_summary
+
         return get_project_summary(project)
 
     def test_story_load_does_not_emit_the_old_abbreviations(self, fixture_db):
@@ -261,6 +283,7 @@ class TestOneVocabularyAcrossReadAndWrite:
 
         out = _handler({})["entity_schemas"]
         known = {f for fields in out.values() for f in fields}
+
         # Declared sub_field names are real vocabulary too. `with` lives here and
         # nowhere else — `character.relationships.sub_fields` — so a top-level-only
         # set rejects a name story_describe in fact reports, and this test failed on
@@ -273,11 +296,11 @@ class TestOneVocabularyAcrossReadAndWrite:
                 for sub, sub_meta in (meta.get("sub_fields") or {}).items():
                     known.add(sub)
                     collect_sub_names({sub: sub_meta})
+
         for fields in out.values():
             collect_sub_names(fields)
         # Entity containers, not fields: they hold other entities.
-        known |= {"acts", "sequences", "scenes", "worlds", "locations",
-                  "plots", "characters"}
+        known |= {"acts", "sequences", "scenes", "worlds", "locations", "plots", "characters"}
         # `milestone` is the load payload's own climax marker, deliberately not
         # a stored field — the spec derives it from four scene booleans.
         known |= {"milestone"}
@@ -317,14 +340,19 @@ class TestEntityTypeEnumsStayInSync:
     story_admin route entity_type through core.writes and have no enum of their own.
     """
 
-    @pytest.mark.parametrize("tool,path", [
-        ("story_retrieve", ["entity_type"]),
-        ("story_describe", ["entity_type"]),
-    ])
+    @pytest.mark.parametrize(
+        "tool,path",
+        [
+            ("story_retrieve", ["entity_type"]),
+            ("story_describe", ["entity_type"]),
+        ],
+    )
     def test_enum_matches_entity_schemas(self, tool, path):
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
 
-        node = importlib.import_module(f"white_words.scriptwriting.tools.{tool}").SCHEMA["properties"]
+        node = importlib.import_module(f"white_words.scriptwriting.tools.{tool}").SCHEMA[
+            "properties"
+        ]
         for key in path:
             node = node[key]
         assert set(node["enum"]) == set(ENTITY_SCHEMAS), (

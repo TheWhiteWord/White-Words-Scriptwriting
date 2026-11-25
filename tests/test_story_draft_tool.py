@@ -5,6 +5,7 @@ tool routes to the right core function, that a caller can only reach the
 project it named, and that a staged draft does not wake the dashboard for a
 change the user has not accepted.
 """
+
 import json
 import sys
 from pathlib import Path
@@ -17,13 +18,21 @@ REPO = Path(__file__).resolve().parents[1]
 from white_words.scriptwriting.tools.story_draft import handler
 from white_words.scriptwriting.tools.story_draft import SCHEMA
 
-OPS = [{
-    "op": "create", "type": "scene", "id": "mira-tells-kael",
-    "frontmatter": {"title": "The Telling", "sequence_id": "seq-discovery",
-                    "act_id": "act-1", "characters": ["mira", "kael"]},
-    "sections": {"Objective": "Mira confesses the reservoir is failing."},
-    "summary": "New scene: The Telling",
-}]
+OPS = [
+    {
+        "op": "create",
+        "type": "scene",
+        "id": "mira-tells-kael",
+        "frontmatter": {
+            "title": "The Telling",
+            "sequence_id": "seq-discovery",
+            "act_id": "act-1",
+            "characters": ["mira", "kael"],
+        },
+        "sections": {"Objective": "Mira confesses the reservoir is failing."},
+        "summary": "New scene: The Telling",
+    }
+]
 
 
 def call(args, project_path):
@@ -31,6 +40,7 @@ def call(args, project_path):
 
 
 # ─── stage ───
+
 
 def test_stage_returns_a_draft_id_and_writes_nothing(fixture_path):
     before = _entity_count(fixture_path)
@@ -43,24 +53,41 @@ def test_stage_returns_a_draft_id_and_writes_nothing(fixture_path):
 
 
 def test_stage_rejects_a_malformed_op_with_a_readable_error(fixture_path):
-    result = call({"action": "stage", "ops": [{"op": "create", "type": "scene"}]},
-                  fixture_path)
+    result = call({"action": "stage", "ops": [{"op": "create", "type": "scene"}]}, fixture_path)
     assert "error" in result
     assert "missing: id, frontmatter" in result["error"]
 
 
 def test_stage_rejects_a_project_op(fixture_path):
-    result = call({"action": "stage", "ops": [{
-        "op": "create", "type": "project", "id": "new-film",
-        "frontmatter": {}, "summary": "a new film"}]}, fixture_path)
+    result = call(
+        {
+            "action": "stage",
+            "ops": [
+                {
+                    "op": "create",
+                    "type": "project",
+                    "id": "new-film",
+                    "frontmatter": {},
+                    "summary": "a new film",
+                }
+            ],
+        },
+        fixture_path,
+    )
     assert "projects cannot be drafted" in result["error"]
 
 
 def test_restaging_the_same_draft_id_replaces_and_diffs(fixture_path):
     first = call({"action": "stage", "ops": OPS, "summary": "The Telling"}, fixture_path)
-    again = call({"action": "stage", "ops": OPS[:0] + [
-        dict(OPS[0], summary="The Telling, rewritten")],
-        "summary": "The Telling", "draft_id": first["draft_id"]}, fixture_path)
+    again = call(
+        {
+            "action": "stage",
+            "ops": OPS[:0] + [dict(OPS[0], summary="The Telling, rewritten")],
+            "summary": "The Telling",
+            "draft_id": first["draft_id"],
+        },
+        fixture_path,
+    )
 
     assert again["restaged"] is True
     assert again["changes"]["changed"][0]["fields"] == ["summary"]
@@ -68,6 +95,7 @@ def test_restaging_the_same_draft_id_replaces_and_diffs(fixture_path):
 
 
 # ─── commit ───
+
 
 def test_commit_writes_and_clears_the_draft(fixture_path):
     staged = call({"action": "stage", "ops": OPS, "summary": "The Telling"}, fixture_path)
@@ -83,9 +111,15 @@ def test_commit_reports_the_failure_and_keeps_the_draft(fixture_path):
     # T5 rewrote this (it was "...partial_failure..."): the create that came
     # first used to land and be named in `committed`; now nothing lands.
     before = _entity_count(fixture_path)
-    ops = OPS + [{
-        "op": "reorder", "entity_type": "sequence", "entity_id": "act-two",
-        "ordered_ids": ["a", "b"], "summary": "Resequence act two"}]
+    ops = OPS + [
+        {
+            "op": "reorder",
+            "entity_type": "sequence",
+            "entity_id": "act-two",
+            "ordered_ids": ["a", "b"],
+            "summary": "Resequence act two",
+        }
+    ]
     staged = call({"action": "stage", "ops": ops, "summary": "two changes"}, fixture_path)
     result = call({"action": "commit", "draft_id": staged["draft_id"]}, fixture_path)
 
@@ -99,6 +133,7 @@ def test_commit_reports_the_failure_and_keeps_the_draft(fixture_path):
 
 
 # ─── discard ───
+
 
 def test_discard_removes_the_draft(fixture_path):
     staged = call({"action": "stage", "ops": OPS, "summary": "x"}, fixture_path)
@@ -114,9 +149,9 @@ def test_discard_of_an_unknown_draft_is_an_error_not_a_crash(fixture_path):
 
 # ─── list ───
 
+
 def test_list_on_a_clean_project_is_empty_not_an_error(fixture_path):
-    assert call({"action": "list"}, fixture_path) == {
-        "success": True, "drafts": [], "count": 0}
+    assert call({"action": "list"}, fixture_path) == {"success": True, "drafts": [], "count": 0}
 
 
 def test_list_reports_every_open_draft(fixture_path):
@@ -128,6 +163,7 @@ def test_list_reports_every_open_draft(fixture_path):
 
 
 # ─── argument errors ───
+
 
 @pytest.mark.parametrize("action", ["stage", "commit", "discard", "list"])
 def test_an_unknown_project_is_refused_before_anything_runs(action, tmp_path):
@@ -145,14 +181,16 @@ def test_commit_without_a_draft_id_does_not_crash(fixture_path):
 
 # ─── the dashboard hook gate ───
 
+
 def _hook():
     """The real post_tool_call hook, with a ctx that records dispatches."""
     plugin = sys.modules.get("hermes_story_architect")
     if plugin is None:
         import importlib.util
+
         spec = importlib.util.spec_from_file_location(
-            "hermes_story_architect", REPO / "__init__.py",
-            submodule_search_locations=[str(REPO)])
+            "hermes_story_architect", REPO / "__init__.py", submodule_search_locations=[str(REPO)]
+        )
         plugin = importlib.util.module_from_spec(spec)
         sys.modules["hermes_story_architect"] = plugin
         spec.loader.exec_module(plugin)
@@ -182,9 +220,9 @@ def _hook():
 
 # ─── schema ───
 
+
 def test_the_schema_documents_every_action():
-    assert SCHEMA["properties"]["action"]["enum"] == \
-        ["stage", "commit", "discard", "list"]
+    assert SCHEMA["properties"]["action"]["enum"] == ["stage", "commit", "discard", "list"]
 
 
 def test_the_schema_says_relations_ride_in_frontmatter():
@@ -204,6 +242,7 @@ def test_the_schema_reports_the_dry_run_verdict():
 
 def _entity_count(project_path):
     import sqlite3
+
     conn = sqlite3.connect(str(project_path / ".story" / "story.db"))
     try:
         return conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
@@ -212,6 +251,7 @@ def _entity_count(project_path):
 
 
 # ─── the card gate ───
+
 
 def _call_tool(monkeypatch, fixture_path, args):
     """Drive `on_call_tool` directly and collect what it publishes.
@@ -229,8 +269,7 @@ def _call_tool(monkeypatch, fixture_path, args):
         published.append(ev)
 
     monkeypatch.setattr(mcp_server, "_publish_bus", recorder)
-    server = mcp_server.create_mcp_server(
-        mcp_server.Config(root=fixture_path.parent, port=8731))
+    server = mcp_server.create_mcp_server(mcp_server.Config(root=fixture_path.parent, port=8731))
     entry = server.get_request_handler("tools/call")
     assert entry is not None
     handler = entry.handler
@@ -251,9 +290,11 @@ def _call_tool(monkeypatch, fixture_path, args):
 
 
 def test_a_clean_stage_publishes_the_card(monkeypatch, fixture_path):
-    published = _call_tool(monkeypatch, fixture_path, {
-        "action": "stage", "project": str(fixture_path), "ops": OPS,
-        "summary": "The Telling"})
+    published = _call_tool(
+        monkeypatch,
+        fixture_path,
+        {"action": "stage", "project": str(fixture_path), "ops": OPS, "summary": "The Telling"},
+    )
 
     assert len(published) == 1
     assert published[0]["draft"]["id"].startswith("d-")
@@ -261,31 +302,67 @@ def test_a_clean_stage_publishes_the_card(monkeypatch, fixture_path):
 
 
 def test_a_refused_stage_publishes_nothing(monkeypatch, fixture_path):
-    ops = [{"op": "edit", "entity_type": "scene", "entity_id": "the-core-day",
-            "data": {"plot_roles": [
-                {"plot": "the-resistance", "role": "climax",
-                 "description": "The children refuse the system's final offer."}]},
-            "summary": "The Core takes the climax"}]
-    assert _call_tool(monkeypatch, fixture_path, {
-        "action": "stage", "project": str(fixture_path), "ops": ops,
-        "summary": "take the climax"}) == []
+    ops = [
+        {
+            "op": "edit",
+            "entity_type": "scene",
+            "entity_id": "the-core-day",
+            "data": {
+                "plot_roles": [
+                    {
+                        "plot": "the-resistance",
+                        "role": "climax",
+                        "description": "The children refuse the system's final offer.",
+                    }
+                ]
+            },
+            "summary": "The Core takes the climax",
+        }
+    ]
+    assert (
+        _call_tool(
+            monkeypatch,
+            fixture_path,
+            {
+                "action": "stage",
+                "project": str(fixture_path),
+                "ops": ops,
+                "summary": "take the climax",
+            },
+        )
+        == []
+    )
 
 
 def test_an_unavailable_stage_publishes_nothing(monkeypatch, fixture_path):
     from white_words.scriptwriting.core import drafts
 
-    monkeypatch.setattr(drafts, "dry_run",
-                        lambda project_path, draft_id: {
-                            "status": "unavailable",
-                            "error": "OperationalError: no such table: drafts"})
-    assert _call_tool(monkeypatch, fixture_path, {
-        "action": "stage", "project": str(fixture_path), "ops": OPS,
-        "summary": "no replay"}) == []
+    monkeypatch.setattr(
+        drafts,
+        "dry_run",
+        lambda project_path, draft_id: {
+            "status": "unavailable",
+            "error": "OperationalError: no such table: drafts",
+        },
+    )
+    assert (
+        _call_tool(
+            monkeypatch,
+            fixture_path,
+            {"action": "stage", "project": str(fixture_path), "ops": OPS, "summary": "no replay"},
+        )
+        == []
+    )
 
 
 def test_a_commit_does_not_publish_an_empty_card(monkeypatch, fixture_path):
     """A commit carries `draft_id` too; only a clean stage may publish."""
     staged = call({"action": "stage", "ops": OPS, "summary": "The Telling"}, fixture_path)
-    assert _call_tool(monkeypatch, fixture_path, {
-        "action": "commit", "project": str(fixture_path),
-        "draft_id": staged["draft_id"]}) == []
+    assert (
+        _call_tool(
+            monkeypatch,
+            fixture_path,
+            {"action": "commit", "project": str(fixture_path), "draft_id": staged["draft_id"]},
+        )
+        == []
+    )

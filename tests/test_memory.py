@@ -1,4 +1,5 @@
 """Focused tests for DB-backed story memory."""
+
 import json
 
 import pytest
@@ -59,7 +60,7 @@ def test_validate_memory_rejects_unknown_category():
 
 def test_validate_memory_rejects_empty_entry():
     with pytest.raises(ValueError, match="non-empty strings"):
-        validate_memory({"decisions": [" "] })
+        validate_memory({"decisions": [" "]})
 
 
 def test_validate_memory_rejects_overlong_entry():
@@ -104,13 +105,17 @@ def test_db_round_trip_and_missing_memory_is_empty(db_project):
 def test_db_round_trip_preserves_project_extra(db_project):
     conn = get_db(db_project)
     try:
-        conn.execute("UPDATE entities SET extra=? WHERE id='memory-test'", (json.dumps({"genre": "drama"}),))
+        conn.execute(
+            "UPDATE entities SET extra=? WHERE id='memory-test'", (json.dumps({"genre": "drama"}),)
+        )
     finally:
         conn.close()
     set_project_memory(db_project, {"directions": ["Stay ambiguous."]})
     conn = get_db(db_project)
     try:
-        extra = json.loads(conn.execute("SELECT extra FROM entities WHERE id='memory-test'").fetchone()[0])
+        extra = json.loads(
+            conn.execute("SELECT extra FROM entities WHERE id='memory-test'").fetchone()[0]
+        )
     finally:
         conn.close()
     assert extra["genre"] == "drama"

@@ -4,6 +4,7 @@ PRAGMA data_version only changes on a connection that stays open while another
 connection commits. The first version of the events route opened a fresh
 connection per poll, so the number never moved and the banner never appeared.
 """
+
 import asyncio
 import sqlite3
 import threading
@@ -111,6 +112,7 @@ def test_event_stream_emits_update_frame(tmp_path):
 
         def write_later():
             import time
+
             time.sleep(0.05)
             c = sqlite3.connect(str(db), isolation_level=None)  # own connection
             c.execute("INSERT INTO t VALUES (1)")
@@ -136,8 +138,9 @@ def test_event_stream_silent_without_changes(tmp_path):
     w = _make_db(db)
 
     async def run():
-        return [f async for f in event_stream(
-            DbChangeWatcher(db), _Request(polls=5), interval=0.01)]
+        return [
+            f async for f in event_stream(DbChangeWatcher(db), _Request(polls=5), interval=0.01)
+        ]
 
     assert asyncio.run(run()) == []
     w.close()

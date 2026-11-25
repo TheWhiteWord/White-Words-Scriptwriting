@@ -1,9 +1,10 @@
 """story_search tool — search within a project."""
+
 import json
 from pathlib import Path
 
 DEFAULT_LIMIT = 10
-MAX_LIMIT = 50      # snippets are capped at 200 chars, so 50 hits is ~14 KB
+MAX_LIMIT = 50  # snippets are capped at 200 chars, so 50 hits is ~14 KB
 
 
 def _clamp_limit(raw) -> tuple[int, bool]:
@@ -24,26 +25,23 @@ def _clamp_limit(raw) -> tuple[int, bool]:
 
 SCHEMA = {
     "description": "Find where something is mentioned, across all section prose in a project. "
-                   "Returns short snippets, not full text, and reports the true total match count "
-                   "so nothing is silently hidden. Follow up with story_retrieve to read a hit.",
+    "Returns short snippets, not full text, and reports the true total match count "
+    "so nothing is silently hidden. Follow up with story_retrieve to read a hit.",
     "type": "object",
     "properties": {
-        "project": {
-            "type": "string",
-            "description": "Project slug or name"
-        },
+        "project": {"type": "string", "description": "Project slug or name"},
         "query": {
             "type": "string",
-            "description": "Search query. All words must be present (AND). Punctuation is safe."
+            "description": "Search query. All words must be present (AND). Punctuation is safe.",
         },
         "limit": {
             "type": "integer",
             "description": "Max results to return (default 10). total_matches always reports the full count.",
             "minimum": 1,
             "maximum": 50,
-        }
+        },
     },
-    "required": ["project", "query"]
+    "required": ["project", "query"],
 }
 
 

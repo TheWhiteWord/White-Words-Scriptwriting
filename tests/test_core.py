@@ -1,13 +1,28 @@
 """Test suite for White Words core modules."""
+
 import pytest
 import json
 from pathlib import Path
-from white_words.scriptwriting.core.section_parser import list_sections, get_section, replace_section
+from white_words.scriptwriting.core.section_parser import (
+    list_sections,
+    get_section,
+    replace_section,
+)
 from white_words.scriptwriting.core.entity import extract_entity, validate_entity
-from white_words.scriptwriting.core.screenplay import extract_scenes, match_character, match_location, extract_location
+from white_words.scriptwriting.core.screenplay import (
+    extract_scenes,
+    match_character,
+    match_location,
+    extract_location,
+)
 from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
-from white_words.scriptwriting.core.writes import (create_entity, create_project, delete_entity,
-                          edit_entity, reorder)
+from white_words.scriptwriting.core.writes import (
+    create_entity,
+    create_project,
+    delete_entity,
+    edit_entity,
+    reorder,
+)
 
 
 # ---- Imports for tool tests ----
@@ -15,6 +30,7 @@ from white_words.scriptwriting.tools.story_load import handler as load_handler
 
 
 # ---- Fixtures ----
+
 
 @pytest.fixture
 def project_path():
@@ -35,6 +51,7 @@ def screenplay_path(project_path):
 
 
 # ---- Section Parser Tests ----
+
 
 class TestSectionParser:
     def test_list_sections_simple(self):
@@ -73,6 +90,7 @@ class TestSectionParser:
 
 # ---- Entity Extraction Tests ----
 
+
 class TestEntityExtraction:
     def test_extract_character(self, kael_note):
         entity = extract_entity(kael_note, "character")
@@ -92,22 +110,43 @@ class TestEntityExtraction:
         assert any("story_role" in w for w in warnings)
 
     def test_validate_character_invalid_role(self):
-        warnings = validate_entity("character", {"name": "T", "story_role": "Invalid", "one_sentence": "X"})
+        warnings = validate_entity(
+            "character", {"name": "T", "story_role": "Invalid", "one_sentence": "X"}
+        )
         assert any("Invalid story_role" in w for w in warnings)
 
     def test_validate_scene_invalid_status(self):
         """validate_entity('scene', {status: 'invalid'}) returns warning."""
-        warnings = validate_entity("scene", {"title": "Test", "sequence_id": "seq-1", "act_id": "act-1", "status": "invalid"})
+        warnings = validate_entity(
+            "scene",
+            {"title": "Test", "sequence_id": "seq-1", "act_id": "act-1", "status": "invalid"},
+        )
         assert any("Invalid status: invalid" in w for w in warnings)
 
     def test_validate_scene_invalid_dramatic_role(self):
         """validate_entity('scene', {dramatic_role: 'invalid'}) returns warning."""
-        warnings = validate_entity("scene", {"title": "Test", "sequence_id": "seq-1", "act_id": "act-1", "dramatic_role": "invalid"})
+        warnings = validate_entity(
+            "scene",
+            {
+                "title": "Test",
+                "sequence_id": "seq-1",
+                "act_id": "act-1",
+                "dramatic_role": "invalid",
+            },
+        )
         assert any("Invalid dramatic_role: invalid" in w for w in warnings)
 
     def test_validate_scene_accepts_non_event(self):
         """'non-event' is a valid dramatic_role (McKee: scenes that don't turn)."""
-        warnings = validate_entity("scene", {"title": "Test", "sequence_id": "seq-1", "act_id": "act-1", "dramatic_role": "non-event"})
+        warnings = validate_entity(
+            "scene",
+            {
+                "title": "Test",
+                "sequence_id": "seq-1",
+                "act_id": "act-1",
+                "dramatic_role": "non-event",
+            },
+        )
         assert not any("Invalid dramatic_role" in w for w in warnings)
 
     def test_non_event_scene_is_valid(self):
@@ -116,15 +155,22 @@ class TestEntityExtraction:
         Value lives in `value_turns` since the B1/B2 redesign; a scene that
         serves no plot simply has none.
         """
-        warnings = validate_entity("scene", {
-            "title": "Test", "sequence_id": "seq-1", "act_id": "act-1",
-            "dramatic_role": "non-event",
-        })
+        warnings = validate_entity(
+            "scene",
+            {
+                "title": "Test",
+                "sequence_id": "seq-1",
+                "act_id": "act-1",
+                "dramatic_role": "non-event",
+            },
+        )
         assert not any("Invalid" in w for w in warnings)
 
     def test_validate_sequence_invalid_status(self):
         """validate_entity('sequence', {status: 'invalid'}) returns warning."""
-        warnings = validate_entity("sequence", {"title": "Test", "act_id": "act-1", "status": "invalid"})
+        warnings = validate_entity(
+            "sequence", {"title": "Test", "act_id": "act-1", "status": "invalid"}
+        )
         assert any("Invalid status: invalid" in w for w in warnings)
 
     def test_validate_act_invalid_status(self):
@@ -144,6 +190,7 @@ class TestEntityExtraction:
 
 
 # ---- Screenplay Tests ----
+
 
 class TestScreenplay:
     def test_extract_scenes(self, screenplay_path):
@@ -179,6 +226,7 @@ class TestScreenplay:
 
 # ---- Note Creation Tests ----
 
+
 def _make_minimal_project(tmp):
     """Create a minimal project structure for testing."""
     project_path = Path(tmp) / "test-project"
@@ -200,11 +248,16 @@ class TestNoteCreation:
 
         project_path = _make_minimal_project(tmp_path)
 
-        result = create_entity(project_path, "character", "test-char",
-            {"name": "Test Char", "story_role": "Protagonist"})
+        result = create_entity(
+            project_path,
+            "character",
+            "test-char",
+            {"name": "Test Char", "story_role": "Protagonist"},
+        )
         assert result["success"] == True
 
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
         try:
             row = conn.execute(
@@ -230,11 +283,16 @@ class TestNoteCreation:
 
         project_path = _make_minimal_project(tmp_path)
 
-        result = create_entity(project_path, "character", "test-char",
-            {"name": "Test Char", "story_role": "Protagonist"})
+        result = create_entity(
+            project_path,
+            "character",
+            "test-char",
+            {"name": "Test Char", "story_role": "Protagonist"},
+        )
         assert result["success"] == True
 
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
         try:
             rows = conn.execute(
@@ -258,11 +316,11 @@ class TestNoteCreation:
 
         project_path = _make_minimal_project(tmp_path)
 
-        result = create_entity(project_path, "plot", "test-plot",
-            {"name": "Test Plot"})
+        result = create_entity(project_path, "plot", "test-plot", {"name": "Test Plot"})
         assert result["success"] == True
 
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
         try:
             row = conn.execute(
@@ -283,11 +341,11 @@ class TestNoteCreation:
 
         project_path = _make_minimal_project(tmp_path)
 
-        result = create_entity(project_path, "plot", "test-plot",
-            {"name": "Test Plot"})
+        result = create_entity(project_path, "plot", "test-plot", {"name": "Test Plot"})
         assert result["success"] == True
 
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
         try:
             rows = conn.execute(
@@ -309,8 +367,12 @@ class TestNoteCreation:
 
         project_path = _make_minimal_project(tmp_path)
 
-        result = create_entity(project_path, "plot", "main-plot",
-            {"name": "Main Plot", "plot_scope": "main", "value_arc": "Maturation"})
+        result = create_entity(
+            project_path,
+            "plot",
+            "main-plot",
+            {"name": "Main Plot", "plot_scope": "main", "value_arc": "Maturation"},
+        )
         assert result["success"] is True
 
         conn = get_db(project_path)
@@ -327,19 +389,29 @@ class TestNoteCreation:
     def test_validate_plot_invalid_scope(self):
         """validate_entity('plot', {plot_scope: 'invalid'}) returns warning."""
         from white_words.scriptwriting.core.entity import validate_entity
-        warnings = validate_entity("plot", {"name": "Test", "status": "active", "plot_scope": "invalid"})
+
+        warnings = validate_entity(
+            "plot", {"name": "Test", "status": "active", "plot_scope": "invalid"}
+        )
         assert any("Invalid plot_scope: invalid" in w for w in warnings)
 
     def test_validate_plot_invalid_value_arc(self):
         """validate_entity('plot', {value_arc: 'invalid'}) returns warning."""
         from white_words.scriptwriting.core.entity import validate_entity
-        warnings = validate_entity("plot", {"name": "Test", "status": "active", "value_arc": "invalid"})
+
+        warnings = validate_entity(
+            "plot", {"name": "Test", "status": "active", "value_arc": "invalid"}
+        )
         assert any("Invalid value_arc: invalid" in w for w in warnings)
 
     def test_validate_plot_valid_scope_and_arc(self):
         """validate_entity accepts valid plot_scope and value_arc."""
         from white_words.scriptwriting.core.entity import validate_entity
-        warnings = validate_entity("plot", {"name": "Test", "status": "active", "plot_scope": "main", "value_arc": "Maturation"})
+
+        warnings = validate_entity(
+            "plot",
+            {"name": "Test", "status": "active", "plot_scope": "main", "value_arc": "Maturation"},
+        )
         assert not any("Invalid" in w for w in warnings)
 
     def test_create_scene_has_all_fields_and_sections(self, tmp_path):
@@ -348,16 +420,19 @@ class TestNoteCreation:
         project_path = _make_minimal_project(tmp_path)
 
         # Create parent entities first (required for scene validation)
-        create_entity(project_path, "act", "act-1",
-            {"title": "Act 1"})
-        create_entity(project_path, "sequence", "seq-1",
-            {"title": "Seq 1", "act_id": "act-1"})
+        create_entity(project_path, "act", "act-1", {"title": "Act 1"})
+        create_entity(project_path, "sequence", "seq-1", {"title": "Seq 1", "act_id": "act-1"})
 
-        result = create_entity(project_path, "scene", "test-scene",
-            {"title": "Test Scene", "sequence_id": "seq-1", "act_id": "act-1"})
+        result = create_entity(
+            project_path,
+            "scene",
+            "test-scene",
+            {"title": "Test Scene", "sequence_id": "seq-1", "act_id": "act-1"},
+        )
         assert result["success"] == True
 
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
         try:
             row = conn.execute(
@@ -398,14 +473,15 @@ class TestNoteCreation:
         project_path = _make_minimal_project(tmp_path)
 
         # Create parent act first (required for sequence validation)
-        create_entity(project_path, "act", "act-1",
-            {"title": "Act 1"})
+        create_entity(project_path, "act", "act-1", {"title": "Act 1"})
 
-        result = create_entity(project_path, "sequence", "test-sequence",
-            {"title": "Test Sequence", "act_id": "act-1"})
+        result = create_entity(
+            project_path, "sequence", "test-sequence", {"title": "Test Sequence", "act_id": "act-1"}
+        )
         assert result["success"] == True
 
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
         try:
             row = conn.execute(
@@ -437,11 +513,11 @@ class TestNoteCreation:
 
         project_path = _make_minimal_project(tmp_path)
 
-        result = create_entity(project_path, "act", "test-act",
-            {"title": "Test Act"})
+        result = create_entity(project_path, "act", "test-act", {"title": "Test Act"})
         assert result["success"] == True
 
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
         try:
             row = conn.execute(
@@ -474,7 +550,16 @@ class TestProjectCreation:
         proj = tmp_path / "projects" / "test-proj"
         assert (proj / ".story" / "story.db").exists()
         assert not (proj / "project.md").exists()
-        for folder in ["characters", "locations", "worlds", "plots", "scenes", "sequences", "acts", "arcs"]:
+        for folder in [
+            "characters",
+            "locations",
+            "worlds",
+            "plots",
+            "scenes",
+            "sequences",
+            "acts",
+            "arcs",
+        ]:
             assert not (proj / folder).exists(), f"Unexpected folder: {folder}"
 
     def test_create_project_does_not_create_project_markdown(self, tmp_path):
@@ -486,9 +571,12 @@ class TestProjectCreation:
         project = tmp_path / "projects" / "test-proj"
         assert not (project / ".story" / "memory.md").exists()
         from white_words.scriptwriting.core.db import get_db, get_project_memory, empty_memory
+
         conn = get_db(project)
         try:
-            extra = json.loads(conn.execute("SELECT extra FROM entities WHERE type='project'").fetchone()[0])
+            extra = json.loads(
+                conn.execute("SELECT extra FROM entities WHERE type='project'").fetchone()[0]
+            )
         finally:
             conn.close()
         assert extra["memory"] == empty_memory()
@@ -500,9 +588,12 @@ class TestProjectCreation:
         db_path = tmp_path / "projects" / "test-proj" / ".story" / "story.db"
         assert db_path.exists()
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(tmp_path / "projects" / "test-proj")
         try:
-            row = conn.execute("SELECT name, type FROM entities WHERE id='test-proj' AND type='project'").fetchone()
+            row = conn.execute(
+                "SELECT name, type FROM entities WHERE id='test-proj' AND type='project'"
+            ).fetchone()
             assert row is not None
             assert row[0] == "Test Project"
         finally:
@@ -533,7 +624,10 @@ class TestProjectCreation:
         assert "memory" in result
         assert "memory_outline" not in result
         assert set(result["memory"]["categories"]) == {
-            "decisions", "directions", "open_questions", "continuity_warnings"
+            "decisions",
+            "directions",
+            "open_questions",
+            "continuity_warnings",
         }
         # Old keys gone
         assert "entities" not in result
@@ -556,24 +650,34 @@ class TestPhase3ToolSurface:
         project_path = _make_project_with_structure(tmp_path)
 
         # Create parents (now writes DB directly)
-        create_entity(project_path, "act", "act-1",
-            {"title": "Act 1"})
-        create_entity(project_path, "sequence", "seq-1",
-            {"title": "Seq 1", "act_id": "act-1"})
-        create_entity(project_path, "location", "kitchen",
-            {"name": "Kitchen", "one_sentence": "x"})
-        create_entity(project_path, "scene", "test-scene",
-            {"title": "Test Scene", "sequence_id": "seq-1", "act_id": "act-1"})
+        create_entity(project_path, "act", "act-1", {"title": "Act 1"})
+        create_entity(project_path, "sequence", "seq-1", {"title": "Seq 1", "act_id": "act-1"})
+        create_entity(project_path, "location", "kitchen", {"name": "Kitchen", "one_sentence": "x"})
+        create_entity(
+            project_path,
+            "scene",
+            "test-scene",
+            {"title": "Test Scene", "sequence_id": "seq-1", "act_id": "act-1"},
+        )
 
         # Edit with data bag: frontmatter field + body section
-        result = edit_entity(project_path, "scene", "test-scene",
-            {"status": "written", "int_ext": "INT.", "location": "kitchen",
-             "Content": "Updated content text."},
-            "Update status and content")
+        result = edit_entity(
+            project_path,
+            "scene",
+            "test-scene",
+            {
+                "status": "written",
+                "int_ext": "INT.",
+                "location": "kitchen",
+                "Content": "Updated content text.",
+            },
+            "Update status and content",
+        )
         assert result["success"] is True
 
         # Assert on DB state
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
         row = conn.execute("SELECT status FROM entities WHERE id='test-scene'").fetchone()
         assert row[0] == "written"
@@ -589,17 +693,18 @@ class TestPhase3ToolSurface:
 
         project_path = _make_project_with_structure(tmp_path)
 
-        create_entity(project_path, "act", "act-1",
-            {"title": "Act 1"})
-        create_entity(project_path, "sequence", "seq-1",
-            {"title": "Seq 1", "act_id": "act-1"})
+        create_entity(project_path, "act", "act-1", {"title": "Act 1"})
+        create_entity(project_path, "sequence", "seq-1", {"title": "Seq 1", "act_id": "act-1"})
         for slug in ["scene-1", "scene-2", "scene-3"]:
-            create_entity(project_path, "scene", slug,
-                {"title": f"Scene {slug[-1]}", "sequence_id": "seq-1", "act_id": "act-1"})
+            create_entity(
+                project_path,
+                "scene",
+                slug,
+                {"title": f"Scene {slug[-1]}", "sequence_id": "seq-1", "act_id": "act-1"},
+            )
 
         # Reorder: move scene-3 to front
-        result = reorder(project_path, "scene", ["scene-3", "scene-1", "scene-2"],
-                         "Reorder scenes")
+        result = reorder(project_path, "scene", ["scene-3", "scene-1", "scene-2"], "Reorder scenes")
         assert result["success"] is True
 
         # Assert DB order_key values
@@ -617,20 +722,22 @@ class TestPhase3ToolSurface:
         """Delete sequence with child scenes → refused."""
         project_path = _make_project_with_structure(tmp_path)
 
-        create_entity(project_path, "act", "act-1",
-            {"title": "Act 1"})
-        create_entity(project_path, "sequence", "seq-1",
-            {"title": "Seq 1", "act_id": "act-1"})
-        create_entity(project_path, "scene", "scene-1",
-            {"title": "Scene 1", "sequence_id": "seq-1", "act_id": "act-1"})
+        create_entity(project_path, "act", "act-1", {"title": "Act 1"})
+        create_entity(project_path, "sequence", "seq-1", {"title": "Seq 1", "act_id": "act-1"})
+        create_entity(
+            project_path,
+            "scene",
+            "scene-1",
+            {"title": "Scene 1", "sequence_id": "seq-1", "act_id": "act-1"},
+        )
 
-        result = delete_entity(project_path, "sequence", "seq-1",
-                               "Delete seq-1", True)
+        result = delete_entity(project_path, "sequence", "seq-1", "Delete seq-1", True)
         assert "Cannot delete" in result["error"]
         assert [c["id"] for c in result["blocking_children"]] == ["scene-1"]
 
         # Entity should still exist (delete was blocked)
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
         row = conn.execute("SELECT id FROM entities WHERE id='seq-1'").fetchone()
         assert row is not None
@@ -640,10 +747,8 @@ class TestPhase3ToolSurface:
         """Delete act with child sequences → refused."""
         project_path = _make_project_with_structure(tmp_path)
 
-        create_entity(project_path, "act", "act-1",
-            {"title": "Act 1"})
-        create_entity(project_path, "sequence", "seq-1",
-            {"title": "Seq 1", "act_id": "act-1"})
+        create_entity(project_path, "act", "act-1", {"title": "Act 1"})
+        create_entity(project_path, "sequence", "seq-1", {"title": "Seq 1", "act_id": "act-1"})
 
         result = delete_entity(project_path, "act", "act-1", "Delete act-1", True)
         assert "Cannot delete" in result["error"]
@@ -651,32 +756,31 @@ class TestPhase3ToolSurface:
 
         # Entity should still exist (delete was blocked)
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
         row = conn.execute("SELECT id FROM entities WHERE id='act-1'").fetchone()
         assert row is not None
         conn.close()
 
-
-
     def test_delete_character_soft_delete(self, tmp_path):
         """Delete character without children → gone from every read."""
         project_path = _make_project_with_structure(tmp_path)
 
-        create_entity(project_path, "character", "solo-char",
-            {"name": "Solo", "story_role": "Minor"})
+        create_entity(
+            project_path, "character", "solo-char", {"name": "Solo", "story_role": "Minor"}
+        )
 
-        result = delete_entity(project_path, "character", "solo-char",
-                               "Delete solo-char", True)
+        result = delete_entity(project_path, "character", "solo-char", "Delete solo-char", True)
         assert result["success"] is True
 
         # The row survives, flagged — that is what makes restore an exact
         # inverse (task_18 soft delete). What must be true is that no reader
         # can see it any more.
         import sqlite3
+
         conn = sqlite3.connect(str(project_path / ".story" / "story.db"))
         conn.execute("PRAGMA journal_mode=WAL")
-        row = conn.execute(
-            "SELECT is_deleted FROM entities WHERE id='solo-char'").fetchone()
+        row = conn.execute("SELECT is_deleted FROM entities WHERE id='solo-char'").fetchone()
         live = conn.execute(
             "SELECT count(*) FROM entities WHERE id='solo-char' AND is_deleted=0"
         ).fetchone()[0]
@@ -688,21 +792,28 @@ class TestPhase3ToolSurface:
         """Create scene without order → auto-assigned next position."""
         project_path = _make_project_with_structure(tmp_path)
 
-        create_entity(project_path, "act", "act-1",
-            {"title": "Act 1"})
-        create_entity(project_path, "sequence", "seq-1",
-            {"title": "Seq 1", "act_id": "act-1"})
+        create_entity(project_path, "act", "act-1", {"title": "Act 1"})
+        create_entity(project_path, "sequence", "seq-1", {"title": "Seq 1", "act_id": "act-1"})
 
         # Create first scene — auto-order = 1
-        create_entity(project_path, "scene", "scene-a",
-            {"title": "Scene A", "sequence_id": "seq-1", "act_id": "act-1"})
+        create_entity(
+            project_path,
+            "scene",
+            "scene-a",
+            {"title": "Scene A", "sequence_id": "seq-1", "act_id": "act-1"},
+        )
         # Create second scene — auto-order = 2
-        result = create_entity(project_path, "scene", "scene-b",
-            {"title": "Scene B", "sequence_id": "seq-1", "act_id": "act-1"})
+        result = create_entity(
+            project_path,
+            "scene",
+            "scene-b",
+            {"title": "Scene B", "sequence_id": "seq-1", "act_id": "act-1"},
+        )
         assert result["success"] is True
 
         # Verify auto-order in DB
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
         try:
             row_a = conn.execute("SELECT order_key FROM entities WHERE id='scene-a'").fetchone()
@@ -716,15 +827,20 @@ class TestPhase3ToolSurface:
         """Create scene with non-existent sequence_id → error."""
         project_path = _make_project_with_structure(tmp_path)
 
-        create_entity(project_path, "act", "act-1",
-            {"title": "Act 1"})
+        create_entity(project_path, "act", "act-1", {"title": "Act 1"})
 
         # No seq-99 exists — scene creation should fail
         with pytest.raises(ValueError, match="seq-99|Sequence"):
-            create_entity(project_path, "scene", "orphan",
-                {"title": "Orphan", "sequence_id": "seq-99", "act_id": "act-1"})
+            create_entity(
+                project_path,
+                "scene",
+                "orphan",
+                {"title": "Orphan", "sequence_id": "seq-99", "act_id": "act-1"},
+            )
+
 
 # ---- Phase 4: screenplay stats from DB scene content ----
+
 
 class TestScreenplayStatsFromSceneContent:
     """Tests for get_screenplay_text → _compute_screenplay_stats pipeline."""
@@ -739,15 +855,27 @@ class TestScreenplayStatsFromSceneContent:
         (project_path / ".story").mkdir()
         (project_path / "project.md").write_text("---\nname: Test\n---\n")
 
-        create_entity(project_path, "act", "act-1",
-            {"title": "Act 1"})
-        create_entity(project_path, "sequence", "seq-1",
-            {"title": "Seq 1", "act_id": "act-1"})
-        create_entity(project_path, "location", "the-institute",
-            {"name": "The Institute", "one_sentence": "T"})
-        create_entity(project_path, "scene", "scene-1",
-            {"title": "The Institute", "sequence_id": "seq-1", "act_id": "act-1",
-             "int_ext": "EXT.", "location": "the-institute", "time_of_day": "DAY"})
+        create_entity(project_path, "act", "act-1", {"title": "Act 1"})
+        create_entity(project_path, "sequence", "seq-1", {"title": "Seq 1", "act_id": "act-1"})
+        create_entity(
+            project_path,
+            "location",
+            "the-institute",
+            {"name": "The Institute", "one_sentence": "T"},
+        )
+        create_entity(
+            project_path,
+            "scene",
+            "scene-1",
+            {
+                "title": "The Institute",
+                "sequence_id": "seq-1",
+                "act_id": "act-1",
+                "int_ext": "EXT.",
+                "location": "the-institute",
+                "time_of_day": "DAY",
+            },
+        )
 
         # The body is written directly, the way the importer does — the write
         # boundary does not run here, so the heading line is stripped by hand and
@@ -756,7 +884,10 @@ class TestScreenplayStatsFromSceneContent:
         try:
             conn.execute(
                 "UPDATE sections SET body=? WHERE entity_id=? AND heading='Content'",
-                ("A vast decaying building.\n\nKAEL (15, intense) stares at a wall of pale light.\n\nKAEL\nSomething's wrong. Everything arrives too perfectly.", "scene-1")
+                (
+                    "A vast decaying building.\n\nKAEL (15, intense) stares at a wall of pale light.\n\nKAEL\nSomething's wrong. Everything arrives too perfectly.",
+                    "scene-1",
+                ),
             )
             conn.commit()
         finally:
@@ -767,6 +898,7 @@ class TestScreenplayStatsFromSceneContent:
         assert "EXT. THE INSTITUTE - DAY" in scene_text
 
         from white_words.scriptwriting.app.stats import _compute_screenplay_stats
+
         stats = _compute_screenplay_stats(scene_text)
         assert stats is not None
         assert "scriptHtml" in stats
@@ -779,7 +911,11 @@ class TestScreenplayStatsFromSceneContent:
         fields, so the assembled text carries one line per scene and the stats
         count them. Before the composer, the same project assembled to bare
         bodies and `lengthStats.scenes` was 0."""
-        from white_words.scriptwriting.core.db import get_dashboard_data, get_db, get_screenplay_text
+        from white_words.scriptwriting.core.db import (
+            get_dashboard_data,
+            get_db,
+            get_screenplay_text,
+        )
 
         project_path = tmp_path / "test-project"
         project_path.mkdir()
@@ -787,23 +923,38 @@ class TestScreenplayStatsFromSceneContent:
         (project_path / "project.md").write_text("---\nname: Test\n---\n")
 
         create_entity(project_path, "act", "act-1", {"title": "Act 1"})
-        create_entity(project_path, "sequence", "seq-1",
-                      {"title": "Seq 1", "act_id": "act-1"})
-        create_entity(project_path, "location", "the-institute",
-                      {"name": "The Institute", "one_sentence": "T"})
+        create_entity(project_path, "sequence", "seq-1", {"title": "Seq 1", "act_id": "act-1"})
+        create_entity(
+            project_path,
+            "location",
+            "the-institute",
+            {"name": "The Institute", "one_sentence": "T"},
+        )
         create_entity(project_path, "project", "test", {"name": "Test"})
         for i, (tod, place) in enumerate([("DAY", ""), ("NIGHT", "cellar")], start=1):
-            create_entity(project_path, "scene", f"scene-{i}",
-                          {"title": f"Scene {i}", "sequence_id": "seq-1", "act_id": "act-1",
-                           "order": i, "int_ext": "INT.", "location": "the-institute",
-                           "time_of_day": tod, "place": place},
-                          sections={"Content": f"Body {i}.\n"})
+            create_entity(
+                project_path,
+                "scene",
+                f"scene-{i}",
+                {
+                    "title": f"Scene {i}",
+                    "sequence_id": "seq-1",
+                    "act_id": "act-1",
+                    "order": i,
+                    "int_ext": "INT.",
+                    "location": "the-institute",
+                    "time_of_day": tod,
+                    "place": place,
+                },
+                sections={"Content": f"Body {i}.\n"},
+            )
 
         text = get_screenplay_text(project_path)
         assert "INT. THE INSTITUTE - DAY" in text
         assert "INT. THE INSTITUTE - CELLAR - NIGHT" in text
 
         from white_words.scriptwriting.app.stats import _compute_screenplay_stats
+
         stats = _compute_screenplay_stats(text)
         assert stats["lengthStats"]["scenes"] == 2
 
@@ -847,21 +998,29 @@ class TestScreenplayStatsFromSceneContent:
             shutil.copytree(str(project), str(exported))
             for f in exported.rglob("*.md"):
                 f.unlink()
-            assert json.loads(export_handler(
-                {"project": str(exported), "root_path": str(export_dir)}))["success"] is True
+            assert (
+                json.loads(
+                    export_handler({"project": str(exported), "root_path": str(export_dir)})
+                )["success"]
+                is True
+            )
 
             reimport = tmp / "reimported"
             (reimport / "save-the-children").parent.mkdir(parents=True)
             shutil.copytree(str(exported), str(reimport / "save-the-children"))
             dest = reimport / "save-the-children"
-            import_handler({"project": str(dest), "confirm": True,
-                            "root_path": str(reimport)})
+            import_handler({"project": str(dest), "confirm": True, "root_path": str(reimport)})
 
             from white_words.scriptwriting.core.db import get_db, get_screenplay_text
+
             conn = get_db(dest)
             try:
-                rows = {sid: json.loads(extra) for sid, extra in conn.execute(
-                    "SELECT id, extra FROM entities WHERE type='scene'")}
+                rows = {
+                    sid: json.loads(extra)
+                    for sid, extra in conn.execute(
+                        "SELECT id, extra FROM entities WHERE type='scene'"
+                    )
+                }
             finally:
                 conn.close()
             assert rows["central-room-day"]["int_ext"] == "INT."
@@ -891,23 +1050,38 @@ class TestStoryOrder:
         project_path.mkdir()
         (project_path / ".story").mkdir()
         create_entity(project_path, "project", "test", {"name": "Test"})
-        create_entity(project_path, "location", "the-garden",
-                      {"name": "The Garden", "one_sentence": "G"})
+        create_entity(
+            project_path, "location", "the-garden", {"name": "The Garden", "one_sentence": "G"}
+        )
         create_entity(project_path, "act", "act-1", {"title": "Act One", "order": 1})
         create_entity(project_path, "act", "act-2", {"title": "Act Two", "order": 2})
-        create_entity(project_path, "sequence", "seq-a",
-                      {"title": "Seq A", "act_id": "act-1", "order": 1})
-        create_entity(project_path, "sequence", "seq-b",
-                      {"title": "Seq B", "act_id": "act-2", "order": 1})
-        for sid, seq, act, order in (("a1", "seq-a", "act-1", 1),
-                                     ("a2", "seq-a", "act-1", 2),
-                                     ("b1", "seq-b", "act-2", 1),
-                                     ("b2", "seq-b", "act-2", 2)):
-            create_entity(project_path, "scene", sid,
-                          {"title": f"Scene {sid}", "sequence_id": seq, "act_id": act,
-                           "order": order, "int_ext": "EXT.", "location": "the-garden",
-                           "time_of_day": "DAY"},
-                          sections={"Content": f"Body {sid}.\n"})
+        create_entity(
+            project_path, "sequence", "seq-a", {"title": "Seq A", "act_id": "act-1", "order": 1}
+        )
+        create_entity(
+            project_path, "sequence", "seq-b", {"title": "Seq B", "act_id": "act-2", "order": 1}
+        )
+        for sid, seq, act, order in (
+            ("a1", "seq-a", "act-1", 1),
+            ("a2", "seq-a", "act-1", 2),
+            ("b1", "seq-b", "act-2", 1),
+            ("b2", "seq-b", "act-2", 2),
+        ):
+            create_entity(
+                project_path,
+                "scene",
+                sid,
+                {
+                    "title": f"Scene {sid}",
+                    "sequence_id": seq,
+                    "act_id": act,
+                    "order": order,
+                    "int_ext": "EXT.",
+                    "location": "the-garden",
+                    "time_of_day": "DAY",
+                },
+                sections={"Content": f"Body {sid}.\n"},
+            )
         return project_path
 
     def test_the_assembled_script_reads_act_by_act(self, tmp_path):
@@ -920,16 +1094,16 @@ class TestStoryOrder:
         from white_words.scriptwriting.core.db import get_dashboard_data
 
         data = get_dashboard_data(self._two_acts(tmp_path))
-        assert [h["id"] for h in data["screenplay_scene_headings"]] == [
-            "a1", "a2", "b1", "b2"]
+        assert [h["id"] for h in data["screenplay_scene_headings"]] == ["a1", "a2", "b1", "b2"]
 
     def test_both_assembly_paths_agree(self, tmp_path):
         """`get_screenplay_text` and the dashboard assemble the same script."""
         from white_words.scriptwriting.core.db import get_dashboard_data, get_screenplay_text
 
         project_path = self._two_acts(tmp_path)
-        dashboard_ids = [h["id"] for h in
-                         get_dashboard_data(project_path)["screenplay_scene_headings"]]
+        dashboard_ids = [
+            h["id"] for h in get_dashboard_data(project_path)["screenplay_scene_headings"]
+        ]
         text = get_screenplay_text(project_path)
         positions = [text.find(f"Body {sid}.") for sid in ("a1", "a2", "b1", "b2")]
         assert all(p >= 0 for p in positions), text
@@ -947,47 +1121,78 @@ class TestStoryOrder:
 
         project_path = self._two_acts(tmp_path)
         # A hole after the second scene, the shape a delete-and-recreate leaves.
-        create_entity(project_path, "scene", "a3",
-                      {"title": "Scene a3", "sequence_id": "seq-a", "act_id": "act-1",
-                       "order": 4, "int_ext": "EXT.", "location": "the-garden",
-                       "time_of_day": "DAY"},
-                      sections={"Content": "Body a3.\n"})
-        scenes = {s["id"]: s for s in
-                  get_dashboard_data(project_path)["story_data"]["scenes"]}
+        create_entity(
+            project_path,
+            "scene",
+            "a3",
+            {
+                "title": "Scene a3",
+                "sequence_id": "seq-a",
+                "act_id": "act-1",
+                "order": 4,
+                "int_ext": "EXT.",
+                "location": "the-garden",
+                "time_of_day": "DAY",
+            },
+            sections={"Content": "Body a3.\n"},
+        )
+        scenes = {s["id"]: s for s in get_dashboard_data(project_path)["story_data"]["scenes"]}
         assert [scenes[sid]["number"] for sid in ("a1", "a2", "a3")] == [1, 2, 3]
         # The stored key is untouched: the number is derived, not written back.
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
         try:
-            assert conn.execute(
-                "SELECT order_key FROM entities WHERE id='a3'").fetchone()[0] == 4
+            assert conn.execute("SELECT order_key FROM entities WHERE id='a3'").fetchone()[0] == 4
         finally:
             conn.close()
 
     def test_a_new_scene_after_a_deleted_one_takes_the_next_number(self, tmp_path):
         """Auto-order counts live scenes only, so a delete leaves no hole."""
         project_path = self._two_acts(tmp_path)
-        create_entity(project_path, "scene", "a3",
-                      {"title": "Scene a3", "sequence_id": "seq-a", "act_id": "act-1",
-                       "int_ext": "EXT.", "location": "the-garden", "time_of_day": "DAY"})
+        create_entity(
+            project_path,
+            "scene",
+            "a3",
+            {
+                "title": "Scene a3",
+                "sequence_id": "seq-a",
+                "act_id": "act-1",
+                "int_ext": "EXT.",
+                "location": "the-garden",
+                "time_of_day": "DAY",
+            },
+        )
         delete_entity(project_path, "scene", "a3", "test", confirm=True)
-        create_entity(project_path, "scene", "a4",
-                      {"title": "Scene a4", "sequence_id": "seq-a", "act_id": "act-1",
-                       "int_ext": "EXT.", "location": "the-garden", "time_of_day": "DAY"})
+        create_entity(
+            project_path,
+            "scene",
+            "a4",
+            {
+                "title": "Scene a4",
+                "sequence_id": "seq-a",
+                "act_id": "act-1",
+                "int_ext": "EXT.",
+                "location": "the-garden",
+                "time_of_day": "DAY",
+            },
+        )
         from white_words.scriptwriting.core.db import get_db
+
         conn = get_db(project_path)
         try:
-            assert conn.execute(
-                "SELECT order_key FROM entities WHERE id='a4'").fetchone()[0] == 3
+            assert conn.execute("SELECT order_key FROM entities WHERE id='a4'").fetchone()[0] == 3
         finally:
             conn.close()
 
 
 # ---- Unfilled Fields Tests ----
 
+
 class TestUnfilledFields:
     def test_unfilled_fields_character(self):
         from white_words.scriptwriting.core.entity import unfilled_fields
+
         extra = {"story_role": "Protagonist", "goals_short": "", "goals_long": ""}
         result = unfilled_fields("character", extra)
         assert "goals_short" in result
@@ -995,13 +1200,19 @@ class TestUnfilledFields:
 
     def test_unfilled_fields_skips_filled(self):
         from white_words.scriptwriting.core.entity import unfilled_fields
-        extra = {"story_role": "Protagonist", "goals_short": "Escaped from prison", "goals_long": ""}
+
+        extra = {
+            "story_role": "Protagonist",
+            "goals_short": "Escaped from prison",
+            "goals_long": "",
+        }
         result = unfilled_fields("character", extra)
         assert "goals_short" not in result
         assert "goals_long" in result
 
     def test_unfilled_fields_only_optional(self):
         from white_words.scriptwriting.core.entity import unfilled_fields
+
         # story_role is required (optional: False), should not appear even if at default
         extra = {"story_role": "", "goals_short": ""}
         result = unfilled_fields("character", extra)
@@ -1010,6 +1221,7 @@ class TestUnfilledFields:
 
     def test_unfilled_fields_scene_location(self):
         from white_words.scriptwriting.core.entity import unfilled_fields
+
         extra = {"location": "", "int_ext": "", "dramatic_role": ""}
         result = unfilled_fields("scene", extra)
         assert "location" in result
@@ -1019,6 +1231,7 @@ class TestUnfilledFields:
 
     def test_unfilled_fields_plot_type(self):
         from white_words.scriptwriting.core.entity import unfilled_fields
+
         extra = {"plot_type": "", "value_arc": "", "one_sentence": ""}
         result = unfilled_fields("plot", extra)
         assert "plot_type" in result
@@ -1028,6 +1241,7 @@ class TestUnfilledFields:
     def test_unfilled_fields_skips_status(self):
         """status is a workflow state, never reported as unfilled."""
         from white_words.scriptwriting.core.entity import unfilled_fields
+
         extra = {"status": "planned", "int_ext": "", "dramatic_role": ""}
         result = unfilled_fields("scene", extra)
         assert "status" not in result
@@ -1037,6 +1251,7 @@ class TestUnfilledFields:
     def test_unfilled_fields_skips_booleans(self):
         """Boolean fields are not 'unfilled'."""
         from white_words.scriptwriting.core.entity import unfilled_fields
+
         extra = {"is_crisis": False, "is_climax": False, "action": ""}
         result = unfilled_fields("scene_beats", extra)
         assert "is_crisis" not in result
@@ -1045,6 +1260,7 @@ class TestUnfilledFields:
     def test_unfilled_fields_skips_numbers(self):
         """Numeric fields (act_count) are not 'unfilled'."""
         from white_words.scriptwriting.core.entity import unfilled_fields
+
         extra = {"act_count": 0, "action": ""}
         result = unfilled_fields("project", extra)
         assert "act_count" not in result
@@ -1052,6 +1268,7 @@ class TestUnfilledFields:
     def test_unfilled_fields_plot_scope_empty(self):
         """plot_scope at empty default is flagged; at 'main' is not."""
         from white_words.scriptwriting.core.entity import unfilled_fields
+
         extra_empty = {"plot_scope": ""}
         result = unfilled_fields("plot", extra_empty)
         assert "plot_scope" in result
@@ -1062,6 +1279,7 @@ class TestUnfilledFields:
     def test_unfilled_fields_subfields_perspectives(self):
         """perspectives: bare → parent name; partial → parent.key per missing char."""
         from white_words.scriptwriting.core.entity import unfilled_fields
+
         bare = {"name": "Kael & Mira", "characters": ["kael", "mira"]}
         assert "perspectives" in unfilled_fields("relationship", bare)
         partial = {**bare, "perspectives": {"kael": {"label": "Friend"}}}
@@ -1085,12 +1303,12 @@ class TestUnfilledFields:
         = filled).
         """
         from white_words.scriptwriting.core.entity import unfilled_fields
+
         # The plot side: an unfilled role is named. All five, every time —
         # that is the question "what does this plot still need".
         bare = {"name": "X", "status": "active"}
         result = unfilled_fields("plot", bare)
-        for field in ("setups", "complications", "crisis", "climax",
-                      "resolutions"):
+        for field in ("setups", "complications", "crisis", "climax", "resolutions"):
             assert field in result, f"{field} is an unfulfilled plot role"
 
         # And it stops being reported once the role row exists.
@@ -1099,12 +1317,15 @@ class TestUnfilledFields:
 
         # The scene side: no roles written is a real gap, one entry is filled.
         assert "plot_roles" in unfilled_fields("scene", {"title": "S"})
-        with_role = {"title": "S", "plot_roles": [
-            {"plot": "the-plot", "role": "setup", "description": "d"}]}
+        with_role = {
+            "title": "S",
+            "plot_roles": [{"plot": "the-plot", "role": "setup", "description": "d"}],
+        }
         assert "plot_roles" not in unfilled_fields("scene", with_role)
 
     def test_unfilled_fields_sequence(self):
         from white_words.scriptwriting.core.entity import unfilled_fields
+
         extra = {"purpose": "", "primary_plot": ""}
         result = unfilled_fields("sequence", extra)
         assert "purpose" in result
@@ -1112,6 +1333,7 @@ class TestUnfilledFields:
 
     def test_unfilled_fields_act(self):
         from white_words.scriptwriting.core.entity import unfilled_fields
+
         extra = {"act_objective": ""}
         result = unfilled_fields("act", extra)
         assert "act_objective" in result
@@ -1121,8 +1343,12 @@ class TestUnfilledFields:
 
         project_path = _make_minimal_project(tmp_path)
 
-        result = create_entity(project_path, "character", "test-char",
-            {"name": "Test Char", "story_role": "Protagonist"})
+        result = create_entity(
+            project_path,
+            "character",
+            "test-char",
+            {"name": "Test Char", "story_role": "Protagonist"},
+        )
         assert result["success"]
 
         unfilled = get_unfilled_map(project_path)
@@ -1136,8 +1362,12 @@ class TestUnfilledFields:
 
         project_path = _make_minimal_project(tmp_path)
 
-        create_entity(project_path, "character", "test-char",
-            {"name": "Test Char", "story_role": "Protagonist"})
+        create_entity(
+            project_path,
+            "character",
+            "test-char",
+            {"name": "Test Char", "story_role": "Protagonist"},
+        )
 
         summary = get_project_summary(project_path)
         # Unfilled moved to view="unfilled" (task_21 spec §3.5) — backend get_unfilled_map
@@ -1147,4 +1377,3 @@ class TestUnfilledFields:
 # ---- Value Schema Tests (task_27 phase 1) ----
 
 # A scene's turn is `value_turns`, whose words come from a `value` entity.
-

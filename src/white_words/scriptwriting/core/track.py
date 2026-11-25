@@ -15,6 +15,7 @@ exists only for a scene where something is recorded. Appearances with nothing
 recorded are counted in `coverage`, not listed. The beats themselves are never
 read: the row is what the record says about the scene, not the mechanism.
 """
+
 import json
 from collections import defaultdict
 
@@ -36,11 +37,14 @@ def for_entity(project_path, entity_id, act=None, sequence=None, value=None) -> 
     conn = get_db(project_path)
     try:
         row = conn.execute(
-            "SELECT type FROM entities WHERE id=? AND is_deleted=0",
-            (entity_id,)).fetchone()
+            "SELECT type FROM entities WHERE id=? AND is_deleted=0", (entity_id,)
+        ).fetchone()
         if row is None:
-            return {"view": "track", "entity": entity_id,
-                    "error": f"No entity with id '{entity_id}'."}
+            return {
+                "view": "track",
+                "entity": entity_id,
+                "error": f"No entity with id '{entity_id}'.",
+            }
         entity_type = row[0]
 
         scenes = _scenes(conn, act, sequence)
@@ -108,10 +112,10 @@ def _scenes(conn, act, sequence) -> dict:
         "LEFT JOIN entities pp ON p.parent_id = pp.id "
         "LEFT JOIN entities sb ON sb.parent_id = e.id "
         "AND sb.type='scene_beats' AND sb.is_deleted=0 "
-        "WHERE e.type='scene' AND e.is_deleted=0").fetchall()
+        "WHERE e.type='scene' AND e.is_deleted=0"
+    ).fetchall()
     out = {}
-    for scene_id, seq_id, scene_key, act_id, act_key, seq_key, \
-            extra_json, beats_json in rows:
+    for scene_id, seq_id, scene_key, act_id, act_key, seq_key, extra_json, beats_json in rows:
         if act and act_id != act:
             continue
         if sequence and seq_id != sequence:
@@ -120,8 +124,7 @@ def _scenes(conn, act, sequence) -> dict:
             "id": scene_id,
             "act_id": act_id,
             "sequence_id": seq_id,
-            "order": scene_order(act_id, seq_id, scene_id,
-                                 act_key, seq_key, scene_key),
+            "order": scene_order(act_id, seq_id, scene_id, act_key, seq_key, scene_key),
             "beats": _json(beats_json),
             "turns": [],
             "cast": [],
@@ -147,8 +150,9 @@ def _attach_cast(conn, scenes) -> None:
     scene. A scene with no cast relation is a scene with no cast.
     """
     for from_id, to_id, kind in conn.execute(
-            "SELECT from_id, to_id, kind FROM live_relations "
-            "WHERE kind IN ('character_scene', 'location_scene')"):
+        "SELECT from_id, to_id, kind FROM live_relations "
+        "WHERE kind IN ('character_scene', 'location_scene')"
+    ):
         scene = scenes.get(to_id)
         if scene is None:
             continue
@@ -167,21 +171,20 @@ def _names(scene, entity_id) -> bool:
         return True
     if entity_id == beats.get("driver"):
         return True
-    if entity_id in [c.get("character", "")
-                     for c in beats.get("true_character") or []]:
+    if entity_id in [c.get("character", "") for c in beats.get("true_character") or []]:
         return True
-    if entity_id in [c.get("entity", "")
-                     for c in beats.get("changes") or []]:
+    if entity_id in [c.get("entity", "") for c in beats.get("changes") or []]:
         return True
-    return any(t["character"] == entity_id
-               for turn in scene["turns"] for t in turn["effects"])
+    return any(t["character"] == entity_id for turn in scene["turns"] for t in turn["effects"])
 
 
 def _change_for(entity_id, beats) -> list:
     """The entity's entries in the record's `changes`, in written order."""
-    return [c.get("change", "") for c in beats.get("changes") or []
-            if isinstance(c, dict) and c.get("entity") == entity_id
-            and c.get("change")]
+    return [
+        c.get("change", "")
+        for c in beats.get("changes") or []
+        if isinstance(c, dict) and c.get("entity") == entity_id and c.get("change")
+    ]
 
 
 def _plots_of(conn, character_id) -> list:
@@ -193,8 +196,8 @@ def _plots_of(conn, character_id) -> list:
     """
     out = []
     for plot_id, extra_json in conn.execute(
-            "SELECT id, extra FROM entities WHERE type='plot' "
-            "AND is_deleted=0 ORDER BY order_key, id"):
+        "SELECT id, extra FROM entities WHERE type='plot' AND is_deleted=0 ORDER BY order_key, id"
+    ):
         if character_id in (_json(extra_json).get("characters") or []):
             out.append(plot_id)
     return out
@@ -230,22 +233,20 @@ def _value_path(conn, character_id, scenes, appears, value) -> list:
             if hit:
                 deepest = hit
                 break
-        out.append({"value": name,
-                    "from": line[0]["from"],
-                    "deepest": deepest,
-                    "to": line[-1]["to"]})
+        out.append(
+            {"value": name, "from": line[0]["from"], "deepest": deepest, "to": line[-1]["to"]}
+        )
     return out
 
 
 def _rung_words(conn, value_name) -> dict:
     """The four rung words of a value, keyed by rung. Empty when undefined."""
     for _, name, extra_json in conn.execute(
-            "SELECT id, name, extra FROM entities WHERE type='value' "
-            "AND is_deleted=0"):
+        "SELECT id, name, extra FROM entities WHERE type='value' AND is_deleted=0"
+    ):
         if str(name or "").strip().lower() == value_name.strip().lower():
             extra = _json(extra_json)
-            return {rung: str(extra.get(rung) or "").strip()
-                    for rung in VALUE_LADDER}
+            return {rung: str(extra.get(rung) or "").strip() for rung in VALUE_LADDER}
     return {}
 
 
@@ -284,8 +285,7 @@ def _row_for(entity_id, entity_type, scene, value):
 
     for moment in beats.get("true_character") or []:
         if isinstance(moment, dict) and moment.get("character") == entity_id:
-            entry = {k: moment[k] for k in ("dilemma", "choice_reveals")
-                     if moment.get(k)}
+            entry = {k: moment[k] for k in ("dilemma", "choice_reveals") if moment.get(k)}
             if entry:
                 row["true_character"] = entry
 
@@ -312,8 +312,11 @@ def _effects_for(character_id, turns, value) -> dict:
         for effect in turn["effects"]:
             if effect.get("character") != character_id:
                 continue
-            levels = {level["conflict_level"]: level["effect"]
-                      for level in effect["levels"] if level.get("effect")}
+            levels = {
+                level["conflict_level"]: level["effect"]
+                for level in effect["levels"]
+                if level.get("effect")
+            }
             if not levels:
                 continue
             # One value can turn under two plots in one scene, and the two

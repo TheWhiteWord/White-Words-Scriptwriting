@@ -5,6 +5,7 @@
 never notice: nothing crashes, the description is just quietly untrue. These
 tests compare the declaration against the real payload and the real data.
 """
+
 import json
 import shutil
 import tempfile
@@ -25,8 +26,7 @@ def _load(project_dir):
 
 
 def test_declared_sub_fields_match_the_load_payload(fixture_path):
-    declared = set(
-        ENTITY_SCHEMAS["character"]["relationships"]["sub_fields"])
+    declared = set(ENTITY_SCHEMAS["character"]["relationships"]["sub_fields"])
     emitted = set()
     for char in _load(fixture_path)["characters"]:
         for entry in char.get("relationships") or []:

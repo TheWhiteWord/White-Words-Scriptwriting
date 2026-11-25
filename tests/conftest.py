@@ -34,7 +34,7 @@ def _alias_legacy_package() -> None:
             return importlib.util.spec_from_loader(fullname, self)
 
         def create_module(self, spec):
-            real = importlib.import_module(NEW + spec.name[len(OLD):])
+            real = importlib.import_module(NEW + spec.name[len(OLD) :])
             shim = types.ModuleType(spec.name)
 
             def _forward(name, _real=real):
@@ -45,7 +45,7 @@ def _alias_legacy_package() -> None:
             return shim
 
         def exec_module(self, module):
-            pass                                    # everything forwards
+            pass  # everything forwards
 
     if not any(getattr(f, "_legacy_alias", False) for f in sys.meta_path):
         finder = _Legacy()
@@ -64,7 +64,10 @@ def _isolate_root(monkeypatch, tmp_path):
     load_plugin_config(). Without this, they'd read ~/.hermes/config.yaml and
     write to the real projects directory.
     """
-    monkeypatch.setattr("white_words.scriptwriting.core.config.load_plugin_config", lambda: {"root_path": str(tmp_path)})
+    monkeypatch.setattr(
+        "white_words.scriptwriting.core.config.load_plugin_config",
+        lambda: {"root_path": str(tmp_path)},
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -102,8 +105,9 @@ def build_fixture_db(dest: Path, root: str) -> None:
     real = white_words.scriptwriting.core.config.load_plugin_config
     white_words.scriptwriting.core.config.load_plugin_config = lambda: {"root_path": root}
     try:
-        result = json.loads(import_handler(
-            {"project": str(dest), "confirm": True, "root_path": root}))
+        result = json.loads(
+            import_handler({"project": str(dest), "confirm": True, "root_path": root})
+        )
     finally:
         white_words.scriptwriting.core.config.load_plugin_config = real
     assert result.get("success"), f"fixture import failed: {result}"

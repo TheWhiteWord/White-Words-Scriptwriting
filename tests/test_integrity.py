@@ -6,6 +6,7 @@ leaving a section, revision or relation pointing at a missing entity.
 hold it to a clean fixture, one hand-broken database per category, and every
 kind of write the app can do.
 """
+
 import json
 import sqlite3
 
@@ -29,27 +30,41 @@ def _orphans(p):
 
 
 def _restore(p, etype, eid):
-    return json.loads(admin({"action": "restore", "project": str(p),
-                             "target": {"entity_type": etype, "id": eid},
-                             "summary": "t"}, root_path=str(p.parent)))
+    return json.loads(
+        admin(
+            {
+                "action": "restore",
+                "project": str(p),
+                "target": {"entity_type": etype, "id": eid},
+                "summary": "t",
+            },
+            root_path=str(p.parent),
+        )
+    )
 
 
 # ─── the oracle itself ───
+
 
 def test_a_clean_fixture_has_no_orphans(fixture_path):
     assert _orphans(fixture_path) == {}
 
 
 BREAKS = [
-    ("sections",
-     "INSERT INTO sections(entity_id, heading, body) VALUES('ghost','Content','x')"),
-    ("revisions",
-     "INSERT INTO revisions(entity_id, heading, body, replaced_at) "
-     "VALUES('ghost','Content','x','2026-01-01T00:00:00')"),
-    ("relations_from",
-     "INSERT INTO relations(from_id, to_id, kind) VALUES('ghost','kael','character_scene')"),
-    ("relations_to",
-     "INSERT INTO relations(from_id, to_id, kind) VALUES('kael','ghost','character_scene')"),
+    ("sections", "INSERT INTO sections(entity_id, heading, body) VALUES('ghost','Content','x')"),
+    (
+        "revisions",
+        "INSERT INTO revisions(entity_id, heading, body, replaced_at) "
+        "VALUES('ghost','Content','x','2026-01-01T00:00:00')",
+    ),
+    (
+        "relations_from",
+        "INSERT INTO relations(from_id, to_id, kind) VALUES('ghost','kael','character_scene')",
+    ),
+    (
+        "relations_to",
+        "INSERT INTO relations(from_id, to_id, kind) VALUES('kael','ghost','character_scene')",
+    ),
     ("parent_id", "UPDATE entities SET parent_id='ghost' WHERE id='kael'"),
     ("location_id", "UPDATE entities SET location_id='ghost' WHERE id='kael'"),
 ]
@@ -73,12 +88,17 @@ def test_a_live_child_of_a_trashed_parent_is_not_an_orphan(fixture_path):
     """A flagged-deleted row still exists; only a missing row is an orphan."""
     assert delete_entity(fixture_path, "scene", "central-room-day", "t", True)["success"]
     # Bring only the scene_beats back: a live child under a trashed parent.
-    twin.sql(fixture_path, "UPDATE entities SET is_deleted=0, deleted_at=NULL "
-                           "WHERE parent_id='central-room-day'")
-    assert twin.sql(fixture_path, "SELECT is_deleted FROM entities "
-                                  "WHERE id='central-room-day'") == [(1,)]
-    assert twin.sql(fixture_path, "SELECT count(*) FROM entities "
-                                  "WHERE parent_id='central-room-day' AND is_deleted=0")[0][0]
+    twin.sql(
+        fixture_path,
+        "UPDATE entities SET is_deleted=0, deleted_at=NULL WHERE parent_id='central-room-day'",
+    )
+    assert twin.sql(
+        fixture_path, "SELECT is_deleted FROM entities WHERE id='central-room-day'"
+    ) == [(1,)]
+    assert twin.sql(
+        fixture_path,
+        "SELECT count(*) FROM entities WHERE parent_id='central-room-day' AND is_deleted=0",
+    )[0][0]
     assert _orphans(fixture_path) == {}
 
 
@@ -92,11 +112,13 @@ def test_an_fts_index_out_of_step_is_reported(fixture_path):
 
 # ─── every kind of write, with the oracle after it ───
 
+
 def _delete_and_restore(etype, eid):
     def scenario(p):
         assert delete_entity(p, etype, eid, "t", True)["success"]
         twin.assert_no_orphans(p)
         assert _restore(p, etype, eid)["success"]
+
     return scenario
 
 
@@ -110,7 +132,7 @@ def _bulk_purge(p):
     delete_entity(p, "character", "kael", "t", True)
     delete_entity(p, "scene", "central-room-day", "t", True)
     out = purge_deleted(p, older_than_days=0)
-    assert len(out["purged"]) >= 3      # kael, the scene, its scene_beats
+    assert len(out["purged"]) >= 3  # kael, the scene, its scene_beats
 
 
 def _create_edit_delete(p):
@@ -120,13 +142,26 @@ def _create_edit_delete(p):
 
 
 def _draft_commit(p):
-    staged = drafts.stage(p, [
-        {"op": "create", "type": "character", "id": "newcomer",
-         "frontmatter": {"name": "Newcomer"}, "summary": "c"},
-        {"op": "edit", "entity_type": "character", "entity_id": "mira",
-         "data": {"one_sentence": "Mira's own line."}, "summary": "e"},
-        {"op": "delete", "entity_type": "character", "entity_id": "kael", "summary": "d"},
-    ])
+    staged = drafts.stage(
+        p,
+        [
+            {
+                "op": "create",
+                "type": "character",
+                "id": "newcomer",
+                "frontmatter": {"name": "Newcomer"},
+                "summary": "c",
+            },
+            {
+                "op": "edit",
+                "entity_type": "character",
+                "entity_id": "mira",
+                "data": {"one_sentence": "Mira's own line."},
+                "summary": "e",
+            },
+            {"op": "delete", "entity_type": "character", "entity_id": "kael", "summary": "d"},
+        ],
+    )
     report = drafts.commit(p, staged["draft_id"])
     # All three ops must land: on success `committed` is True and `applied`
     # lists them; a partial landing also reads as truthy `committed`.
@@ -134,8 +169,7 @@ def _draft_commit(p):
 
 
 def _reimport(p):
-    out = json.loads(import_handler({"project": str(p), "confirm": True},
-                                    root_path=str(p.parent)))
+    out = json.loads(import_handler({"project": str(p), "confirm": True}, root_path=str(p.parent)))
     assert out.get("success"), out
 
 

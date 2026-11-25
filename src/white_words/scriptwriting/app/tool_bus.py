@@ -3,6 +3,7 @@
 MCP calls carry no conversation id, so subscribers (one active reply at a
 time) receive every event; calls made while no subscriber exists are dropped.
 """
+
 from __future__ import annotations
 
 import asyncio

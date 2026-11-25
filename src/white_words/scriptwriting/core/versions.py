@@ -5,6 +5,7 @@ decides how. The tokens are opaque and short-lived: the browser stores one at
 load and presents it at save, where the compare happens inside the save's
 transaction (see the manual_* modules).
 """
+
 from __future__ import annotations
 
 import hashlib

@@ -34,9 +34,11 @@ def vault(tmp_path, _built_fixture):
         shutil.copytree(str(_built_fixture), str(dest))
     import white_words.scriptwriting.core.config
     import pytest as _p
+
     _monkey = _p.MonkeyPatch()
-    _monkey.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
-                    lambda: {"root_path": str(v)})
+    _monkey.setattr(
+        white_words.scriptwriting.core.config, "load_plugin_config", lambda: {"root_path": str(v)}
+    )
     yield v
     _monkey.undo()
 
@@ -48,6 +50,7 @@ def _mem(vault, **args):
 class TestThreshold:
     def test_project_threshold_is_stricter_than_the_shared_one(self):
         from white_words.scriptwriting.core.constants import FUZZY_THRESHOLD
+
         assert PROJECT_THRESHOLD > FUZZY_THRESHOLD
 
     def test_exact_slug_still_resolves(self, vault):
@@ -71,20 +74,19 @@ class TestThreshold:
         """The shared constant belongs to screenplay matching; we only added
         a local one, so a screenplay title match behaves exactly as before."""
         from white_words.scriptwriting.core.constants import FUZZY_THRESHOLD
+
         assert FUZZY_THRESHOLD == 40
 
 
 class TestNoWriteToWrongProject:
     def test_rejected_name_writes_nothing(self, vault):
-        _mem(vault, action="add", project="ghost", category="decisions",
-             entry="should never land")
+        _mem(vault, action="add", project="ghost", category="decisions", entry="should never land")
         for slug in ("stc", "save-the-children"):
             memory = get_project_memory(vault / "projects" / slug)
             assert memory["decisions"] == []
 
     def test_rejection_is_an_error_not_a_success(self, vault):
-        r = _mem(vault, action="add", project="ghost", category="decisions",
-                 entry="x")
+        r = _mem(vault, action="add", project="ghost", category="decisions", entry="x")
         assert r.get("success") is not True
         assert "No project matching" in r["error"]
 
@@ -92,37 +94,42 @@ class TestNoWriteToWrongProject:
 class TestMatchConfidence:
     def test_exact_project_gets_no_warning(self, vault):
         assert "warning" not in _mem(
-            vault, action="add", project="stc", category="decisions", entry="A.")
+            vault, action="add", project="stc", category="decisions", entry="A."
+        )
 
     def test_weak_match_is_reported(self, vault):
-        r = _mem(vault, action="add", project="the children",
-                 category="decisions", entry="B.")
+        r = _mem(vault, action="add", project="the children", category="decisions", entry="B.")
         assert r["resolved_project"] == "save-the-children"
         assert r["match_score"] < 90
         assert "warning" in r
 
     def test_warning_says_where_it_wrote(self, vault):
         """The point of the warning: the agent can tell the user which story."""
-        r = _mem(vault, action="add", project="the children",
-                 category="decisions", entry="C.")
+        r = _mem(vault, action="add", project="the children", category="decisions", entry="C.")
         assert "save-the-children" in r["warning"]
 
     def test_warning_is_reported_on_remove_and_replace_too(self, vault):
-        _mem(vault, action="add", project="the children", category="decisions",
-             entry="D.")
-        removed = _mem(vault, action="remove", project="the children",
-                       category="decisions", old_entry="D.")
+        _mem(vault, action="add", project="the children", category="decisions", entry="D.")
+        removed = _mem(
+            vault, action="remove", project="the children", category="decisions", old_entry="D."
+        )
         assert "warning" in removed
-        replaced = _mem(vault, action="add", project="the children",
-                        category="decisions", entry="E.")
+        replaced = _mem(
+            vault, action="add", project="the children", category="decisions", entry="E."
+        )
         assert "warning" in replaced
-        rep = _mem(vault, action="replace", project="the children",
-                   category="decisions", old_entry="E.", new_entry="F.")
+        rep = _mem(
+            vault,
+            action="replace",
+            project="the children",
+            category="decisions",
+            old_entry="E.",
+            new_entry="F.",
+        )
         assert "warning" in rep
 
     def test_failures_are_not_double_reported(self, vault):
         """A failed call already lists the alternatives; no warning needed."""
-        r = _mem(vault, action="add", project="the children",
-                 category="decisions", entry="   ")
+        r = _mem(vault, action="add", project="the children", category="decisions", entry="   ")
         assert r["success"] is False
         assert "warning" not in r

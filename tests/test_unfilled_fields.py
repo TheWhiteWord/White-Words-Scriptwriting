@@ -8,6 +8,7 @@ The bug this pins: the old rule was `value == default` alone, so a field the
 user *cleared* back to "" was reported as filled. The UI showed a populated field
 with nothing in it and the agent got no signal that anything was missing.
 """
+
 import pytest
 
 from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
@@ -82,7 +83,8 @@ class TestNeverUnfilled:
             for field, meta in fields.items():
                 if meta["type"] in ("boolean", "number"):
                     assert field not in unfilled_fields(
-                        entity_type, {field: False if meta["type"] == "boolean" else 0})
+                        entity_type, {field: False if meta["type"] == "boolean" else 0}
+                    )
 
     def test_computed_fields_are_skipped_except_the_plot_roles(self):
         """Computed means "derived at read time", which is not the same as
@@ -99,6 +101,7 @@ class TestNeverUnfilled:
         summarises entities that live elsewhere and are reported there.
         """
         from white_words.scriptwriting.core.entity import _RELATION_FIELDS
+
         for entity_type, fields in ENTITY_SCHEMAS.items():
             computed = [f for f, m in fields.items() if m.get("computed")]
             relation_fields = _RELATION_FIELDS.get(entity_type, {})
@@ -116,22 +119,23 @@ class TestSubFields:
         assert "perspectives" in _unfilled("relationship", perspectives={}, characters=["kael"])
 
     def test_partially_filled_parent_reports_the_gap(self):
-        unfilled = _unfilled("relationship",
-                             perspectives={"kael": "sees everything"},
-                             characters=["kael", "mira"])
+        unfilled = _unfilled(
+            "relationship", perspectives={"kael": "sees everything"}, characters=["kael", "mira"]
+        )
         assert "perspectives.mira" in unfilled
         assert "perspectives.kael" not in unfilled
 
     def test_fully_filled_parent_reports_nothing(self):
-        unfilled = _unfilled("relationship",
-                             perspectives={"kael": "a", "mira": "b"},
-                             characters=["kael", "mira"])
+        unfilled = _unfilled(
+            "relationship", perspectives={"kael": "a", "mira": "b"}, characters=["kael", "mira"]
+        )
         assert not [u for u in unfilled if u.startswith("perspectives")]
 
     def test_list_parent_present_counts_as_filled(self):
         """An entry existing = filled; its notes are optional prose."""
-        assert "plot_roles" not in _unfilled("scene", plot_roles=[
-            {"plot": "the-plot", "role": "setup", "description": ""}])
+        assert "plot_roles" not in _unfilled(
+            "scene", plot_roles=[{"plot": "the-plot", "role": "setup", "description": ""}]
+        )
 
     def test_cleared_list_parent_is_unfilled(self):
         assert "plot_roles" in _unfilled("scene", plot_roles=[])

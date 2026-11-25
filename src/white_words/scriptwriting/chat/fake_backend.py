@@ -1,4 +1,5 @@
 """In-memory fake chat backend for tests."""
+
 from __future__ import annotations
 
 from typing import Any, AsyncIterator
@@ -22,6 +23,11 @@ class FakeBackend:
             yield TextDelta(text=r)
         if self.error:
             from .events import Error
+
             yield Error(message=self.error)
             return
-        yield Done(backend_state={"n": (backend_state or {}).get("n", 0) + 1 if isinstance(backend_state, dict) else 1})
+        yield Done(
+            backend_state={
+                "n": (backend_state or {}).get("n", 0) + 1 if isinstance(backend_state, dict) else 1
+            }
+        )

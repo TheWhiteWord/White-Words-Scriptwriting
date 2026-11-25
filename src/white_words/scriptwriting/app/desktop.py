@@ -3,6 +3,7 @@
 The app is a local server, so the launcher starts the server and opens the
 browser. Written by the app itself: no flatpak sandbox, no browser install step.
 """
+
 from __future__ import annotations
 
 import os
@@ -47,29 +48,32 @@ def _exec_line() -> str:
 
 
 def _desktop_file() -> str:
-    return "\n".join([
-        "[Desktop Entry]",
-        "Type=Application",
-        "Version=1.0",
-        f"Name={NAME}",
-        f"GenericName={GENERIC_NAME}",
-        f"Comment={COMMENT}",
-        f"Exec={_exec_line()}",
-        f"Icon={APP_ID}",
-        "Terminal=false",
-        "Categories=Office;TextEditor;",
-        f"Keywords={KEYWORDS}",
-        "StartupNotify=true",
-        "",
-    ])
+    return "\n".join(
+        [
+            "[Desktop Entry]",
+            "Type=Application",
+            "Version=1.0",
+            f"Name={NAME}",
+            f"GenericName={GENERIC_NAME}",
+            f"Comment={COMMENT}",
+            f"Exec={_exec_line()}",
+            f"Icon={APP_ID}",
+            "Terminal=false",
+            "Categories=Office;TextEditor;",
+            f"Keywords={KEYWORDS}",
+            "StartupNotify=true",
+            "",
+        ]
+    )
 
 
 def _refresh() -> None:
     try:
-        subprocess.run(["update-desktop-database", str(_apps_dir())],
-                       capture_output=True, check=False)
+        subprocess.run(
+            ["update-desktop-database", str(_apps_dir())], capture_output=True, check=False
+        )
     except FileNotFoundError:
-        pass                                    # not every system ships it
+        pass  # not every system ships it
 
 
 def install() -> int:

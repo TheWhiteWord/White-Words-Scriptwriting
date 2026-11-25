@@ -23,6 +23,7 @@ and `restore_project` are the project lifecycle. Deleting a project moves its
 folder to a trash folder under the root; nothing drafts, because a draft exists
 to exist before it is written.
 """
+
 import json
 import shutil
 import tempfile
@@ -39,82 +40,90 @@ TRASH_DIR = ".story-trash"
 
 SCHEMA = {
     "description": "Project lifecycle and admin operations: create_project (a new project), "
-                   "list_projects, delete_project (moves a project to the trash), "
-                   "list_trashed_projects / restore_project (bring a deleted project back), "
-                   "list_deleted (the trash: what was deleted and "
-                   "when), restore (bring a soft-deleted entity back), "
-                   "purge (PROPOSE removing deleted entities for good: all those deleted over 30 days "
-                   "ago, or one you name — nothing is removed until the user approves it in the app), "
-                   "list_revisions / restore_revision (the earlier versions of "
-                   "an entity's text, and putting one back). Entity content "
-                   "itself is NOT here — create and edit through story_draft. "
-                   "Deleting an entity is a soft delete and is exactly reversible via restore; "
-                   "purge is the only irreversible one, and the only one that waits for the user. "
-                   "delete_project takes a whole project out of the projects list into a trash folder, "
-                   "from where restore_project returns it; neither needs a confirmation, so do it "
-                   "only when the user asked.",
+    "list_projects, delete_project (moves a project to the trash), "
+    "list_trashed_projects / restore_project (bring a deleted project back), "
+    "list_deleted (the trash: what was deleted and "
+    "when), restore (bring a soft-deleted entity back), "
+    "purge (PROPOSE removing deleted entities for good: all those deleted over 30 days "
+    "ago, or one you name — nothing is removed until the user approves it in the app), "
+    "list_revisions / restore_revision (the earlier versions of "
+    "an entity's text, and putting one back). Entity content "
+    "itself is NOT here — create and edit through story_draft. "
+    "Deleting an entity is a soft delete and is exactly reversible via restore; "
+    "purge is the only irreversible one, and the only one that waits for the user. "
+    "delete_project takes a whole project out of the projects list into a trash folder, "
+    "from where restore_project returns it; neither needs a confirmation, so do it "
+    "only when the user asked.",
     "type": "object",
     "properties": {
         "action": {
             "type": "string",
-            "enum": ["create_project", "list_projects", "delete_project", "list_deleted",
-                     "restore", "purge", "list_revisions", "restore_revision",
-                     "list_trashed_projects", "restore_project"],
+            "enum": [
+                "create_project",
+                "list_projects",
+                "delete_project",
+                "list_deleted",
+                "restore",
+                "purge",
+                "list_revisions",
+                "restore_revision",
+                "list_trashed_projects",
+                "restore_project",
+            ],
             "description": "create_project (initialise a new project folder + database), "
-                           "list_projects (every project under the root, no database opened), "
-                           "delete_project (move a project folder, with everything in it, to the "
-                           "trash — recoverable with restore_project), "
-                           "list_trashed_projects (deleted projects, newest first), "
-                           "restore_project (bring one back; needs trash_id), "
-                           "list_deleted (every soft-deleted entity, newest first, with the "
-                           "id and type that restore and purge need; entities deleted "
-                           "together with their parent are listed under it), "
-                           "restore (undelete one entity, bringing back its prose and relations "
-                           "exactly as they were), purge (propose permanently removing soft-deleted "
-                           "entities — those older than the age floor, or the one named in "
-                           "`target`. Irreversible, so it is staged as a draft: the user sees "
-                           "an approval card and nothing is removed until they approve. Relay "
-                           "preview_md verbatim), "
-                           "list_revisions (the earlier versions kept of an entity's sections, "
-                           "newest first; every edit keeps the text it replaced), "
-                           "restore_revision (put one of those back as the current text; the "
-                           "text it replaces is kept in turn, so this is undoable)"
+            "list_projects (every project under the root, no database opened), "
+            "delete_project (move a project folder, with everything in it, to the "
+            "trash — recoverable with restore_project), "
+            "list_trashed_projects (deleted projects, newest first), "
+            "restore_project (bring one back; needs trash_id), "
+            "list_deleted (every soft-deleted entity, newest first, with the "
+            "id and type that restore and purge need; entities deleted "
+            "together with their parent are listed under it), "
+            "restore (undelete one entity, bringing back its prose and relations "
+            "exactly as they were), purge (propose permanently removing soft-deleted "
+            "entities — those older than the age floor, or the one named in "
+            "`target`. Irreversible, so it is staged as a draft: the user sees "
+            "an approval card and nothing is removed until they approve. Relay "
+            "preview_md verbatim), "
+            "list_revisions (the earlier versions kept of an entity's sections, "
+            "newest first; every edit keeps the text it replaced), "
+            "restore_revision (put one of those back as the current text; the "
+            "text it replaces is kept in turn, so this is undoable)",
         },
         "trash_id": {
             "type": "string",
             "description": "For restore_project: which deleted project to bring back, exactly "
-                           "as list_trashed_projects shows it.",
+            "as list_trashed_projects shows it.",
         },
         "revision_id": {
             "type": "integer",
             "description": "For restore_revision: the id of the revision to put back, from "
-                           "list_revisions.",
+            "list_revisions.",
         },
         "heading": {
             "type": "string",
             "description": "For list_revisions: only the revisions of this section, e.g. "
-                           "\"Content\". Default: all sections of the entity.",
+            '"Content". Default: all sections of the entity.',
         },
         "project": {
             "type": "string",
             "description": "Project slug or path. For create_project this is the new project's "
-                           "folder name and the project does not exist yet.",
+            "folder name and the project does not exist yet.",
         },
         "frontmatter": {
             "type": "object",
             "description": "For create_project: the project entity's field values, e.g. "
-                           "{name, logline}. Missing fields fall back to schema defaults; "
-                           "required fields must be present and non-empty.",
+            "{name, logline}. Missing fields fall back to schema defaults; "
+            "required fields must be present and non-empty.",
         },
         "target": {
             "type": "object",
             "description": "For restore: the entity to bring back. For purge: the one deleted "
-                           "entity to remove permanently (it must already be deleted; the age "
-                           "floor does not apply). For list_revisions / restore_revision: the "
-                           "entity whose text history it is (only `id` is needed).",
+            "entity to remove permanently (it must already be deleted; the age "
+            "floor does not apply). For list_revisions / restore_revision: the "
+            "entity whose text history it is (only `id` is needed).",
             "properties": {
-                "entity_type": {"type": "string",
-                                "description": "Type of entity to restore"},
+                "entity_type": {"type": "string", "description": "Type of entity to restore"},
                 "id": {"type": "string", "description": "Entity id, as returned by story_load"},
             },
         },
@@ -125,11 +134,11 @@ line the user will read on the approval card, naming what is to be removed for g
         },
         "older_than_days": {
             "type": "integer",
-            "description": "For action=\"purge\" without a target: only purge entities deleted "
-                           "longer ago than this many days. Default 30. Anything newer stays "
-                           "restorable. Ignored when a target is given. "
-                           "For action=\"list_deleted\": the same threshold, used to mark "
-                           "which entries a purge would remove."
+            "description": 'For action="purge" without a target: only purge entities deleted '
+            "longer ago than this many days. Default 30. Anything newer stays "
+            "restorable. Ignored when a target is given. "
+            'For action="list_deleted": the same threshold, used to mark '
+            "which entries a purge would remove.",
         },
     },
     "required": ["action"],
@@ -171,15 +180,17 @@ def handler(args: dict, **kwargs) -> str:
 def _resolve(args: dict, root_path: Path) -> Path:
     """Resolve the `project` argument, which every project-scoped action takes."""
     from .story_resolve import resolve_project
+
     return resolve_project(args.get("project", ""), root_path)
 
 
 # ─── the actions ───
 
+
 def _create_project(args: dict, root_path: Path) -> dict:
     from white_words.scriptwriting.core.writes import create_project
-    return create_project(
-        args.get("project", ""), args.get("frontmatter") or {}, root_path)
+
+    return create_project(args.get("project", ""), args.get("frontmatter") or {}, root_path)
 
 
 def _list_projects(root_path: Path) -> dict:
@@ -193,19 +204,25 @@ def _list_projects(root_path: Path) -> dict:
     """
     projects_dir = root_path / "projects"
     if not projects_dir.is_dir():
-        return {"success": True, "projects": [], "count": 0,
-                "note": f"No projects directory at {projects_dir}"}
+        return {
+            "success": True,
+            "projects": [],
+            "count": 0,
+            "note": f"No projects directory at {projects_dir}",
+        }
 
     projects = []
     for folder in sorted(projects_dir.iterdir()):
         if not folder.is_dir():
             continue
         db = folder / ".story" / "story.db"
-        projects.append({
-            "slug": folder.name,
-            "path": str(folder),
-            "has_database": db.exists(),
-        })
+        projects.append(
+            {
+                "slug": folder.name,
+                "path": str(folder),
+                "has_database": db.exists(),
+            }
+        )
     return {"success": True, "projects": projects, "count": len(projects)}
 
 
@@ -229,7 +246,7 @@ def _delete_project(args: dict, root_path: Path) -> dict:
     if not (project_path / ".story" / "story.db").exists():
         return {
             "error": f"Not a story project — no .story/story.db in {project_path}. "
-                     f"Nothing was deleted.",
+            f"Nothing was deleted.",
             "project": str(project_path),
         }
 
@@ -240,15 +257,20 @@ def _delete_project(args: dict, root_path: Path) -> dict:
     # two deletes of the same slug never collide.
     slot = Path(tempfile.mkdtemp(prefix=f"{slug}_{stamp}_", dir=str(trash)))
     try:
-        (slot / "deleted.json").write_text(json.dumps({
-            "slug": slug,
-            "original_path": str(project_path),
-            # Full precision: two deletes in one second must still sort newest-first.
-            "deleted_at": clock.now_iso("microseconds"),
-        }), encoding="utf-8")
+        (slot / "deleted.json").write_text(
+            json.dumps(
+                {
+                    "slug": slug,
+                    "original_path": str(project_path),
+                    # Full precision: two deletes in one second must still sort newest-first.
+                    "deleted_at": clock.now_iso("microseconds"),
+                }
+            ),
+            encoding="utf-8",
+        )
         shutil.move(str(project_path), str(slot))
     except BaseException:
-        shutil.rmtree(slot, ignore_errors=True)   # a failed move leaves the project where it was
+        shutil.rmtree(slot, ignore_errors=True)  # a failed move leaves the project where it was
         raise
 
     trashed = slot / slug
@@ -259,7 +281,7 @@ def _delete_project(args: dict, root_path: Path) -> dict:
         "trash_id": slot.name,
         "trashed_to": str(trashed),
         "note": 'Undo with action="restore_project" and this trash_id. To remove it '
-                "for good, delete the folder under the trash directory by hand.",
+        "for good, delete the folder under the trash directory by hand.",
     }
 
 
@@ -278,13 +300,15 @@ def _trashed_projects(root_path: Path) -> list[dict]:
         folder = slot / slug
         if not folder.is_dir():
             continue
-        found.append({
-            "trash_id": slot.name,
-            "slug": slug,
-            "deleted_at": meta.get("deleted_at", ""),
-            "has_database": (folder / ".story" / "story.db").exists(),
-            "path": str(folder),
-        })
+        found.append(
+            {
+                "trash_id": slot.name,
+                "slug": slug,
+                "deleted_at": meta.get("deleted_at", ""),
+                "has_database": (folder / ".story" / "story.db").exists(),
+                "path": str(folder),
+            }
+        )
     found.sort(key=lambda e: (e["deleted_at"], e["trash_id"]), reverse=True)
     return found
 
@@ -313,12 +337,17 @@ def _restore_project(args: dict, root_path: Path) -> dict:
     if dest.exists():
         raise ValueError(
             f"A project named {entry['slug']} already exists. Rename or delete it first; "
-            f"the trashed one was not touched.")
+            f"the trashed one was not touched."
+        )
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(entry["path"], str(dest))
-    shutil.rmtree(root_path / TRASH_DIR / trash_id, ignore_errors=True)   # the empty slot
-    return {"success": True, "message": f"Restored project {entry['slug']}.",
-            "slug": entry["slug"], "project": str(dest)}
+    shutil.rmtree(root_path / TRASH_DIR / trash_id, ignore_errors=True)  # the empty slot
+    return {
+        "success": True,
+        "message": f"Restored project {entry['slug']}.",
+        "slug": entry["slug"],
+        "project": str(dest),
+    }
 
 
 def _stage_purge(args: dict, project_path: Path) -> dict:
@@ -333,13 +362,18 @@ def _stage_purge(args: dict, project_path: Path) -> dict:
     from white_words.scriptwriting.core import drafts
 
     target = args.get("target")
-    if target is not None and not (isinstance(target, dict) and target.get("entity_type")
-                                   and target.get("id")):
+    if target is not None and not (
+        isinstance(target, dict) and target.get("entity_type") and target.get("id")
+    ):
         return {"error": "purge: `target` needs both entity_type and id."}
-    op = {"op": "purge",
-          "summary": args.get("summary") or ("Permanently remove "
-                                             + (f"{target['entity_type']} {target['id']}"
-                                                if target else "old deleted items"))}
+    op = {
+        "op": "purge",
+        "summary": args.get("summary")
+        or (
+            "Permanently remove "
+            + (f"{target['entity_type']} {target['id']}" if target else "old deleted items")
+        ),
+    }
     if target:
         op["target"] = {"entity_type": target["entity_type"], "id": target["id"]}
     if "older_than_days" in args:
@@ -349,9 +383,11 @@ def _stage_purge(args: dict, project_path: Path) -> dict:
     except drafts.DraftError as e:
         return {"error": str(e)}
     staged["purged"] = False
-    staged["message"] = ("Nothing has been removed. This waits for the user: they approve "
-                         "it on the card in the app. Relay preview_md verbatim and tell them "
-                         "it cannot be undone.")
+    staged["message"] = (
+        "Nothing has been removed. This waits for the user: they approve "
+        "it on the card in the app. Relay preview_md verbatim and tell them "
+        "it cannot be undone."
+    )
     return staged
 
 
@@ -397,10 +433,12 @@ def _restore_entity(args: dict, project_path: Path) -> dict:
     from white_words.scriptwriting.core import trash
 
     target = args.get("target") or {}
-    return trash.restore(project_path,
-                         target.get("entity_type") or "",
-                         target.get("id") or "",
-                         args.get("summary", ""))
+    return trash.restore(
+        project_path,
+        target.get("entity_type") or "",
+        target.get("id") or "",
+        args.get("summary", ""),
+    )
 
 
 def _target_id(args: dict, action: str) -> str:
@@ -416,11 +454,18 @@ def _list_revisions(args: dict, project_path: Path) -> dict:
 
     entity_id = _target_id(args, "list_revisions")
     revisions = list_revisions(project_path, entity_id, args.get("heading"))
-    result = {"success": True, "entity_id": entity_id, "count": len(revisions),
-              "revisions": revisions, "kept_per_section": REVISIONS_KEPT}
+    result = {
+        "success": True,
+        "entity_id": entity_id,
+        "count": len(revisions),
+        "revisions": revisions,
+        "kept_per_section": REVISIONS_KEPT,
+    }
     if revisions:
-        result["hint"] = ('Put one back with action="restore_revision", target '
-                          '{id}, revision_id. The text it replaces is kept too.')
+        result["hint"] = (
+            'Put one back with action="restore_revision", target '
+            "{id}, revision_id. The text it replaces is kept too."
+        )
     else:
         result["message"] = "No earlier versions are kept for this entity."
     return result

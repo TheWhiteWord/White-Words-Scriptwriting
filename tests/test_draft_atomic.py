@@ -13,6 +13,7 @@ every op and the mark on ONE connection in ONE transaction. These tests hold:
     connection and takes a backup, which cannot happen inside the shared one),
   * the approve route's contract is unchanged.
 """
+
 import sqlite3
 
 import pytest
@@ -32,9 +33,16 @@ H = {"X-White-Words": "1"}
 
 # ─── ops ───
 
+
 def _create(etype, slug, **fm):
-    return {"op": "create", "type": etype, "id": slug, "frontmatter": fm,
-            "sections": {}, "summary": f"new {etype} {slug}"}
+    return {
+        "op": "create",
+        "type": etype,
+        "id": slug,
+        "frontmatter": fm,
+        "sections": {},
+        "summary": f"new {etype} {slug}",
+    }
 
 
 def _scene(slug, **fm):
@@ -44,27 +52,39 @@ def _scene(slug, **fm):
 
 def _edit_unknown():
     """Raises inside the write function: there is no such character."""
-    return {"op": "edit", "entity_type": "character", "entity_id": "nobody-at-all",
-            "data": {"one_sentence": "x"}, "summary": "edit a ghost"}
+    return {
+        "op": "edit",
+        "entity_type": "character",
+        "entity_id": "nobody-at-all",
+        "data": {"one_sentence": "x"},
+        "summary": "edit a ghost",
+    }
 
 
 def _delete_a_sequence_with_scenes():
     """RETURNS an error dict instead of raising (Gotcha 4): structural children."""
-    return {"op": "delete", "entity_type": "sequence", "entity_id": "seq-discovery",
-            "summary": "delete a sequence that still has scenes"}
+    return {
+        "op": "delete",
+        "entity_type": "sequence",
+        "entity_id": "seq-discovery",
+        "summary": "delete a sequence that still has scenes",
+    }
 
 
 FAILING_THIRD_OPS = [
     pytest.param(_edit_unknown, "edit character/nobody-at-all", id="raises"),
-    pytest.param(_delete_a_sequence_with_scenes, "delete sequence/seq-discovery",
-                 id="returns-an-error-dict"),
+    pytest.param(
+        _delete_a_sequence_with_scenes, "delete sequence/seq-discovery", id="returns-an-error-dict"
+    ),
 ]
 
 
 def _two_creates_and_a_bad_third(bad):
-    return [_create("character", "newchar", name="New Char"),
-            _scene("new-scene", characters=["kael"]),
-            bad()]
+    return [
+        _create("character", "newchar", name="New Char"),
+        _scene("new-scene", characters=["kael"]),
+        bad(),
+    ]
 
 
 def _stage(project, ops, summary="a batch"):
@@ -87,18 +107,25 @@ def _exists(project, entity_id):
 # connection; it is kept because it is the briefed example.)
 SELF_REFERENCING_BATCHES = [
     pytest.param(
-        [_create("location", "newloc", name="New Loc"),
-         _scene("new-scene", location="newloc")],
-        id="location-then-scene"),
+        [_create("location", "newloc", name="New Loc"), _scene("new-scene", location="newloc")],
+        id="location-then-scene",
+    ),
     pytest.param(
-        [_create("character", "newchar", name="New Char"),
-         _create("plot", "new-plot", name="New Plot", characters=["newchar"])],
-        id="character-then-plot"),
+        [
+            _create("character", "newchar", name="New Char"),
+            _create("plot", "new-plot", name="New Plot", characters=["newchar"]),
+        ],
+        id="character-then-plot",
+    ),
     pytest.param(
-        [_create("character", "newchar", name="New Char"),
-         _create("relationship", "mira-newchar", name="Mira and New",
-                 characters=["mira", "newchar"])],
-        id="character-then-relationship"),
+        [
+            _create("character", "newchar", name="New Char"),
+            _create(
+                "relationship", "mira-newchar", name="Mira and New", characters=["mira", "newchar"]
+            ),
+        ],
+        id="character-then-relationship",
+    ),
 ]
 
 
@@ -124,6 +151,7 @@ def test_creates_that_reference_each_other_commit_together(fixture_path, ops):
 
 # ─── 2. nothing lands when op K fails ───
 
+
 @pytest.mark.parametrize("bad,bad_label", FAILING_THIRD_OPS)
 def test_nothing_lands_when_the_third_op_fails(fixture_path, bad, bad_label):
     before = twin.snapshot(fixture_path)
@@ -136,11 +164,11 @@ def test_nothing_lands_when_the_third_op_fails(fixture_path, bad, bad_label):
     result = drafts.commit(fixture_path, staged["draft_id"])
 
     assert result["success"] is False
-    assert result["committed"] == []                 # always [] now, never "what landed"
+    assert result["committed"] == []  # always [] now, never "what landed"
     assert result["failed"]["op"] == bad_label
     assert result["failed"]["error"]
     assert result["draft_kept"] is True
-    assert twin.snapshot(fixture_path) == before     # byte-for-byte as before
+    assert twin.snapshot(fixture_path) == before  # byte-for-byte as before
     assert not _exists(fixture_path, "newchar") and not _exists(fixture_path, "new-scene")
     assert _open_ids(fixture_path) == [staged["draft_id"]]
     twin.assert_no_orphans(fixture_path)
@@ -169,6 +197,7 @@ def test_a_write_that_returns_success_false_is_a_failure_too(fixture_path, monke
     """No write function returns this today, but the contract is "an error key OR
     success False" (Gotcha 4) and a refusal must never be read as a landed op."""
     from white_words.scriptwriting.core import writes
+
     real = writes.create_entity
 
     def refusing(project_path, etype, slug, *args, **kwargs):
@@ -178,14 +207,14 @@ def test_a_write_that_returns_success_false_is_a_failure_too(fixture_path, monke
 
     monkeypatch.setattr(writes, "create_entity", refusing)
     before = twin.snapshot(fixture_path)
-    draft_id = _stage(fixture_path, [_create("character", "newchar", name="New Char"),
-                                     _scene("new-scene")])
+    draft_id = _stage(
+        fixture_path, [_create("character", "newchar", name="New Char"), _scene("new-scene")]
+    )
 
     result = drafts.commit(fixture_path, draft_id)
 
     assert result["success"] is False and result["committed"] == []
-    assert result["failed"] == {"op": "create scene/new-scene",
-                                "error": "refused by the write"}
+    assert result["failed"] == {"op": "create scene/new-scene", "error": "refused by the write"}
     assert twin.snapshot(fixture_path) == before
     assert _open_ids(fixture_path) == [draft_id]
 
@@ -198,8 +227,15 @@ def test_the_report_shapes(fixture_path):
     assert ok["committed"] is True
 
     bad = drafts.commit(fixture_path, _stage(fixture_path, [_edit_unknown()]))
-    assert set(bad) == {"success", "committed", "failed", "draft_id", "draft_kept",
-                        "preview_md", "message"}
+    assert set(bad) == {
+        "success",
+        "committed",
+        "failed",
+        "draft_id",
+        "draft_kept",
+        "preview_md",
+        "message",
+    }
     assert set(bad["failed"]) == {"op", "error"}
 
 
@@ -208,9 +244,16 @@ def test_a_fixed_draft_lands_after_a_failed_commit(fixture_path):
     draft_id = _stage(fixture_path, ops)
     assert drafts.commit(fixture_path, draft_id)["success"] is False
 
-    fixed = ops[:2] + [{"op": "edit", "entity_type": "character", "entity_id": "kael",
-                        "data": {"one_sentence": "Kael, steadier."}, "summary": "fix Kael"}]
-    drafts.stage(fixture_path, fixed, "fixed", draft_id=draft_id)    # same id: a re-stage
+    fixed = ops[:2] + [
+        {
+            "op": "edit",
+            "entity_type": "character",
+            "entity_id": "kael",
+            "data": {"one_sentence": "Kael, steadier."},
+            "summary": "fix Kael",
+        }
+    ]
+    drafts.stage(fixture_path, fixed, "fixed", draft_id=draft_id)  # same id: a re-stage
     result = drafts.commit(fixture_path, draft_id)
 
     assert result["success"] is True
@@ -223,8 +266,8 @@ def test_a_fixed_draft_lands_after_a_failed_commit(fixture_path):
 
 # ─── 3. crash safety ───
 
-def test_a_crash_while_marking_leaves_nothing_landed_and_the_draft_open(
-        fixture_path, monkeypatch):
+
+def test_a_crash_while_marking_leaves_nothing_landed_and_the_draft_open(fixture_path, monkeypatch):
     before = twin.snapshot(fixture_path)
     ops = [_create("character", "newchar", name="New Char"), _scene("new-scene")]
     draft_id = _stage(fixture_path, ops)
@@ -244,7 +287,7 @@ def test_a_crash_while_marking_leaves_nothing_landed_and_the_draft_open(
     assert twin.snapshot(fixture_path) == before
     assert _open_ids(fixture_path) == [draft_id]
 
-    monkeypatch.undo()                              # the disk is back
+    monkeypatch.undo()  # the disk is back
     again = drafts.commit(fixture_path, draft_id)
     assert again["success"] is True and "already_committed" not in again
     assert _exists(fixture_path, "newchar") and _exists(fixture_path, "new-scene")
@@ -252,6 +295,7 @@ def test_a_crash_while_marking_leaves_nothing_landed_and_the_draft_open(
 
 
 # ─── 4. idempotence ───
+
 
 def test_committing_twice_writes_once(fixture_path):
     ops = [_create("character", "newchar", name="New Char"), _scene("new-scene")]
@@ -264,14 +308,14 @@ def test_committing_twice_writes_once(fixture_path):
     assert first["success"] is True and "already_committed" not in first
     assert second["success"] is True and second["already_committed"] is True
     assert second["applied"] == first["applied"]
-    assert twin.snapshot(fixture_path) == after_first          # no second write
+    assert twin.snapshot(fixture_path) == after_first  # no second write
     twin.assert_no_orphans(fixture_path)
 
 
 # ─── 5. no hidden connection inside the transaction ───
 
-def test_no_op_opens_a_second_connection_while_the_transaction_is_open(
-        fixture_path, monkeypatch):
+
+def test_no_op_opens_a_second_connection_while_the_transaction_is_open(fixture_path, monkeypatch):
     """DB-3 on the whole draft path: a write that opened its own connection while
     the shared transaction holds the write lock would wait 3 s and fail — or,
     for a read, see the old snapshot. The spy refuses any `get_db` made while a
@@ -282,19 +326,25 @@ def test_no_op_opens_a_second_connection_while_the_transaction_is_open(
     def in_transaction(conn):
         try:
             return conn.in_transaction
-        except sqlite3.ProgrammingError:                  # already closed
+        except sqlite3.ProgrammingError:  # already closed
             return False
 
     def spy(project_path):
-        assert not any(in_transaction(c) for c in opened), \
+        assert not any(in_transaction(c) for c in opened), (
             "a connection was opened while the draft's transaction was open"
+        )
         conn = real(project_path)
         opened.append(conn)
         return conn
 
     monkeypatch.setattr(db, "get_db", spy)
-    from white_words.scriptwriting.core import (manual_edits, manual_entities,
-                                      manual_structure, track)
+    from white_words.scriptwriting.core import (
+        manual_edits,
+        manual_entities,
+        manual_structure,
+        track,
+    )
+
     for mod in (manual_edits, manual_entities, manual_structure, track):
         monkeypatch.setattr(mod, "get_db", spy)
 
@@ -302,13 +352,26 @@ def test_no_op_opens_a_second_connection_while_the_transaction_is_open(
         _create("location", "newloc", name="New Loc"),
         _create("character", "newchar", name="New Char"),
         _scene("new-scene", location="newloc", characters=["newchar"]),
-        {"op": "edit", "entity_type": "scene", "entity_id": "new-scene",
-         "data": {"status": "drafted"}, "summary": "mark it"},
-        {"op": "reorder", "entity_type": "scene", "entity_id": "seq-discovery",
-         "ordered_ids": ["new-scene", "central-room-day", "central-room-night"],
-         "summary": "order it"},
-        {"op": "delete", "entity_type": "character", "entity_id": "newchar",
-         "summary": "drop it again"},
+        {
+            "op": "edit",
+            "entity_type": "scene",
+            "entity_id": "new-scene",
+            "data": {"status": "drafted"},
+            "summary": "mark it",
+        },
+        {
+            "op": "reorder",
+            "entity_type": "scene",
+            "entity_id": "seq-discovery",
+            "ordered_ids": ["new-scene", "central-room-day", "central-room-night"],
+            "summary": "order it",
+        },
+        {
+            "op": "delete",
+            "entity_type": "character",
+            "entity_id": "newchar",
+            "summary": "drop it again",
+        },
     ]
     draft_id = _stage(fixture_path, ops)
     result = drafts.commit(fixture_path, draft_id)
@@ -320,8 +383,11 @@ def test_no_op_opens_a_second_connection_while_the_transaction_is_open(
 
 # ─── 6. purge drafts keep the per-op path ───
 
-PURGE = {"op": "purge", "target": {"entity_type": "character", "id": "kael"},
-         "summary": "remove Kael for good"}
+PURGE = {
+    "op": "purge",
+    "target": {"entity_type": "character", "id": "kael"},
+    "summary": "remove Kael for good",
+}
 
 
 @pytest.fixture
@@ -367,8 +433,11 @@ def test_a_draft_with_several_purges_says_truthfully_what_was_done(trashed):
     """The one draft that can still land in part: each purge is its own
     transaction (it takes a backup), and a purge cannot be undone. So here, and
     only here, `committed` lists what was done instead of being empty."""
-    second = {"op": "purge", "target": {"entity_type": "character", "id": "mira"},
-              "summary": "remove Mira for good"}               # Mira is alive: refused
+    second = {
+        "op": "purge",
+        "target": {"entity_type": "character", "id": "mira"},
+        "summary": "remove Mira for good",
+    }  # Mira is alive: refused
     draft_id = _stage(trashed, [PURGE, second])
 
     result = drafts.commit(trashed, draft_id)
@@ -387,14 +456,17 @@ def test_a_draft_with_several_purges_says_truthfully_what_was_done(trashed):
 def test_a_purge_still_cannot_be_bundled_with_other_changes(fixture_path):
     """T5 relies on this: a mixed draft would send a purge into the shared
     transaction. It must stay impossible to stage."""
-    for ops in ([_create("character", "newchar", name="N"), PURGE],
-                [PURGE, _create("character", "newchar", name="N")]):
+    for ops in (
+        [_create("character", "newchar", name="N"), PURGE],
+        [PURGE, _create("character", "newchar", name="N")],
+    ):
         with pytest.raises(drafts.DraftError, match="cannot be bundled"):
             drafts.stage(fixture_path, ops, "mixed")
     assert _open_ids(fixture_path) == []
 
 
 # ─── 7. the approve route ───
+
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
@@ -426,8 +498,7 @@ def test_approving_a_good_draft_reports_committed(client):
 def test_approving_a_failing_draft_reports_failed_and_changes_nothing(client):
     tc, proj = client
     before = twin.snapshot(proj)
-    draft_id = _stage(proj, [_create("character", "newchar", name="New Char"),
-                             _edit_unknown()])
+    draft_id = _stage(proj, [_create("character", "newchar", name="New Char"), _edit_unknown()])
 
     r = _approve(tc, draft_id)
 
@@ -435,7 +506,7 @@ def test_approving_a_failing_draft_reports_failed_and_changes_nothing(client):
     assert r.json()["status"] == "failed"
     assert "nobody-at-all" in r.json()["draft"]["error"]
     assert twin.snapshot(proj) == before
-    assert _open_ids(proj) == [draft_id]                 # the card can be tried again
+    assert _open_ids(proj) == [draft_id]  # the card can be tried again
 
 
 def test_approving_an_unknown_draft_is_a_stale_draft(client):

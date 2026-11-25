@@ -1,4 +1,5 @@
 """Read services for the standalone app (framework-free)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -25,9 +26,12 @@ def list_projects(root) -> list[dict]:
         meta = {"slug": d.name, "has_db": db.exists()}
         if db.exists():
             import sqlite3
+
             try:
                 conn = sqlite3.connect(str(db))
-                row = conn.execute("SELECT name FROM entities WHERE type='project' LIMIT 1").fetchone()
+                row = conn.execute(
+                    "SELECT name FROM entities WHERE type='project' LIMIT 1"
+                ).fetchone()
                 conn.close()
                 if row and row[0]:
                     meta["name"] = row[0]
@@ -47,6 +51,7 @@ def get_project_dashboard(root, slug) -> dict:
     if not db_path.exists():
         raise ProjectNotFound(f"Database not found for {slug}")
     import sqlite3
+
     conn = sqlite3.connect(str(db_path))
     try:
         if not has_schema(conn):
@@ -61,8 +66,8 @@ def get_project_dashboard(root, slug) -> dict:
     if scene_text:
         try:
             from white_words.scriptwriting.app.stats import _compute_screenplay_stats
-            screenplay_stats = _compute_screenplay_stats(
-                scene_text, scene_headings=scene_headings)
+
+            screenplay_stats = _compute_screenplay_stats(scene_text, scene_headings=scene_headings)
         except Exception:
             screenplay_stats = None
     data["screenplay_stats"] = screenplay_stats

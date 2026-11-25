@@ -40,23 +40,37 @@ def test_no_schema_declares_a_field_the_write_path_discards():
     and story_describe labels it as such. What must not be declared is an `id`:
     the row key already is the id, so the field could only ever be blank.
     """
-    offenders = [f"{t}.{f}" for t, schema in ENTITY_SCHEMAS.items()
-                 for f in schema if f in FIELDS_TO_SKIP and f != "type"]
+    offenders = [
+        f"{t}.{f}"
+        for t, schema in ENTITY_SCHEMAS.items()
+        for f in schema
+        if f in FIELDS_TO_SKIP and f != "type"
+    ]
     assert offenders == [], f"declared but discarded on write: {offenders}"
 
 
-@pytest.mark.parametrize("entity_type,slug", [
-    ("scene", "central-room-day"),
-    ("act", "act-1"),
-
-])
-def test_every_type_that_had_an_id_field_is_still_retrievable(
-        project_root, entity_type, slug):
+@pytest.mark.parametrize(
+    "entity_type,slug",
+    [
+        ("scene", "central-room-day"),
+        ("act", "act-1"),
+    ],
+)
+def test_every_type_that_had_an_id_field_is_still_retrievable(project_root, entity_type, slug):
     """Deleting the field must not cost the entity its identity."""
     import json
-    out = json.loads(str(handler(
-        {"project": "save-the-children", "entity_type": entity_type,
-         "id": [slug], "fields": ["all"]},
-        root_path=str(project_root),
-    )))
+
+    out = json.loads(
+        str(
+            handler(
+                {
+                    "project": "save-the-children",
+                    "entity_type": entity_type,
+                    "id": [slug],
+                    "fields": ["all"],
+                },
+                root_path=str(project_root),
+            )
+        )
+    )
     assert out["entities"][0]["id"] == slug

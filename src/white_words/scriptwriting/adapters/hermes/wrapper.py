@@ -1,4 +1,5 @@
 """Wrapper around the hermes CLI and profile paths."""
+
 from __future__ import annotations
 
 import os

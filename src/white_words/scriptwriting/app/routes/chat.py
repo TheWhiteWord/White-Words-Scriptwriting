@@ -9,6 +9,7 @@ def make_router(config, app):
 
     def _resolve_project(slug) -> tuple:  # type: ignore
         from white_words.scriptwriting.tools.story_resolve import resolve_project
+
         root = Path(config.root)
         try:
             return resolve_project(slug, root), None
@@ -19,49 +20,139 @@ def make_router(config, app):
 
     async def stream_reply(slug, cid, user_text, context, retry=False):
         from white_words.scriptwriting.app import tool_bus
+
         pp, err = _resolve_project(slug)
         if pp is None:
-            yield ("error", {"type": "error", "code": "not_found", "message": err, "retryable": False})
+            yield (
+                "error",
+                {"type": "error", "code": "not_found", "message": err, "retryable": False},
+            )
             return
         from white_words.scriptwriting.app.token import load_api_key
+
         api_key = load_api_key()
         if not api_key:
-            yield ("error", {"type": "error", "code": "agent_not_configured", "message": "no api key", "retryable": False})
+            yield (
+                "error",
+                {
+                    "type": "error",
+                    "code": "agent_not_configured",
+                    "message": "no api key",
+                    "retryable": False,
+                },
+            )
             return
         active = getattr(app.state, "active_replies", None)
         if active and len(active) > 0:
-            yield ("error", {"type": "error", "code": "reply_in_progress", "message": "reply in progress", "retryable": True})
+            yield (
+                "error",
+                {
+                    "type": "error",
+                    "code": "reply_in_progress",
+                    "message": "reply in progress",
+                    "retryable": True,
+                },
+            )
             return
 
         queue: asyncio.Queue = asyncio.Queue()
 
         async def producer():
             bus_q = tool_bus.subscribe()
+
             async def _bus_fwd():
                 while True:
                     ev = await bus_q.get()
                     await queue.put(("bus", ev))
+
             fwd_task = asyncio.ensure_future(_bus_fwd())
             service = app.state.chat_service
             try:
-                async for ev in (service.retry(pp, cid, context or {}) if retry else service.send(pp, cid, user_text, context or {})):
-                    from white_words.scriptwriting.chat.events import TextDelta, ToolStarted, ToolFinished, Done, Error
+                async for ev in (
+                    service.retry(pp, cid, context or {})
+                    if retry
+                    else service.send(pp, cid, user_text, context or {})
+                ):
+                    from white_words.scriptwriting.chat.events import (
+                        TextDelta,
+                        ToolStarted,
+                        ToolFinished,
+                        Done,
+                        Error,
+                    )
+
                     if isinstance(ev, TextDelta):
                         await queue.put(("sse", ("text", {"type": "text", "text": ev.text})))
                     elif isinstance(ev, ToolStarted):
-                        await queue.put(("sse", ("tool", {"type": "tool", "id": ev.id, "name": ev.name, "status": "started", "label": ev.label})))
+                        await queue.put(
+                            (
+                                "sse",
+                                (
+                                    "tool",
+                                    {
+                                        "type": "tool",
+                                        "id": ev.id,
+                                        "name": ev.name,
+                                        "status": "started",
+                                        "label": ev.label,
+                                    },
+                                ),
+                            )
+                        )
                     elif isinstance(ev, ToolFinished):
                         st = ev.status if ev.status in ("finished", "failed") else "finished"
-                        await queue.put(("sse", ("tool", {"type": "tool", "id": ev.id, "name": ev.name, "status": st, "label": ev.label})))
+                        await queue.put(
+                            (
+                                "sse",
+                                (
+                                    "tool",
+                                    {
+                                        "type": "tool",
+                                        "id": ev.id,
+                                        "name": ev.name,
+                                        "status": st,
+                                        "label": ev.label,
+                                    },
+                                ),
+                            )
+                        )
                     elif isinstance(ev, Done):
-                        await queue.put(("sse", ("done", {"type": "done", "message_id": ev.message_id})))
+                        await queue.put(
+                            ("sse", ("done", {"type": "done", "message_id": ev.message_id}))
+                        )
                     elif isinstance(ev, Error):
-                        await queue.put(("sse", ("error", {"type": "error", "code": "agent_error", "message": ev.message, "retryable": False})))
+                        await queue.put(
+                            (
+                                "sse",
+                                (
+                                    "error",
+                                    {
+                                        "type": "error",
+                                        "code": "agent_error",
+                                        "message": ev.message,
+                                        "retryable": False,
+                                    },
+                                ),
+                            )
+                        )
             except asyncio.CancelledError:
                 await queue.put(("sse", ("cancelled", {"type": "cancelled"})))
                 raise
             except Exception as e:
-                await queue.put(("sse", ("error", {"type": "error", "code": "agent_error", "message": str(e), "retryable": False})))
+                await queue.put(
+                    (
+                        "sse",
+                        (
+                            "error",
+                            {
+                                "type": "error",
+                                "code": "agent_error",
+                                "message": str(e),
+                                "retryable": False,
+                            },
+                        ),
+                    )
+                )
             finally:
                 tool_bus.unsubscribe(bus_q)
                 fwd_task.cancel()
@@ -80,9 +171,29 @@ def make_router(config, app):
                     ev = payload
                     t = ev.get("type") if isinstance(ev, dict) else None
                     if t in ("started", "finished", "failed"):
-                        await queue.put(("sse", ("tool", {"type": "tool", "id": ev.get("id"), "name": ev.get("name"), "status": "started" if t == "started" else ("failed" if t == "failed" else "finished"), "args": ev.get("args"), "result_preview": ev.get("result_preview"), "duration_ms": ev.get("duration_ms")})))
+                        await queue.put(
+                            (
+                                "sse",
+                                (
+                                    "tool",
+                                    {
+                                        "type": "tool",
+                                        "id": ev.get("id"),
+                                        "name": ev.get("name"),
+                                        "status": "started"
+                                        if t == "started"
+                                        else ("failed" if t == "failed" else "finished"),
+                                        "args": ev.get("args"),
+                                        "result_preview": ev.get("result_preview"),
+                                        "duration_ms": ev.get("duration_ms"),
+                                    },
+                                ),
+                            )
+                        )
                     if t == "draft":
-                        await queue.put(("sse", ("draft", {"type": "draft", "draft": ev.get("draft")})))
+                        await queue.put(
+                            ("sse", ("draft", {"type": "draft", "draft": ev.get("draft")}))
+                        )
                     continue
                 etype, data = payload
                 yield (etype, data)
@@ -98,9 +209,16 @@ def make_router(config, app):
     async def create_conv(slug: str, request: Request):
         pp, err = _resolve_project(slug)
         if pp is None:
-            return JSONResponse(status_code=404, content={"error": {"code": "not_found", "message": err}})
+            return JSONResponse(
+                status_code=404, content={"error": {"code": "not_found", "message": err}}
+            )
         from white_words.scriptwriting.chat import store as chat_store
-        body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+
+        body = (
+            await request.json()
+            if request.headers.get("content-type", "").startswith("application/json")
+            else {}
+        )
         cid = chat_store.create_conversation(pp, body.get("title", ""))
         return {"id": cid}
 
@@ -108,31 +226,62 @@ def make_router(config, app):
     async def list_conv(slug: str):
         pp, err = _resolve_project(slug)
         if pp is None:
-            return JSONResponse(status_code=404, content={"error": {"code": "not_found", "message": err}})
+            return JSONResponse(
+                status_code=404, content={"error": {"code": "not_found", "message": err}}
+            )
         from white_words.scriptwriting.chat import store as chat_store
+
         convs = chat_store.list_conversations(pp)
-        return {"conversations": [{"id": c["id"], "title": c.get("title", ""), "updated_at": c.get("updated_at")} for c in convs]}
+        return {
+            "conversations": [
+                {"id": c["id"], "title": c.get("title", ""), "updated_at": c.get("updated_at")}
+                for c in convs
+            ]
+        }
 
     @router.get("/api/projects/{slug}/conversations/{cid}")
     async def get_conv(slug: str, cid: str):
         pp, err = _resolve_project(slug)
         if pp is None:
-            return JSONResponse(status_code=404, content={"error": {"code": "not_found", "message": err}})
+            return JSONResponse(
+                status_code=404, content={"error": {"code": "not_found", "message": err}}
+            )
         from white_words.scriptwriting.chat import store as chat_store
+
         conv = chat_store.get_conversation(pp, cid)
         if not conv:
-            return JSONResponse(status_code=404, content={"error": {"code": "not_found", "message": "conversation not found"}})
+            return JSONResponse(
+                status_code=404,
+                content={"error": {"code": "not_found", "message": "conversation not found"}},
+            )
         msgs = []
         for m in conv.get("messages", []):
             if m.get("hidden"):
                 continue
-            msgs.append({"id": m["id"], "role": m["role"], "text": m.get("text", ""), "status": m.get("status", "complete"), "created_at": m.get("created_at"), "tools": m.get("tools"), "drafts": m.get("drafts"), "attachments": m.get("attachments"), "error": m.get("error")})
+            msgs.append(
+                {
+                    "id": m["id"],
+                    "role": m["role"],
+                    "text": m.get("text", ""),
+                    "status": m.get("status", "complete"),
+                    "created_at": m.get("created_at"),
+                    "tools": m.get("tools"),
+                    "drafts": m.get("drafts"),
+                    "attachments": m.get("attachments"),
+                    "error": m.get("error"),
+                }
+            )
         # A card's stored status is a display copy; the drafts table is the truth.
         # Overlay it here, at serve time only, so the stored cards stay as the
         # approve/reject routes wrote them.
         from white_words.scriptwriting.core.drafts import reconcile_snapshots
-        slots = [(m, i) for m in msgs for i, d in enumerate(m["drafts"] or []) if isinstance(d, dict)]
-        for (m, i), shown in zip(slots, reconcile_snapshots(pp, [m["drafts"][i] for m, i in slots])):
+
+        slots = [
+            (m, i) for m in msgs for i, d in enumerate(m["drafts"] or []) if isinstance(d, dict)
+        ]
+        for (m, i), shown in zip(
+            slots, reconcile_snapshots(pp, [m["drafts"][i] for m, i in slots])
+        ):
             m["drafts"][i] = shown
         return {"id": conv["id"], "title": conv.get("title", ""), "messages": msgs}
 
@@ -140,8 +289,11 @@ def make_router(config, app):
     async def del_conv(slug: str, cid: str):
         pp, err = _resolve_project(slug)
         if pp is None:
-            return JSONResponse(status_code=404, content={"error": {"code": "not_found", "message": err}})
+            return JSONResponse(
+                status_code=404, content={"error": {"code": "not_found", "message": err}}
+            )
         from white_words.scriptwriting.chat import store as chat_store
+
         chat_store.delete_conversation(pp, cid)
         return {"deleted": True}
 
@@ -156,22 +308,36 @@ def make_router(config, app):
         # project resolve
         pp, err = _resolve_project(slug)
         if pp is None:
-            return JSONResponse(status_code=404, content={"error": {"code": "not_found", "message": err}})
+            return JSONResponse(
+                status_code=404, content={"error": {"code": "not_found", "message": err}}
+            )
         if not text:
-            return JSONResponse(status_code=400, content={"error": {"code": "empty_text", "message": "empty text"}})
+            return JSONResponse(
+                status_code=400, content={"error": {"code": "empty_text", "message": "empty text"}}
+            )
         from white_words.scriptwriting.app.token import load_api_key
+
         if not load_api_key():
-            return JSONResponse(status_code=503, content={"error": {"code": "agent_not_configured", "message": "no api key"}})
+            return JSONResponse(
+                status_code=503,
+                content={"error": {"code": "agent_not_configured", "message": "no api key"}},
+            )
         active = getattr(app.state, "active_replies", None)
         if active and len(active) > 0:
-            return JSONResponse(status_code=409, content={"error": {"code": "reply_in_progress", "message": "reply in progress"}})
+            return JSONResponse(
+                status_code=409,
+                content={"error": {"code": "reply_in_progress", "message": "reply in progress"}},
+            )
         cid = cid_path or body.get("conversation_id")
         if not cid:
             from white_words.scriptwriting.chat import store as chat_store
+
             cid = chat_store.create_conversation(pp, text[:60])
+
         async def gen():
             async for etype, data in stream_reply(slug, cid, text, context, retry=False):
                 yield f"event: {etype}\ndata: {__import__('json').dumps(data)}\n\n"
+
         return StreamingResponse(gen(), media_type="text/event-stream")
 
     @router.post("/api/projects/{slug}/messages")
@@ -181,30 +347,46 @@ def make_router(config, app):
     @router.post("/api/projects/{slug}/conversations/{cid}/messages")
     async def conv_messages_route(slug: str, cid: str, request: Request):
         return await _messages_handler(slug, request, cid_path=cid)
+
     @router.post("/api/projects/{slug}/conversations/{cid}/retry")
     async def retry_route(slug: str, cid: str, request: Request):
         pp, err = _resolve_project(slug)
         if pp is None:
-            return JSONResponse(status_code=404, content={"error": {"code": "not_found", "message": err}})
+            return JSONResponse(
+                status_code=404, content={"error": {"code": "not_found", "message": err}}
+            )
         from white_words.scriptwriting.chat import store as chat_store
+
         conv = chat_store.get_conversation(pp, cid)
         has_user = any(m.get("role") == "user" for m in (conv["messages"] if conv else []))
         if not has_user:
-            return JSONResponse(status_code=400, content={"error": {"code": "no_user_message", "message": "no user message"}})
+            return JSONResponse(
+                status_code=400,
+                content={"error": {"code": "no_user_message", "message": "no user message"}},
+            )
         from white_words.scriptwriting.app.token import load_api_key
+
         if not load_api_key():
-            return JSONResponse(status_code=503, content={"error": {"code": "agent_not_configured", "message": "no api key"}})
+            return JSONResponse(
+                status_code=503,
+                content={"error": {"code": "agent_not_configured", "message": "no api key"}},
+            )
         active = getattr(app.state, "active_replies", None)
         if active and len(active) > 0:
-            return JSONResponse(status_code=409, content={"error": {"code": "reply_in_progress", "message": "reply in progress"}})
+            return JSONResponse(
+                status_code=409,
+                content={"error": {"code": "reply_in_progress", "message": "reply in progress"}},
+            )
         try:
             body = await request.json()
         except Exception:
             body = {}
         context = body.get("context") or {}
+
         async def gen():
             async for etype, data in stream_reply(slug, cid, "", context, retry=True):
                 yield f"event: {etype}\ndata: {__import__('json').dumps(data)}\n\n"
+
         return StreamingResponse(gen(), media_type="text/event-stream")
 
     @router.post("/api/projects/{slug}/conversations/{cid}/cancel")

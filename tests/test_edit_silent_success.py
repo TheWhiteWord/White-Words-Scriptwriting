@@ -29,14 +29,17 @@ def vault(tmp_path, monkeypatch):
     dest.parent.mkdir(parents=True)
     shutil.copytree(str(FIXTURE), str(dest))
     import white_words.scriptwriting.core.config
-    monkeypatch.setattr(white_words.scriptwriting.core.config, "load_plugin_config",
-                        lambda: {"root_path": str(v)})
+
+    monkeypatch.setattr(
+        white_words.scriptwriting.core.config, "load_plugin_config", lambda: {"root_path": str(v)}
+    )
     _import(v)
     return v
 
 
 def _import(root):
     from white_words.scriptwriting.tools.story_import import handler
+
     handler({"project": "save-the-children", "confirm": True}, root_path=str(root))
 
 
@@ -46,6 +49,7 @@ def _project(vault):
 
 def _edit(vault, data, entity_type="character", slug="kael"):
     from white_words.scriptwriting.core.writes import edit_entity
+
     return edit_entity(_project(vault), entity_type, slug, data, "t")
 
 
@@ -109,9 +113,18 @@ def _has_reference_site(meta: dict) -> bool:
 
 def _field(vault, name, entity_type="character", entity_id="kael"):
     from white_words.scriptwriting.tools.story_retrieve import handler
-    r = json.loads(handler({
-        "project": "save-the-children", "entity_type": entity_type,
-        "id": [entity_id], "fields": [name]}, root_path=str(vault)))
+
+    r = json.loads(
+        handler(
+            {
+                "project": "save-the-children",
+                "entity_type": entity_type,
+                "id": [entity_id],
+                "fields": [name],
+            },
+            root_path=str(vault),
+        )
+    )
     return r["entities"][0]["fields"][name]
 
 
@@ -143,12 +156,12 @@ class TestUnrecognisedKeysAreRejected:
         """Same reason: an error naming nothing actionable just gets retried
         the same wrong way."""
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
+
         with pytest.raises(ValueError) as exc:
             _edit(vault, {"nonsense_key": 1})
         message = str(exc.value)
         # A real field name and a real section name, so the caller can copy one.
-        fields = [f for f, m in ENTITY_SCHEMAS["character"].items()
-                  if not m.get("computed")]
+        fields = [f for f, m in ENTITY_SCHEMAS["character"].items() if not m.get("computed")]
         assert fields[0] in message
         assert "Background" in message
 
@@ -165,8 +178,7 @@ class TestUnrecognisedKeysAreRejected:
             _edit(vault, {"frontmatter": {"goals_short": "NESTED"}})
         conn = sqlite3.connect(str(_project(vault) / ".story" / "story.db"))
         try:
-            extra = conn.execute(
-                "SELECT extra FROM entities WHERE id='kael'").fetchone()[0]
+            extra = conn.execute("SELECT extra FROM entities WHERE id='kael'").fetchone()[0]
         finally:
             conn.close()
         assert "frontmatter" not in extra
@@ -186,15 +198,16 @@ class TestSuccessNamesWhatLanded:
         assert r["applied"]["fields"] == []
 
     def test_relation_edit_is_reported(self, vault):
-        r = _edit(vault, {"characters": ["kael", "mira"]},
-                  entity_type="scene", slug="central-room-day")
+        r = _edit(
+            vault, {"characters": ["kael", "mira"]}, entity_type="scene", slug="central-room-day"
+        )
         assert r["applied"]["relations"] == ["characters"]
 
     def test_computed_only_edit_warns_that_nothing_landed(self, vault):
         """A read-only field must not look like a successful write."""
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
-        computed = [f for f, m in ENTITY_SCHEMAS["character"].items()
-                    if m.get("computed")]
+
+        computed = [f for f, m in ENTITY_SCHEMAS["character"].items() if m.get("computed")]
         if not computed:
             pytest.skip("character has no computed fields")
         r = _edit(vault, {computed[0]: "anything"})
@@ -212,17 +225,29 @@ class TestValidKeysStillWork:
 
     def test_section_prose_applies(self, vault):
         from white_words.scriptwriting.tools.story_retrieve import handler
+
         _edit(vault, {"Background": "PROSE MARKER."})
-        r = json.loads(handler({
-            "project": "save-the-children", "entity_type": "character",
-            "id": ["kael"], "sections": ["all"]}, root_path=str(vault)))
+        r = json.loads(
+            handler(
+                {
+                    "project": "save-the-children",
+                    "entity_type": "character",
+                    "id": ["kael"],
+                    "sections": ["all"],
+                },
+                root_path=str(vault),
+            )
+        )
         assert r["entities"][0]["sections"]["Background"] == "PROSE MARKER."
 
     def test_every_valid_key_of_every_entity_type_is_accepted(self, vault):
         """Sweeps the whole surface, so a schema addition cannot be locked out."""
         from white_words.scriptwriting.core.constants import ENTITY_SCHEMAS
-        from white_words.scriptwriting.core.entity import (ENTITY_COLUMN_MAP, relation_fields,
-                                 standard_sections)
+        from white_words.scriptwriting.core.entity import (
+            ENTITY_COLUMN_MAP,
+            relation_fields,
+            standard_sections,
+        )
         from white_words.scriptwriting.core.writes import _FIELDS_TO_SKIP
 
         conn = sqlite3.connect(str(_project(vault) / ".story" / "story.db"))
@@ -236,10 +261,12 @@ class TestValidKeysStillWork:
         rejected = []
         for etype, sample in samples.items():
             schema = ENTITY_SCHEMAS.get(etype, {})
-            keys = ([k for k in schema if not schema[k].get("computed")]
-                    + list(standard_sections(etype))
-                    + list(relation_fields(etype))
-                    + list(ENTITY_COLUMN_MAP.get(etype, {})))
+            keys = (
+                [k for k in schema if not schema[k].get("computed")]
+                + list(standard_sections(etype))
+                + list(relation_fields(etype))
+                + list(ENTITY_COLUMN_MAP.get(etype, {}))
+            )
             for key in keys:
                 if key in _FIELDS_TO_SKIP:
                     continue
@@ -270,8 +297,7 @@ class TestValidKeysStillWork:
                     _import(vault)
                     data = {key: probe}
                     if etype == "scene" and key == "forced_heading":
-                        data = {key: ".PROBE", "int_ext": "", "place": "",
-                                "time_of_day": ""}
+                        data = {key: ".PROBE", "int_ext": "", "place": "", "time_of_day": ""}
                     _edit(vault, data, etype, sample)
                 except ValueError:
                     rejected.append(f"{etype}.{key}")

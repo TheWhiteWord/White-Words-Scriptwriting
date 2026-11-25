@@ -14,6 +14,7 @@ Files live in ``<project>/.story/`` and are named
 ``*.partial`` files (a backup still being written, or one that failed) never
 match, so a listing only ever shows complete backups.
 """
+
 import re
 import sqlite3
 import threading
@@ -50,8 +51,7 @@ def slugify_label(label: str) -> str | None:
     return slug or None
 
 
-def create_backup(project_path: Path, *, label: str | None = None,
-                  automatic: bool = False) -> str:
+def create_backup(project_path: Path, *, label: str | None = None, automatic: bool = False) -> str:
     """Snapshot the project database. Returns the backup's path.
 
     Automatic backups prune older automatic ones afterwards; manual ones are kept.
@@ -63,8 +63,7 @@ def create_backup(project_path: Path, *, label: str | None = None,
         slug = slugify_label(label)
         if slug is None:
             raise ValueError("The label needs at least one letter or digit.")
-    path = backup_database(project_path, prefix="story_auto" if automatic else "story",
-                           label=slug)
+    path = backup_database(project_path, prefix="story_auto" if automatic else "story", label=slug)
     if automatic:
         prune_automatic_backups(project_path)
     return path
@@ -93,8 +92,10 @@ def maybe_periodic_backup(project_path: Path, *, now: datetime | None = None) ->
             if now - taken < PERIODIC_BACKUP_INTERVAL:
                 return None
             # story.db changes only at checkpoints; the -wal file on every write
-            changed = max((f.stat().st_mtime for f in (db, db.with_name("story.db-wal"))
-                           if f.exists()), default=0)
+            changed = max(
+                (f.stat().st_mtime for f in (db, db.with_name("story.db-wal")) if f.exists()),
+                default=0,
+            )
             if changed <= taken.timestamp() + _CHECKPOINT_SLACK_SECONDS:
                 return None
         return create_backup(project_path, automatic=True)
@@ -118,14 +119,24 @@ def list_backups(project_path: Path) -> list[dict]:
         except ValueError:
             created = datetime.fromtimestamp(st.st_mtime)
         rest = m["rest"]
-        label = rest[1:-9] or None if rest.startswith("_") and len(rest) > 9 and rest[-9] == "_" else None
-        found.append((created, st.st_mtime_ns, {
-            "name": f.name,
-            "kind": "automatic" if m["auto"] else "manual",
-            "label": label,
-            "created_at": created.isoformat(timespec="seconds"),
-            "size_bytes": st.st_size,
-        }))
+        label = (
+            rest[1:-9] or None
+            if rest.startswith("_") and len(rest) > 9 and rest[-9] == "_"
+            else None
+        )
+        found.append(
+            (
+                created,
+                st.st_mtime_ns,
+                {
+                    "name": f.name,
+                    "kind": "automatic" if m["auto"] else "manual",
+                    "label": label,
+                    "created_at": created.isoformat(timespec="seconds"),
+                    "size_bytes": st.st_size,
+                },
+            )
+        )
     found.sort(key=lambda t: (t[0], t[1]), reverse=True)
     return [t[2] for t in found]
 
@@ -161,12 +172,11 @@ def restore_backup(project_path: Path, name: str) -> dict:
     backup — so a restore can itself be undone by restoring that one. Raises
     ValueError, changing nothing, if a check fails.
     """
-    from .db import (BASELINE_VERSION, LATEST_VERSION, SCHEMA_MIGRATIONS,
-                     apply_migrations, get_db)
+    from .db import BASELINE_VERSION, LATEST_VERSION, SCHEMA_MIGRATIONS, apply_migrations, get_db
 
     # Only names from the listing: that is what keeps a path like ../story.db out.
     if name not in {b["name"] for b in list_backups(project_path)}:
-        raise ValueError(f"No such backup: {name}. Use action=\"list\" for the names.")
+        raise ValueError(f'No such backup: {name}. Use action="list" for the names.')
     source = project_path / ".story" / name
     if not (project_path / ".story" / "story.db").exists():
         raise ValueError("This project has no story.db to restore into.")
@@ -180,7 +190,8 @@ def restore_backup(project_path: Path, name: str) -> dict:
         try:
             ok = snap.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
             has_entities = snap.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='entities'").fetchone()
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='entities'"
+            ).fetchone()
             version = snap.execute("PRAGMA user_version").fetchone()[0]
             page_size = snap.execute("PRAGMA page_size").fetchone()[0]
         except sqlite3.Error as e:
@@ -192,25 +203,33 @@ def restore_backup(project_path: Path, name: str) -> dict:
         if version > LATEST_VERSION:
             raise ValueError(
                 f"{name} was made by a newer version of White Words (schema "
-                f"{version}, this build knows {LATEST_VERSION}). Update the app first.")
+                f"{version}, this build knows {LATEST_VERSION}). Update the app first."
+            )
         if version < BASELINE_VERSION:
             raise ValueError(
                 f"{name} is older than this build supports (schema {version}; the "
-                f"baseline is {BASELINE_VERSION}).")
+                f"baseline is {BASELINE_VERSION})."
+            )
 
         live = get_db(project_path)
         try:
             if live.execute("PRAGMA page_size").fetchone()[0] != page_size:
-                raise ValueError(f"{name} uses a different database page size and cannot "
-                                 f"be restored in place.")
+                raise ValueError(
+                    f"{name} uses a different database page size and cannot be restored in place."
+                )
             safety = create_backup(project_path, label="before-restore", automatic=True)
             snap.backup(live)
-            apply_migrations(live, SCHEMA_MIGRATIONS, baseline=BASELINE_VERSION,
-                             name=f"{project_path.name}/.story/story.db")
+            apply_migrations(
+                live,
+                SCHEMA_MIGRATIONS,
+                baseline=BASELINE_VERSION,
+                name=f"{project_path.name}/.story/story.db",
+            )
             if live.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                 raise RuntimeError(
                     f"The database failed its integrity check after the restore. The state "
-                    f"before it is saved as {Path(safety).name}.")
+                    f"before it is saved as {Path(safety).name}."
+                )
         finally:
             live.close()
     finally:
@@ -222,7 +241,8 @@ def restore_backup(project_path: Path, name: str) -> dict:
         "restored": name,
         "restored_created_at": meta["created_at"],
         "safety_backup": Path(safety).name,
-        "message": (f"Restored the project to {meta['created_at']}. Anything done after "
-                    f"that is not in it."),
+        "message": (
+            f"Restored the project to {meta['created_at']}. Anything done after that is not in it."
+        ),
         "hint": f"To undo this restore, restore {Path(safety).name}.",
     }
