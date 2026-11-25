@@ -170,6 +170,22 @@ and what it changes. No narration.
 
 ### Deviations
 ### Issues
+- **Safety copies share the 20-slot automatic cap with the daily backup.**
+  `prune_automatic_backups` (`core/backups.py:144`) keeps the newest
+  `AUTO_BACKUPS_KEPT` of `kind="automatic"` regardless of label, so every
+  `before-restore` copy already evicts a daily one. §4.3's switch takes both a
+  safety backup *and* parks the live DB as `heads/<current>.db` — the parked
+  head is already the copy the safety backup would be. Take the park as the
+  safety net and skip the extra backup, or a project that switches branches
+  regularly fills all 20 slots with pre-switch copies and loses the daily
+  history the cap exists for. `create_backup(label=None)` skips the label but
+  still writes the file, so "no backup" needs an explicit path (a
+  `safety_label=False` / `backup=False` argument on the loader) rather than
+  passing `None`.
+- Backups stay the escape hatch worth keeping when `history.db` is what broke:
+  a snapshot is a file plus a manifest row, so losing the manifest orphans it,
+  while `restore_backup` on a plain `story_*.db` needs only the app. Do not
+  delete the backup path on the grounds that snapshots cover it.
 
 ---
 
