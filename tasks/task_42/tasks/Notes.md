@@ -64,14 +64,14 @@ and what it changes. No narration.
   table. The `live_relations` view hides every row either end of which is
   deleted, so `restore_check`'s collision scan must not use it. Verified by the
   two-trashed-holders test, which finds nothing through the view.
-- `_get_next_order_db` (`core/writes.py:1155`) counts live rows only, by design —
+- `_get_next_order_db` (`core/writes.py:1154`) counts live rows only, by design —
   a soft-deleted child's key is meant to be reused. The reissue is not a bug; the
   tie it creates on restore was. Reproduced: keys `1,2,3`, delete 3, create → 3
   again, restore → two live rows on key 3, order decided by id string.
 - `reorder()` (`core/writes.py:1009`) is the only writer of `order_key` that
   takes a complete sibling list, and it renumbers `1..n` live rows. Any
   post-restore placement goes through it rather than writing keys directly.
-- `validate_scene_dramatic_role` (`core/entity.py:1165`) allows `plot_role` with
+- `validate_scene_dramatic_role` (`core/entity.py:1139`) allows `plot_role` with
   empty `plot_roles`, so a scene that loses its only role in a `take` stays valid.
   No follow-up decision is needed for the loser.
 - Batch checks must all run against the state the batch started in, before any
@@ -100,9 +100,11 @@ and what it changes. No narration.
   (`purge_cutoff`, imported and unused at `dev`). Part of T0's 263-finding
   backlog, not touched here.
 - `tests/test_live_relations.py` pins the exact set of raw `relations` reads with
-  a count per file. Adding a legitimate one means updating that registry **and**
-  its docstring reason; the assertion message alone is not enough context for
-  whoever hits it next. `core/trash.py` went from 1 to 3.
+  a count per file — currently `core/db.py` 1 (the view's definition),
+  `core/integrity.py` 2 (the oracle), `core/trash.py` 3 (the restore guard). A
+  new legitimate read means updating that registry **and** its docstring reason,
+  because the assertion message alone does not tell the next reader why the count
+  moved.
 - The Trash tab's UI work landed in this task, not T13: the refusal it introduces
   would otherwise make a collided scene unrestorable from the browser. The panel
   now sends `resolutions`; the `placed` result is still not surfaced.
@@ -112,6 +114,17 @@ and what it changes. No narration.
 ## T2 — `load_database_in_place`, `apply_op` public
 
 ### Findings
+- `reorder()` now accepts `project_path=None` when the caller supplies `conn`
+  (`core/writes.py:1009`, with an assert spelling out the contract). T1 needed
+  it to renumber from inside `restore`'s transaction. An `apply_op` that issues a
+  reorder inside the executor's transaction uses the same form; do not reopen a
+  second connection for it.
+- `reorder()` takes a **complete** sibling list and renumbers `1..n`  — it does
+  not verify completeness (`F13`). Inside a transaction it will happily number a
+  partial list, so the completeness assertion belongs to the caller (T7's
+  planner). Extracting `apply_op` must not move that responsibility into the
+  already-public function.
+
 ### Deviations
 ### Issues
 
@@ -144,6 +157,20 @@ and what it changes. No narration.
 ## T6 — Diff
 
 ### Findings
+- `live_relations` hides every relation row either end of which is deleted, so
+  "trash ignored" (§6.1) comes for free on that path. A raw `FROM relations`
+  read does not: a trashed scene still holds its `plot_<role>` rows and its
+  cast rows. Read the view, or filter `is_deleted` explicitly.
+- Two **live** siblings can already share an `order_key`: a delete frees a key,
+  `_get_next_order_db` reissues it, and a restore leaves the pair in place. So
+  the child order must be serialized as the `(order_key, id)` id list (§4.4's
+  fingerprint does this too), never as the raw key values — two states that
+  differ only in which of two tied siblings sorts first would otherwise diff as
+  equal.
+- `tests/test_live_relations.py` pins every raw `relations` read with a count
+  per file. A diff that needs one must add itself to that registry and its
+  docstring reason, or the suite fails with an unexplained count mismatch.
+
 ### Deviations
 ### Issues
 
@@ -161,6 +188,19 @@ and what it changes. No narration.
   check evaluated after an earlier op moved the state it depended on reports the
   wrong thing. Evaluate every decision against the plan's starting state, then
   emit the ordered ops.
+- **The D4 "to verify" is settled.** §7.5 asked whether a scene that loses its
+  only plot role to `Theirs` stays valid. It does:
+  `validate_scene_dramatic_role` (`core/entity.py:1139`) accepts
+  `dramatic_role='plot_role'` or empty with an empty `plot_roles`, and
+  `validate_scene_plot_roles` only rejects a *singular* role held twice. The
+  loser needs no follow-up decision (no mark-as-transition, no
+  assign-another-role): its beats, cast and other plots' roles are untouched, and
+  T1's `take` resolution performs exactly this write.
+- **D6 must not double-place.** `core.trash.restore` already settles the restored
+  row's position (renumbers the parent through `reorder`, reports `placed`). A D6
+  plan that also emits a `reorder` for the same parent renumbers it twice, and
+  the second is built from a list the planner computed before the restore ran.
+  Take the restore's `placed` as the outcome and emit no reorder for that parent.
 
 ### Deviations
 ### Issues
@@ -178,6 +218,20 @@ and what it changes. No narration.
 - `restore` returns `code=restore_needs_decision` and writes nothing when a
   collision has no resolution. The executor must treat that return as a failed
   dry run mapped back to the D4 item, not as a success with a missing role.
+- A `restore` op is not in the agent-visible op vocabulary (`OP_ORDER`), and
+  `_dispatch` (`core/drafts.py:692`) has no `restore` branch — it dispatches
+  `create`/`edit`/`delete`/`reorder` to `core.writes` and `purge` straight to
+  `core.trash.purge_deleted`. So there is precedent for an op reaching
+  `core.trash`, but `apply_op` will be the first caller of `trash.restore` from an
+  op. §7.7's "restore is internal to the executor" means the executor calls
+  `core.trash.restore` itself; do not add a `restore` kind to the public op
+  vocabulary, which is what the agent's `story_draft` schema is built from.
+- `reorder` inside the executor's transaction passes `project_path=None` and the
+  live `conn`; it does not open a connection per op.
+- Position is already settled by a restore and already released by a delete;
+  the executor's own ordering work is the §7.7 order (restores → edits that
+  release roles → deletes → creates → other edits → reorders) and the
+  complete-sibling-list rule from F13, nothing more.
 
 ### Deviations
 ### Issues
@@ -187,6 +241,14 @@ and what it changes. No narration.
 ## T9 — Persistent merge sessions
 
 ### Findings
+- A session's stored decisions are keyed by item path; T1's `resolutions` shape
+  (`{plot, role, choice: drop|take}`) is the value a D4 decision writes. Persist
+  the shape as-is — the executor hands it straight to `core.trash.restore`, so a
+  session that round-trips through the manifest must not rename `choice`.
+- `restore_needs_decision` is a refusal *result*, not an exception, and it
+  carries `collisions`. If a session records "unresolved" it must record which
+  collision, not only that apply failed.
+
 ### Deviations
 ### Issues
 
@@ -195,6 +257,20 @@ and what it changes. No narration.
 ## T10 — HTTP routes
 
 ### Findings
+- The trash routes are the shape to copy for a core refusal: the core returns a
+  dict with `error` **plus** a `code` (`restore_needs_decision`) and its payload
+  (`collisions`), and the route maps it to `409` with
+  `{"error": {code, message, …payload}}` (`app/routes/trash.py:56`,
+  `_restore_refusal`). §10's "existing error shape" is that envelope;
+  `_err(status, code, message, **extra)` (`app/routes/trash.py:31`) is the helper,
+  defined locally in that module and not yet shared.
+- A refusal that a caller must act on carries its payload at the **top level of
+  the error object**, not nested under a second key — `collisions` and `blockers`
+  sit beside `code` and `message`, and the dashboard reads them there.
+- `restore_many` raises `RestoreRefused` for a batch while `restore` returns a
+  dict; the route catches the exception and folds `refused[*].collisions` into one
+  list. A merge route that applies a planned batch will hit the same split.
+
 ### Deviations
 ### Issues
 
@@ -221,6 +297,14 @@ and what it changes. No narration.
 ## T12 — Agent approval card
 
 ### Findings
+- A scene that loses its only plot role to a `take` stays valid
+  (`core/entity.py:1139`), so an approval card never needs a follow-up prompt for
+  the losing scene.
+- The core's refusal carries everything the card draws: the collision's `message`
+  is written in the repo's agent-facing style and names the fix, `holder` names
+  the other scene, and `choices` says what to offer. The card renders those; it
+  must not invent a third option.
+
 ### Deviations
 ### Issues
 

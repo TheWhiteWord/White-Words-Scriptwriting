@@ -20,15 +20,15 @@ Close both, in `restore_check` (so the caller sees it before acting) and in
 
 | Claim | Evidence |
 |---|---|
-| `restore` only clears flags | `core/trash.py:805` — `_clear_flags`, no role or order check |
+| `restore` only clears flags | `core/trash.py`, `_clear_flags` + `restore`: no role or order check at the start of T1 |
 | A trashed scene's role rows survive the delete | `core/writes.py` delete leaves `relations` intact; the `live_relations` view hides them |
 | The singular-role rule counts live scenes only | `core/entity.py:1119` filters `e.is_deleted=0`, so a trashed climax frees the slot |
 | A role collision is writable today | probe: delete `central-room-day`, give `central-room-night` `inciting_incident`, restore → two live holders |
-| `_get_next_order_db` counts live rows only | `core/writes.py:1155` — `MAX(order_key)+1 WHERE is_deleted=0`, so the deleted key is handed out again |
+| `_get_next_order_db` counts live rows only | `core/writes.py:1154` — `MAX(order_key)+1 WHERE is_deleted=0`, so the deleted key is handed out again |
 | A duplicate `order_key` puts the restored scene last | probe: delete `the-core-day` (key 3), create `the-roof-dawn` (key 3), restore → order becomes `day, night, roof-dawn, core-day`; ties break on the id string |
 | The duplicate reaches the tracked markdown | probe: export writes `order: 3` into both `The Core - Day.md` and `The Roof - Dawn.md` |
 | `plot_roles` is relation storage, not `extra` | fixture scene `extra` keys: no `plot_roles`; rows are `(plot, plot_<role>)` |
-| Removing a role cannot invalidate the loser | `validate_scene_dramatic_role` (`core/entity.py:1165`): `plot_role` or empty is allowed with empty `plot_roles` |
+| Removing a role cannot invalidate the loser | `validate_scene_dramatic_role` (`core/entity.py:1139`): `plot_role` or empty is allowed with empty `plot_roles` |
 | Only scenes and sequences are reorderable | `REORDERABLE_TYPES` (`core/writes.py:1006`); other types legitimately share key `0` |
 | Both callers route through one function | dashboard → `restore_many`; agent → `story_admin` → `restore` |
 
