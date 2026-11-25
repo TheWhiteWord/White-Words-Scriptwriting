@@ -20,7 +20,7 @@ import re
 from pathlib import Path
 
 from . import clock
-from .constants import ENTITY_LABELS
+from .constants import ENTITY_LABELS, UNIQUE_PLOT_ROLES
 from .references import REFERENCE_LISTS, REFERENCE_MAPS, references_to, scrub_live_extras
 
 # A section body of `[placeholder — type/Section]` is the template's marker, not
@@ -403,6 +403,148 @@ def _relations_touching(conn, entity_id: str) -> list:
     ).fetchall()
 
 
+# ─── collisions a restore can land in ────────────────────────────────────────
+
+# The two ways out of a role collision, as the message offers them.
+_ROLE_CHOICES = ("drop", "take")
+
+
+def _singular_role_collisions(conn, entity_id: str, batch) -> list:
+    """The singular plot roles restoring this scene would put on a second scene.
+
+    A `plot_<role>` row is owned by the plot (`from_id=plot, to_id=scene`) and
+    hidden, not removed, by a delete — so a trashed climax still holds its row
+    while `validate_scene_plot_roles` (which counts live scenes only) lets
+    another scene take the same role. Clearing the flag would then leave two
+    live holders, a state no writer permits.
+
+    Read from the `relations` table rather than `live_relations`, because while
+    the row is in the trash the view hides every relation it is party to — and
+    this is one of the readers that exists to look at the hidden state.
+
+    A scene in `batch` is being restored in the same call, so it competes for
+    the role too and is reported; a live holder is what the caller must resolve.
+    """
+    rows = conn.execute(
+        "SELECT from_id, kind FROM relations "
+        "WHERE to_id=? AND kind IN ({}) ORDER BY from_id".format(
+            ",".join("?" * len(UNIQUE_PLOT_ROLES))
+        ),
+        (entity_id, *[f"plot_{r}" for r in UNIQUE_PLOT_ROLES]),
+    ).fetchall()
+    if not rows:
+        return []
+
+    out = []
+    for plot, kind in rows:
+        role = kind[len("plot_") :]
+        # Straight from `relations`: a trashed holder's row is hidden by the
+        # `live_relations` view, and a scene in the same batch is exactly the
+        # case where two rows would arrive on one role together.
+        holders = conn.execute(
+            "SELECT e.id, e.name, e.is_deleted FROM relations r "
+            "JOIN entities e ON e.id = r.to_id "
+            "WHERE r.from_id=? AND r.kind=? AND r.to_id<>? ORDER BY e.id",
+            (plot, kind, entity_id),
+        ).fetchall()
+        plot_name = _names(conn, [plot]).get(plot, (plot, "plot"))[0]
+        # A live holder is what the caller must resolve. A trashed one only
+        # competes when it is arriving in the same call.
+        live = [h for h in holders if not h[2]]
+        competing = [h for h in holders if h[2] and h[0] in batch]
+        if not live and not competing:
+            continue
+        holder = (live or competing)[0]
+        out.append(
+            {
+                "code": "role_collision",
+                "plot": plot,
+                "plot_name": plot_name,
+                "role": role,
+                "holder": {"id": holder[0], "name": holder[1] or holder[0]},
+                # `take` moves the role off the holder. A second scene in the
+                # batch means both would hold it, so the choice is not offered.
+                "choices": list(_ROLE_CHOICES) if not competing else ["drop"],
+                "message": (
+                    f"Plot “{plot_name}” already has its {role.replace('_', ' ')} on "
+                    f"“{holder[1] or holder[0]}”. One scene per plot: choose which "
+                    f"of the two keeps it."
+                ),
+            }
+        )
+    return out
+
+
+def _position_collision(
+    conn, etype: str, entity_id: str, parent_id: str, order_key, is_deleted: int
+):
+    """The live sibling that took this row's `order_key` while it was trashed.
+
+    `_get_next_order_db` hands out `MAX(order_key)+1` over live rows, so a
+    deleted row's key goes to the next scene created. Both rows then share a
+    key, and readers break the tie on the id string — which puts the restored
+    scene wherever its id sorts, not where it was.
+
+    Only for `REORDERABLE_TYPES`: `order_key` is a sequence there. Every other
+    type sits on the default 0, siblings included, and a shared 0 means nothing.
+
+    Returns {order_key, after, taken_by}, or None. `after` is the live sibling
+    the row followed before the delete: its key was the highest below its own.
+    """
+    from .writes import REORDERABLE_TYPES
+
+    if etype not in REORDERABLE_TYPES or not parent_id or not is_deleted or order_key is None:
+        return None
+    taken_by = conn.execute(
+        "SELECT id, name FROM entities WHERE parent_id=? AND is_deleted=0 AND order_key=? "
+        "AND id<>? ORDER BY id",
+        (parent_id, order_key, entity_id),
+    ).fetchone()
+    if not taken_by:
+        return None
+    after = conn.execute(
+        "SELECT id, name, order_key FROM entities WHERE parent_id=? AND is_deleted=0 "
+        "AND order_key<? AND id<>? ORDER BY order_key DESC, id DESC",
+        (parent_id, order_key, entity_id),
+    ).fetchone()
+    return {
+        "order_key": order_key,
+        "taken_by": {"id": taken_by[0], "name": taken_by[1] or taken_by[0]},
+        "after": ({"id": after[0], "name": after[1] or after[0]} if after else None),
+    }
+
+
+def _settle_positions(conn, etype: str, entity_id: str, parent_id: str, after_id: str | None):
+    """Put a restored row back in a clean sequence. Returns its position, or None.
+
+    Renumbers the parent's live scenes/sequences through `reorder()` — the only
+    writer of `order_key` that produces a complete sibling list — with the
+    restored row placed directly after the sibling it followed before the
+    delete. `reorder` requires the complete live set, which is exactly what this
+    builds. Types that are not reorderable keep their `order_key`: it is not a
+    sequence there, so a shared value means nothing (every `value` is key 0).
+    """
+    from .writes import REORDERABLE_TYPES, reorder
+
+    if etype not in REORDERABLE_TYPES or not parent_id:
+        return None
+    siblings = [
+        r[0]
+        for r in conn.execute(
+            "SELECT id FROM entities WHERE type=? AND parent_id=? AND is_deleted=0 "
+            "ORDER BY order_key, id",
+            (etype, parent_id),
+        ).fetchall()
+    ]
+    if entity_id not in siblings:
+        return None
+    siblings.remove(entity_id)
+    at = siblings.index(after_id) + 1 if after_id and after_id in siblings else len(siblings)
+    siblings.insert(at, entity_id)
+    reorder(None, etype, siblings, "restored", conn=conn)
+    return at + 1
+
+
 def restore_check(conn, entity_id: str, *, also_restoring=()) -> dict:
     """What restoring `entity_id` would bring back, and what stands in the way.
 
@@ -412,6 +554,12 @@ def restore_check(conn, entity_id: str, *, also_restoring=()) -> dict:
       * **blockers** — a structural parent still in the trash (or gone for good):
         restoring would produce a row no reader can see (see `_NEEDS_PARENT`).
         `fix` names the parent to restore in the same batch.
+      * **collisions** — a singular plot role this row would put on a second
+        live scene, with the scene holding it now and the two ways out. The
+        restore is refused until the caller chooses one.
+      * **placement** — the sibling that took this row's position while it was
+        in the trash. Not a blocker: the restore puts it back after its old
+        neighbour and renumbers, so there is nothing to choose.
       * **warnings** — links that will stay hidden because the other end is
         still deleted (`reference_in_trash`), or can never come back because it
         was purged (`reference_purged`), or children that stay behind because
@@ -419,18 +567,19 @@ def restore_check(conn, entity_id: str, *, also_restoring=()) -> dict:
       * **returned** — what becomes VISIBLE again. Nothing is rebuilt: sections
         and relation rows were only hidden, so this is a census, not a promise.
 
-    `also_restoring` is the rest of the batch: a parent in it is not a blocker.
+    `also_restoring` is the rest of the batch: a parent in it is not a blocker,
+    and a scene in it counts as a competing holder.
     """
     from .references import dead_ids
 
     row = conn.execute(
-        "SELECT id, type, name, parent_id, location_id, extra, is_deleted, deleted_at "
+        "SELECT id, type, name, parent_id, location_id, extra, is_deleted, deleted_at, order_key "
         "FROM entities WHERE id=?",
         (entity_id,),
     ).fetchone()
     if not row:
-        return {"blockers": [], "warnings": {}, "returned": {}}
-    eid, etype, ename, parent_id, location_id, extra_json, is_deleted, deleted_at = row
+        return {"blockers": [], "collisions": [], "warnings": {}, "returned": {}}
+    eid, etype, ename, parent_id, location_id, extra_json, is_deleted, deleted_at, order_key = row
     extra = json.loads(extra_json) if extra_json else {}
     batch = set(also_restoring)
     dead = dead_ids(conn)
@@ -593,9 +742,12 @@ def restore_check(conn, entity_id: str, *, also_restoring=()) -> dict:
     ).fetchone()[0]
     sections = conn.execute("SELECT count(*) FROM sections WHERE entity_id=?", (eid,)).fetchone()[0]
     holders, detached = references_to(conn, [eid])
+    collisions = _singular_role_collisions(conn, eid, batch) if etype == "scene" else []
 
     return {
         "blockers": blockers,
+        "collisions": collisions,
+        "placement": _position_collision(conn, etype, eid, parent_id, order_key, is_deleted),
         "warnings": warnings,
         "returned": {
             "children": children,
@@ -802,7 +954,71 @@ def _clear_flags(conn, entity_id: str, deleted_at) -> list:
     return [entity_id] + children
 
 
-def restore(project_path: Path, entity_type: str, entity_id: str, summary: str = "") -> dict:
+def _resolve(conn, entity_id: str, etype: str, collisions: list, resolutions) -> list:
+    """Apply the caller's choices for a row's role collisions.
+
+    `resolutions` is a list of `{plot, role, choice}`. `drop` leaves the role on
+    the current holder only, so the incoming row arrives without it — its
+    `plot_<role>` row goes, which is the same write an edit makes when a role is
+    removed. `take` moves it: the holder loses its row, the restored scene keeps
+    its own.
+
+    Raises ValueError naming what is missing, before anything is written.
+    """
+    chosen = {}
+    for r in resolutions or []:
+        if not isinstance(r, dict):
+            continue
+        key = (str(r.get("plot") or ""), str(r.get("role") or ""))
+        choice = str(r.get("choice") or "")
+        if choice not in _ROLE_CHOICES:
+            raise ValueError(
+                f"Unknown resolution for {key[0]}/{key[1]}: {choice or '(empty)'}. "
+                f"One of: {', '.join(_ROLE_CHOICES)}."
+            )
+        chosen[key] = choice
+
+    for c in collisions:
+        key = (c["plot"], c["role"])
+        if key not in chosen:
+            raise ValueError(c["message"] + " Choose one: " + " / ".join(c["choices"]) + ".")
+        if chosen[key] not in c["choices"]:
+            raise ValueError(
+                f"“{chosen[key]}” is not available for {c['plot']}/{c['role']}: the other "
+                f"scene is in this same restore, so the role can only be dropped. "
+                f"Choose one: {', '.join(c['choices'])}."
+            )
+
+    applied = []
+    for c in collisions:
+        plot, role, kind = c["plot"], c["role"], f"plot_{c['role']}"
+        choice = chosen[(plot, role)]
+        if choice == "drop":
+            conn.execute(
+                "DELETE FROM relations WHERE from_id=? AND to_id=? AND kind=?",
+                (plot, entity_id, kind),
+            )
+        else:  # take
+            # Only a LIVE holder loses the role. A row hidden on a trashed scene
+            # is not the caller's to rewrite: that scene's own restore is where
+            # it is decided, and deleting it here would drop the role silently.
+            conn.execute(
+                "DELETE FROM relations WHERE from_id=? AND kind=? AND to_id<>? "
+                "AND to_id IN (SELECT id FROM entities WHERE is_deleted=0)",
+                (plot, kind, entity_id),
+            )
+        applied.append({"plot": plot, "role": role, "choice": choice})
+    return applied
+
+
+def restore(
+    project_path: Path,
+    entity_type: str,
+    entity_id: str,
+    summary: str = "",
+    *,
+    resolutions=None,
+) -> dict:
     """Undelete an entity by clearing is_deleted. The exact inverse of the delete.
 
     The delete changes nothing but the flags: sections, relation rows, the names
@@ -816,9 +1032,19 @@ def restore(project_path: Path, entity_type: str, entity_id: str, summary: str =
     while the entity was in the trash. An edit that sets `characters` replaces
     the stored list, hidden names included.
 
-    No structural check here: this is the agent's action, and it stays exactly as
-    it was. The dashboard refuses a restore whose parent is still in the trash,
-    which is `restore_check`, read by the route.
+    Two things can stand in the way, both created while the row was hidden:
+
+    * a **singular plot role** another scene took in the meantime. Refused until
+      `resolutions` names which scene keeps it (`drop` / `take`), because a
+      second live climax is a state no writer permits.
+    * a **position** another sibling took: `_get_next_order_db` hands out the
+      key of a deleted row. Not refused — the row goes back after the sibling
+      it followed before the delete, and the parent is renumbered, which is what
+      any other ordering change does.
+
+    Structural checks on the parent are not here: `restore_check` reports them
+    and the dashboard refuses on it. `restore_many` applies that check, because
+    a batch is one action.
     """
     from white_words.scriptwriting.core.db import get_db, transaction
 
@@ -828,22 +1054,47 @@ def restore(project_path: Path, entity_type: str, entity_id: str, summary: str =
         with transaction(conn):
             # Deliberately NOT filtered on is_deleted — that is the point.
             row = conn.execute(
-                "SELECT id, is_deleted, deleted_at FROM entities WHERE id=?",
+                "SELECT id, type, name, is_deleted, deleted_at, parent_id, order_key "
+                "FROM entities WHERE id=?",
                 (entity_id,),
             ).fetchone()
             if not row:
                 return {"error": f"Entity not found: {entity_type}/{entity_id}"}
-            entity_id, is_deleted, deleted_at = row
+            entity_id, etype, ename, is_deleted, deleted_at, parent_id, order_key = row
             if not is_deleted:
                 return {
                     "error": f"{entity_id} is not deleted — nothing to restore.",
                     "entity_id": entity_id,
                 }
+            resolved = []
+            if etype == "scene":
+                collisions = _singular_role_collisions(conn, entity_id, set())
+                if collisions:
+                    try:
+                        resolved = _resolve(conn, entity_id, etype, collisions, resolutions)
+                    except ValueError as e:
+                        return {
+                            "error": str(e),
+                            "code": "restore_needs_decision",
+                            "collisions": collisions,
+                        }
+            placement = _position_collision(
+                conn, etype, entity_id, parent_id, order_key, is_deleted
+            )
             restored = _clear_flags(conn, entity_id, deleted_at)
+            placed = None
+            if placement:
+                placed = _settle_positions(
+                    conn,
+                    etype,
+                    entity_id,
+                    parent_id,
+                    (placement["after"] or {}).get("id"),
+                )
     finally:
         conn.close()
 
-    return {
+    result = {
         "success": True,
         "message": f"Restored: {summary}",
         "entity_id": entity_id,
@@ -851,6 +1102,15 @@ def restore(project_path: Path, entity_type: str, entity_id: str, summary: str =
         "restored": restored,
         "restored_cascade_children": restored[1:],
     }
+    if resolved:
+        result["resolved_roles"] = resolved
+    if placement:
+        result["placed"] = {
+            "position": placed,
+            "after": (placement["after"] or {}).get("name"),
+            "was_taken_by": placement["taken_by"]["name"],
+        }
+    return result
 
 
 class RestoreRefused(Exception):
@@ -862,7 +1122,7 @@ class RestoreRefused(Exception):
         self.refused = refused
 
 
-def restore_many(project_path: Path, targets: list) -> dict:
+def restore_many(project_path: Path, targets: list, *, resolutions=None) -> dict:
     """Restore several deletions in one transaction, or none of them.
 
     All-or-nothing on purpose: the batch the person selected is one action, and
@@ -874,6 +1134,11 @@ def restore_many(project_path: Path, targets: list) -> dict:
     Parents included in the batch are allowed in any order: `restore_check` is
     told what else is being restored, so a scene listed before its sequence is
     not a false blocker.
+
+    `resolutions` is `{target_id: [{plot, role, choice}, …]}` — the roles each
+    target keeps. A role collision with no resolution refuses the batch, and
+    every target already examined reports its own collisions, so the caller sees
+    the whole set of decisions at once.
     """
     from white_words.scriptwriting.core.db import get_db, transaction
 
@@ -885,14 +1150,22 @@ def restore_many(project_path: Path, targets: list) -> dict:
     if not wanted:
         return {"error": "restore needs targets: [{entity_type, id}, …]"}
     batch = [eid for eid, _ in wanted]
+    per_target = resolutions or {}
 
     conn = get_db(project_path)
     try:
         with transaction(conn):
-            restored, also, refused = [], [], []
+            # Every check first, against the state the batch started in, then the
+            # writes. Interleaved, a target's collision would be judged after an
+            # earlier target had already moved the role it collided on, and the
+            # caller's resolution would be silently dropped.
+            checks, refused = {}, []
+            resolved = []
             for eid, etype in wanted:
                 row = conn.execute(
-                    "SELECT id, type, name, is_deleted, deleted_at FROM entities WHERE id=?", (eid,)
+                    "SELECT id, type, name, is_deleted, deleted_at, parent_id, order_key "
+                    "FROM entities WHERE id=?",
+                    (eid,),
                 ).fetchone()
                 if not row:
                     refused.append(
@@ -901,6 +1174,7 @@ def restore_many(project_path: Path, targets: list) -> dict:
                             "id": eid,
                             "error": f"Entity not found: {etype}/{eid}",
                             "blockers": [],
+                            "collisions": [],
                         }
                     )
                     continue
@@ -911,6 +1185,7 @@ def restore_many(project_path: Path, targets: list) -> dict:
                             "id": eid,
                             "error": f"{eid} is not deleted — nothing to restore.",
                             "blockers": [],
+                            "collisions": [],
                         }
                     )
                     continue
@@ -922,12 +1197,52 @@ def restore_many(project_path: Path, targets: list) -> dict:
                             "id": eid,
                             "error": check["blockers"][0]["message"],
                             "blockers": check["blockers"],
+                            "collisions": check["collisions"],
                         }
                     )
                     continue
-                children = _clear_flags(conn, eid, row[4])
-                restored.append({"type": row[1], "id": eid, "name": row[2] or eid})
-                also.extend(c for c in children if c != eid)
+                checks[eid] = (row, check)
+
+            for eid, (row, check) in checks.items():
+                if check["collisions"]:
+                    try:
+                        resolved += [
+                            {"id": eid, **r}
+                            for r in _resolve(
+                                conn, eid, row[1], check["collisions"], per_target.get(eid)
+                            )
+                        ]
+                    except ValueError as e:
+                        refused.append(
+                            {
+                                "entity_type": row[1],
+                                "id": eid,
+                                "error": str(e),
+                                "blockers": [],
+                                "collisions": check["collisions"],
+                            }
+                        )
+
+            restored, also, placed = [], [], []
+            if not refused:
+                for eid, (row, check) in checks.items():
+                    children = _clear_flags(conn, eid, row[4])
+                    restored.append({"type": row[1], "id": eid, "name": row[2] or eid})
+                    also.extend(c for c in children if c != eid)
+                    if check["placement"]:
+                        placed.append(
+                            {
+                                "id": eid,
+                                "position": _settle_positions(
+                                    conn,
+                                    row[1],
+                                    eid,
+                                    row[5],
+                                    (check["placement"]["after"] or {}).get("id"),
+                                ),
+                                "after": (check["placement"]["after"] or {}).get("name"),
+                            }
+                        )
             if refused:
                 # Nothing was written: raise out of the transaction with the
                 # payload, and the route turns it into a 409.
@@ -935,13 +1250,18 @@ def restore_many(project_path: Path, targets: list) -> dict:
     finally:
         conn.close()
 
-    return {
+    result = {
         "success": True,
         "message": f"Restored {len(restored)} item(s).",
         "restored": restored,
         "also_restored": sorted(set(also)),
         "returned": {"entities": len(restored) + len(set(also))},
     }
+    if placed:
+        result["placed"] = placed
+    if resolved:
+        result["resolved_roles"] = resolved
+    return result
 
 
 # ─── removing for good, by name ──────────────────────────────────────────────

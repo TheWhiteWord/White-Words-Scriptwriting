@@ -313,11 +313,13 @@ def test_every_read_of_relations_goes_through_the_view():
 
     Writers (INSERT / DELETE / UPDATE) use the table and are not matched. The
     allowed reads are the view's own definition in SCHEMA_SQL, the integrity
-    oracle, and the trash's restore preview: those two must see rows the view
-    hides. The oracle needs them because a dangling reference whose other end is
-    in the trash is still an orphan; the restore preview needs them because the
-    warning it prints is exactly "these links stay hidden", and asking the view
-    would answer "none" in the only case the warning matters.
+    oracle, and the trash's restore guard: those must see rows the view hides.
+    The oracle needs them because a dangling reference whose other end is in the
+    trash is still an orphan; the guard needs them twice, and for the same
+    reason — the warning it prints is exactly "these links stay hidden", and the
+    singular plot role a trashed scene still holds is the whole collision it
+    reports. Asking the view would answer "none" in both cases, which are the
+    only cases where either matters.
     """
     pattern = re.compile(r"(?<!DELETE )\b(?:FROM|JOIN)\s+relations\b")
     found = {}
@@ -325,7 +327,7 @@ def test_every_read_of_relations_goes_through_the_view():
         n = len(pattern.findall(f.read_text(encoding="utf-8")))
         if n:
             found[str(f.relative_to(SRC))] = n
-    assert found == {"core/db.py": 1, "core/integrity.py": 2, "core/trash.py": 1}, (
+    assert found == {"core/db.py": 1, "core/integrity.py": 2, "core/trash.py": 3}, (
         f"raw reads of the relations table: {found}. Read `live_relations` instead."
     )
 

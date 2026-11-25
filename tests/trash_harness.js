@@ -302,6 +302,43 @@ check('prose puts Content first and skips the template placeholder', () => {
   hasNot(html, '[placeholder');
 });
 
+check('a role collision offers both sides and defaults to keeping the holder', () => {
+  const html = D.trashPanelBody(Object.assign({}, DETAIL, {
+    restore: {
+      blockers: [],
+      collisions: [{
+        code: 'role_collision', plot: 'the-resistance', plot_name: 'The Resistance',
+        role: 'inciting_incident', holder: { id: 'the-core-day', name: 'The Core - Day' },
+        choices: ['drop', 'take'],
+        message: 'Plot “The Resistance” already has its inciting incident on “The Core - Day”.',
+      }],
+      warnings: {}, returned: { children: [], relations: 0, sections: 0 },
+    },
+  }));
+  has(html, 'The Resistance — one scene per plot');
+  has(html, 'already has its inciting incident');
+  // Keeping the current holder is the checked option; taking it is offered.
+  has(html, 'value="keep" checked');
+  has(html, 'value="take"');
+  has(html, 'this scene comes back without it');
+});
+
+check('a take that is not on offer is not drawn', () => {
+  const html = D.trashPanelBody(Object.assign({}, DETAIL, {
+    restore: {
+      blockers: [],
+      collisions: [{
+        code: 'role_collision', plot: 'the-resistance', plot_name: 'The Resistance',
+        role: 'climax', holder: { id: 'a', name: 'A' }, choices: ['drop'],
+        message: 'Two scenes in this batch would both hold it.',
+      }],
+      warnings: {}, returned: { children: [], relations: 0, sections: 0 },
+    },
+  }));
+  has(html, 'value="keep" checked');
+  hasNot(html, 'value="take"');
+});
+
 check('the footer names the blocker and stays inert until it is ticked', () => {
   const T = D.trashState;
   T.detail = Object.assign({}, DETAIL, {

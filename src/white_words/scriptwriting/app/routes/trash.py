@@ -5,18 +5,21 @@ refusals to HTTP. Non-GET requests already pass through the Host / Origin /
 `X-White-Words` checks in `server.py`; this adds no second auth model.
 
 Error bodies are `{"error": {"code", "message", ...}}`, the same envelope the
-form routes use. Two of them carry structure the dashboard draws:
+form routes use. Three of them carry structure the dashboard draws:
 
   * `409 restore_blocked` — `blockers` (a structural parent still in the trash,
     with `fix` naming it);
+  * `409 restore_needs_decision` — `collisions` (a singular plot role the scene
+    shares with a live one; `choices` says what may be sent back as
+    `resolutions`);
   * `409 not_in_trash` — the target is live, usually because the agent restored
     it while the tab was open.
 
 The rules themselves live in `core/trash.py`, shared with the agent's
 `story_admin` tool, so the browser cannot offer an action the agent would
-describe differently. In particular a restore whose parent is still in the trash
-is refused HERE, not there: `core.trash.restore` stays permissive for the agent,
-and this route is the one that reads `restore_check` first.
+describe differently. A restore whose parent is still in the trash is one of
+those rules (`restore_check`), and this route reads it; a role collision is
+enforced in `core.trash.restore` itself, so neither caller can write it.
 """
 
 from pathlib import Path
@@ -55,6 +58,13 @@ def make_router(config, app):
         message = result.get("error") or "Nothing was restored."
         if result.get("code") == "not_found" or message.startswith("Entity not found"):
             return _err(404, "not_found", message)
+        if result.get("code") == "restore_needs_decision" or result.get("collisions"):
+            return _err(
+                409,
+                "restore_needs_decision",
+                message,
+                collisions=result.get("collisions") or [],
+            )
         if result.get("blockers"):
             return _err(409, "restore_blocked", message, blockers=result["blockers"])
         return _err(409, "not_in_trash", message)
@@ -87,6 +97,21 @@ def make_router(config, app):
     def _targets(body) -> list:
         return [t for t in ((body or {}).get("targets") or []) if isinstance(t, dict)]
 
+    def _resolutions(body) -> dict:
+        """Per-target role resolutions: `{target_id: [{plot, role, choice}, …]}`.
+
+        `targets` already carry an optional `resolutions` list; this folds the
+        two accepted forms into the one `core.trash` reads.
+        """
+        out = {
+            t["id"]: t["resolutions"]
+            for t in _targets(body)
+            if t.get("id") and t.get("resolutions")
+        }
+        for eid, entries in ((body or {}).get("resolutions") or {}).items():
+            out[eid] = entries
+        return out
+
     @router.post("/api/projects/{slug}/trash/{etype}/{eid}/restore")
     def restore_one(slug: str, etype: str, eid: str, body: dict | None = None):
         """Restore one deletion, its bundle included. Reversible: no confirm."""
@@ -102,7 +127,13 @@ def make_router(config, app):
                 conn.close()
             if check["blockers"]:
                 return {"error": check["blockers"][0]["message"], "blockers": check["blockers"]}
-            result = trash.restore(p, etype, eid, "restored from the trash")
+            result = trash.restore(
+                p,
+                etype,
+                eid,
+                "restored from the trash",
+                resolutions=(_resolutions(body) or {}).get(eid),
+            )
             if result.get("error"):
                 return result
             result["returned"] = check["returned"]
@@ -124,17 +155,27 @@ def make_router(config, app):
 
         def go(p):
             try:
-                return trash.restore_many(p, targets)
+                return trash.restore_many(p, targets, resolutions=_resolutions(body))
             except trash.RestoreRefused as refused:
                 return {
                     "error": str(refused),
                     "refused": refused.refused,
                     "blockers": refused.refused[0].get("blockers") or [],
+                    "collisions": [c for r in refused.refused for c in (r.get("collisions") or [])],
                 }
 
         result = _run(slug, go)
         if isinstance(result, dict) and result.get("error"):
             blockers = result.get("blockers") or []
+            collisions = result.get("collisions") or []
+            if collisions:
+                return _err(
+                    409,
+                    "restore_needs_decision",
+                    result["error"],
+                    refused=result.get("refused") or [],
+                    collisions=collisions,
+                )
             return _err(
                 409,
                 "restore_blocked" if blockers else "not_in_trash",

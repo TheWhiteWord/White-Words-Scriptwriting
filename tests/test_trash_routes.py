@@ -313,6 +313,99 @@ def test_restore_refuses_an_empty_batch_and_a_live_target(client):
     assert r.json()["error"]["code"] == "not_in_trash"
 
 
+# ─── the restore guard over HTTP ─────────────────────────────────────────────
+
+
+def _give_role_to(p, scene, role="inciting_incident", plot="the-resistance"):
+    from white_words.scriptwriting.core.writes import edit_entity
+
+    edit_entity(
+        p, "scene", scene, {"plot_roles": [{"plot": plot, "role": role, "description": "x"}]}, "t"
+    )
+
+
+def test_a_role_collision_is_a_conflict_that_lists_the_choices(client):
+    tc, project = client
+    delete_entity(project, "scene", "central-room-day", "t", True)
+    _give_role_to(project, "the-core-day")
+
+    r = tc.post(f"/api/projects/{SLUG}/trash/scene/central-room-day/restore", json={}, headers=HDR)
+    assert r.status_code == 409, r.text
+    error = r.json()["error"]
+    assert error["code"] == "restore_needs_decision"
+    [collision] = error["collisions"]
+    assert collision["role"] == "inciting_incident"
+    assert collision["holder"]["id"] == "the-core-day"
+    assert collision["choices"] == ["drop", "take"]
+    assert _sql(project, "SELECT is_deleted FROM entities WHERE id='central-room-day'")[0][0] == 1
+
+
+def test_the_listing_reports_the_collision_before_it_is_clicked(client):
+    """The row says so up front, the way a blocked restore already does."""
+    tc, project = client
+    delete_entity(project, "scene", "central-room-day", "t", True)
+    _give_role_to(project, "the-core-day")
+
+    item = next(i for i in _trash(tc)["items"] if i["id"] == "central-room-day")
+    assert item["restore"]["collisions"][0]["role"] == "inciting_incident"
+    assert item["restore"]["placement"] is None
+
+
+def test_a_resolution_restores_the_scene(client):
+    tc, project = client
+    delete_entity(project, "scene", "central-room-day", "t", True)
+    _give_role_to(project, "the-core-day")
+
+    r = tc.post(
+        f"/api/projects/{SLUG}/trash/restore",
+        json={
+            "targets": [{"entity_type": "scene", "id": "central-room-day"}],
+            "resolutions": {
+                "central-room-day": [
+                    {"plot": "the-resistance", "role": "inciting_incident", "choice": "drop"}
+                ]
+            },
+        },
+        headers=HDR,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["resolved_roles"] == [
+        {
+            "id": "central-room-day",
+            "plot": "the-resistance",
+            "role": "inciting_incident",
+            "choice": "drop",
+        }
+    ]
+    # No scene took its position while it was away, so nothing moved.
+    assert "placed" not in r.json()
+
+
+def test_the_single_target_endpoint_accepts_a_resolution(client):
+    tc, project = client
+    delete_entity(project, "scene", "central-room-day", "t", True)
+    _give_role_to(project, "the-core-day")
+
+    r = tc.post(
+        f"/api/projects/{SLUG}/trash/scene/central-room-day/restore",
+        json={
+            "resolutions": {
+                "central-room-day": [
+                    {"plot": "the-resistance", "role": "inciting_incident", "choice": "take"}
+                ]
+            }
+        },
+        headers=HDR,
+    )
+    assert r.status_code == 200, r.text
+    live = _sql(
+        project,
+        "SELECT e.id FROM live_relations r JOIN entities e ON e.id = r.to_id "
+        "WHERE r.from_id='the-resistance' AND r.kind='plot_inciting_incident' AND e.is_deleted=0",
+    )
+    assert live == [("central-room-day",)]
+
+
 # ─── purge ───────────────────────────────────────────────────────────────────
 
 

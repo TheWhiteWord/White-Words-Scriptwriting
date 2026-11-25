@@ -132,6 +132,26 @@ SCHEMA = {
             "description": "For restore: one line naming what was restored. For purge: one \
 line the user will read on the approval card, naming what is to be removed for good",
         },
+        "resolutions": {
+            "type": "array",
+            "description": "For restore of a scene: the singular plot role it shares with \
+a live scene, and who keeps it. Required only when the restore returns \
+code=restore_needs_decision; the refusal lists each collision. `drop` leaves the role \
+on the scene that holds it now (the restored scene arrives without it); `take` moves \
+it to the restored scene. Nothing is written until every collision has an entry.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "plot": {"type": "string", "description": "Plot id, from the collision"},
+                    "role": {
+                        "type": "string",
+                        "description": "inciting_incident, crisis or climax",
+                    },
+                    "choice": {"type": "string", "enum": ["drop", "take"]},
+                },
+                "required": ["plot", "role", "choice"],
+            },
+        },
         "older_than_days": {
             "type": "integer",
             "description": 'For action="purge" without a target: only purge entities deleted '
@@ -429,6 +449,11 @@ def _restore_entity(args: dict, project_path: Path) -> dict:
     The one thing that is not given back: a field someone set to a new value
     while the entity was in the trash. An edit that sets `characters` replaces
     the stored list, hidden names included.
+
+    A scene can come back into a singular plot role another scene took while it
+    was hidden. The refusal is the answer to that: `code=restore_needs_decision`
+    with the collisions listed, and `resolutions` names who keeps each role. The
+    two steps are deliberate — the agent never picks a side silently.
     """
     from white_words.scriptwriting.core import trash
 
@@ -438,6 +463,7 @@ def _restore_entity(args: dict, project_path: Path) -> dict:
         target.get("entity_type") or "",
         target.get("id") or "",
         args.get("summary", ""),
+        resolutions=args.get("resolutions"),
     )
 
 

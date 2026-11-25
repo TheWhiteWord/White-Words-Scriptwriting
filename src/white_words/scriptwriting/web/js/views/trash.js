@@ -149,6 +149,7 @@ window.DASH = window.DASH || {};
     const key = keyOf(item.type, item.id);
     const on = !!(selected && selected.has(key));
     const blocked = !!(item.restore && item.restore.blockers && item.restore.blockers.length);
+    const collided = !!(item.restore && item.restore.collisions && item.restore.collisions.length);
     const includes = (item.includes || []).length
       ? `<div class="trash-includes">${item.includes.map((inc) => `
           <div class="trash-include">
@@ -158,6 +159,7 @@ window.DASH = window.DASH || {};
       : '';
     const chips = [
       blocked ? '<span class="trash-chip blocked">restore blocked</span>' : '',
+      collided ? '<span class="trash-chip blocked">needs a decision</span>' : '',
       item.purge_eligible ? '<span class="trash-chip">30+ days</span>' : '',
       (item.includes || []).length
         ? `<span class="trash-chip count">${plural(1 + item.includes.length, 'entity', 'entities')}</span>`
@@ -233,6 +235,23 @@ window.DASH = window.DASH || {};
   const selectedItems = () => T.items.filter((i) => T.selected.has(keyOf(i.type, i.id)));
   const blockedAmong = (items) => items.filter(
     (i) => i.restore && i.restore.blockers && i.restore.blockers.length);
+
+  /** The role choices the panel's radio buttons are set to, per target id. */
+  function roleResolutions() {
+    const out = {};
+    const panel = document.getElementById('detail-panel');
+    if (!panel || !T.detail) return out;
+    const eid = T.detail.entity.id;
+    panel.querySelectorAll('[data-role]').forEach((el) => {
+      if (!el.checked) return;
+      (out[eid] = out[eid] || []).push({
+        plot: el.dataset.role,
+        role: el.dataset.roleName,
+        choice: el.value === 'take' ? 'take' : 'drop',
+      });
+    });
+    return out;
+  }
 
   function syncActions() {
     const n = T.selected.size;
@@ -370,6 +389,29 @@ window.DASH = window.DASH || {};
         </div>
       </div>`).join('');
 
+    // A singular plot role another scene took while this one was in the trash.
+    // The choice is the reader's: neither side is the default.
+    const collisions = ((restore && restore.collisions) || []).map((c) => `
+      <div class="trash-panel-block">
+        <div class="trash-panel-label">${h(c.plot_name)} — one scene per plot</div>
+        <div class="trash-note blocked">
+          <strong>${h(c.message)}</strong>
+          <div class="trash-tick-note">
+            <label class="trash-tick">
+              <input type="radio" name="role-${h(c.plot + c.role)}" data-role="${h(c.plot)}"
+                     data-role-name="${h(c.role)}" value="keep" checked>
+              <span>Keep it on “${h(c.holder.name)}” — this scene comes back without it</span>
+            </label>
+            ${c.choices.includes('take') ? `
+            <label class="trash-tick">
+              <input type="radio" name="role-${h(c.plot + c.role)}" data-role="${h(c.plot)}"
+                     data-role-name="${h(c.role)}" value="take">
+              <span>Move it to “${h(entity.name)}” — “${h(c.holder.name)}” loses it</span>
+            </label>` : ''}
+          </div>
+        </div>
+      </div>`).join('');
+
     const warnings = Object.entries((restore && restore.warnings) || {}).map(([code, refs]) => {
       const ticked = code !== 'reference_purged';   // nothing left to bring back
       return `
@@ -442,7 +484,7 @@ window.DASH = window.DASH || {};
         </div>
       </div>`;
 
-    return blocker + `
+    return blocker + collisions + `
       <div class="trash-panel-block">
         <div class="trash-panel-label">Deleted</div>
         <div class="trash-field-row">
@@ -592,8 +634,19 @@ window.DASH = window.DASH || {};
   async function restoreKeys(keys) {
     const targets = targetsOf(keys);
     if (!targets.length) return;
+    // A scene whose singular role another scene holds arrives with `drop` unless
+    // the panel's radio said otherwise, so the choice is never silent.
+    const resolutions = T.detail ? roleResolutions() : {};
+    if (T.detail && T.selected.has(keyOf(T.detail.entity.type, T.detail.entity.id))) {
+      (T.detail.restore && T.detail.restore.collisions || []).forEach((c) => {
+        const list = resolutions[T.detail.entity.id] = resolutions[T.detail.entity.id] || [];
+        if (!list.some((r) => r.plot === c.plot && r.role === c.role)) {
+          list.push({ plot: c.plot, role: c.role, choice: 'drop' });
+        }
+      });
+    }
     try {
-      const res = await post('/trash/restore', { targets });
+      const res = await post('/trash/restore', { targets, resolutions });
       afterWrite();
       await reload();
       toast('Restored ' + plural(res.restored.length, 'item') +

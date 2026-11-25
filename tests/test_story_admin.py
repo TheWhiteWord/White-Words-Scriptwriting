@@ -264,6 +264,70 @@ class TestRestore:
         )
         assert "error" in result
 
+    def test_a_role_collision_is_refused_with_the_choices(self, root):
+        """The refusal is data the agent can act on, not a failed call."""
+        from white_words.scriptwriting.core.writes import delete_entity, edit_entity
+
+        project = root / "projects" / "save-the-children"
+        delete_entity(project, "scene", "central-room-day", "s", confirm=True)
+        edit_entity(
+            project,
+            "scene",
+            "the-core-day",
+            {
+                "plot_roles": [
+                    {"plot": "the-resistance", "role": "inciting_incident", "description": "x"}
+                ]
+            },
+            "t",
+        )
+
+        result = _run(
+            {
+                "action": "restore",
+                "project": "save-the-children",
+                "target": {"entity_type": "scene", "id": "central-room-day"},
+            },
+            root,
+        )
+        assert result["code"] == "restore_needs_decision"
+        [collision] = result["collisions"]
+        assert collision["holder"]["id"] == "the-core-day"
+        assert collision["choices"] == ["drop", "take"]
+
+    def test_a_resolution_restores_it(self, root):
+        from white_words.scriptwriting.core.writes import delete_entity, edit_entity
+
+        project = root / "projects" / "save-the-children"
+        delete_entity(project, "scene", "central-room-day", "s", confirm=True)
+        edit_entity(
+            project,
+            "scene",
+            "the-core-day",
+            {
+                "plot_roles": [
+                    {"plot": "the-resistance", "role": "inciting_incident", "description": "x"}
+                ]
+            },
+            "t",
+        )
+
+        result = _run(
+            {
+                "action": "restore",
+                "project": "save-the-children",
+                "target": {"entity_type": "scene", "id": "central-room-day"},
+                "resolutions": [
+                    {"plot": "the-resistance", "role": "inciting_incident", "choice": "take"}
+                ],
+            },
+            root,
+        )
+        assert result["success"] is True
+        assert result["resolved_roles"][0]["choice"] == "take"
+        # Nothing took its position while it was away, so it stays where it was.
+        assert "placed" not in result
+
 
 # ─── purge ───
 

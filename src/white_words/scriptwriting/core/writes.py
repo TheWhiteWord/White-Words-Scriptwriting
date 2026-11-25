@@ -1007,13 +1007,16 @@ REORDERABLE_TYPES = ("scene", "sequence")
 
 
 def reorder(
-    project_path: Path, entity_type: str, ordered_ids: list, summary: str, *, conn=None
+    project_path: Path | None, entity_type: str, ordered_ids: list, summary: str, *, conn=None
 ) -> dict:
     """Renumber scenes/sequences within their parent.
 
     The caller provides the complete new ordering. All items must exist and
     belong to the same parent; order is renumbered 1, 2, 3, ... from the list.
     Single DB transaction: BEGIN → UPDATE order_key for each item → COMMIT.
+
+    `project_path` is read only when `conn` is None, so a caller already inside
+    its own transaction passes `None`.
     """
     from .db import get_db, transaction
 
@@ -1024,6 +1027,9 @@ def reorder(
 
     own_conn = conn is None
     if own_conn:
+        assert project_path is not None, (
+            "reorder needs a project_path when it opens its own connection"
+        )
         conn = get_db(project_path)
     try:
         # Verify all entities exist and belong to the same parent
