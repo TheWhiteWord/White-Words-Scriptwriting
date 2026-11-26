@@ -1096,5 +1096,31 @@ Manual checks (a real browser; none of these can be run by pytest):
 6. Switch and open on another branch: the writing view shows that branch's data.
 7. Click a graph node: its row in the lists flashes.
 
+### UI patch 2 — the draft chip, and what the Oz demo showed about the graph
+- **The graph on the demo's history** (10 drafts, 4 branches, two real merges) was wider
+  than the panel, so the newest drafts were off-screen, and every merge was drawn twice.
+  Branch names are now a fixed column beside the scrolling canvas, the graph opens at its
+  newest drafts and keeps where the reader scrolled it, and columns are narrower.
+- **`picked_from` listed complete merges.** `graph._PICKED` took every applied session,
+  but a complete merge's source is a parent of the draft saved next, already a solid
+  edge. `_picked_from` now drops a pick whose source is in the branch's lineage. Until
+  that save, a complete merge is still a pick *and* a `pending_merge_parents` entry; the
+  graph draws the pending edge only.
+- **`GET /history/status`** (new): `listing.summary` for this project plus
+  `next_draft_number`, the `Draft {seq}` an unnamed save will get. It is what the chip
+  reads, because `GET /history/` computes every branch's tip.
+- **The chip is in all ten `.view-header-actions`**, painted by `draft-chip.js` after
+  `loadDashboard`. It re-reads on view change, window focus, the SSE `update` event and
+  after any successful non-GET to this project (chat aside), through one `fetch` wrapper:
+  entity forms, the script editor, reorder and trash each have their own API helper, so
+  fetch is the only place that sees every write. It is a courtesy and never holds a
+  write up.
+- **Chip click** stores `ww:expand` and calls `DASH.openProjects()`; the projects page
+  opens that card with its history showing.
+- **Save dialog is shared** (`history-dialogs.js`), with the field helpers the compare
+  and merge screens will use.
+- Not covered by pytest, checked in Chromium on the Oz demo: the chip in the Script and
+  Trash headers at 1000px, save from the chip, the chip after a write from the page.
+
 ### Deviations
 ### Issues

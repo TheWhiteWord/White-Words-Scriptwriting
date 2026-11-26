@@ -361,3 +361,32 @@ def test_a_session_that_does_not_exist_is_refused(client):
     r = tc.get(f"/api/projects/{SLUG}/history/merges/nope", headers=HDR)
 
     assert r.status_code == 409 and r.json()["error"]["code"] == "refused"
+
+
+def test_the_status_is_the_current_branch_and_what_a_save_would_be_called(client):
+    tc, project = client
+    store.adopt(project)
+    edit_entity(project, "character", "kael", {"name": "Kael Renamed"}, "probe")
+
+    body = tc.get(f"/api/projects/{SLUG}/history/status", headers=HDR).json()
+
+    assert body["current_branch"] == "main"
+    assert body["current_draft"] == "Draft 1"
+    assert body["changes_since_save"] == 1
+    assert body["next_draft_number"] == 2
+
+
+def test_the_status_of_a_project_with_no_history_writes_nothing(client):
+    tc, project = client
+
+    body = tc.get(f"/api/projects/{SLUG}/history/status", headers=HDR).json()
+
+    assert body["branch_count"] == 0 and body["next_draft_number"] == 1
+    assert not store.history_path(project).exists()
+
+
+def test_the_status_needs_the_exact_slug(client):
+    tc, _ = client
+
+    assert tc.get(f"/api/projects/{SLUG}/history/status", headers=HDR).status_code == 200
+    assert tc.get("/api/projects/save-the-child/history/status", headers=HDR).status_code == 404

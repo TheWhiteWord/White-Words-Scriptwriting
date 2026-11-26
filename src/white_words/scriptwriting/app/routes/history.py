@@ -87,6 +87,13 @@ def make_router(config, app):
 
         return _run(slug, graph.summary)
 
+    @router.get("/api/projects/{slug}/history/status")
+    def history_status(slug: str):
+        """The current branch and draft, and how far the project has moved since."""
+        from white_words.scriptwriting.core.history import listing
+
+        return _run(slug, listing.status)
+
     @router.get("/api/projects/{slug}/history/diff")
     def history_diff(slug: str, a: str, b: str):
         """Every difference between two states; the script view is a lens on them."""

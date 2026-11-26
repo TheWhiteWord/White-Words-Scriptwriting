@@ -129,6 +129,12 @@ window.DASH = window.DASH || {};
     const top = el.scrollTop;
     el.innerHTML = pageHtml(S.projects, S.state, Date.now());
     el.scrollTop = top;
+    // A graph opens at its newest drafts and keeps wherever the reader scrolled it to.
+    el.querySelectorAll('.pj-card').forEach((card) => {
+      const sc = card.querySelector('.hg-scroll');
+      const x = stateOf(card.dataset.slug).graphX;
+      if (sc) sc.scrollLeft = x == null ? sc.scrollWidth : x;
+    });
   }
 
   async function loadList() {
@@ -153,34 +159,13 @@ window.DASH = window.DASH || {};
   }
 
   const historyOf = (slug) => { const h = stateOf(slug).hist; return h && h.state === 'ready' ? h.data : null; };
-  const field = (label, html, help) => '<label class="ef-field"><span class="ef-label">' + esc(label) + '</span>' + html + (help ? '<span class="ef-help">' + esc(help) + '</span>' : '') + '</label>';
-  const val = (d, name) => { const el = d.el.querySelector('[data-f="' + name + '"]'); return el ? el.value.trim() : ''; };
-  const checked = (d, name) => { const el = d.el.querySelector('[data-f="' + name + '"]'); return !!(el && el.checked); };
-
-  // Run an action inside a dialog: busy while it works, the server's sentence on refusal.
-  async function attempt(d, fn) {
-    d.error('');
-    d.busy(true);
-    try { await fn(); } catch (e) { d.error(esc(e.message)); d.busy(false); return false; }
-    return true;
-  }
+  const { field, val, checked, attempt } = D.historyDialogs;
 
   function saveDialog(slug) {
     const data = historyOf(slug);
     const cur = data && data.branches.find((b) => b.is_current);
     const next = cur ? Math.max.apply(null, [0].concat(data.snapshots.filter((s) => s.branch_id === cur.id).map((s) => s.seq))) + 1 : 1;
-    const d = D.efDialog({
-      kicker: 'Save draft', title: cur ? 'Save “' + cur.name + '” as a draft' : 'Save the first draft', confirm: 'Save draft',
-      bodyHtml: field('Name', '<input class="ef-input" data-f="label" maxlength="80" placeholder="Draft ' + next + '">', 'Optional.')
-        + field('Note', '<textarea class="ef-input ef-area" data-f="note" rows="3" placeholder="What is this version for?"></textarea>'),
-      onConfirm: async (dlg) => {
-        let saved;
-        if (await attempt(dlg, async () => { saved = await D.historyApi(slug, 'POST', '/snapshots', { label: val(dlg, 'label') || null, note: val(dlg, 'note') }); })) {
-          dlg.close(); toast('Saved “' + saved.label + '”.'); refresh(slug);
-        }
-      },
-    });
-    d.el.querySelector('[data-f="label"]').focus();
+    D.historyDialogs.saveDraft({ slug, branchName: cur ? cur.name : null, next, onSaved: () => refresh(slug) });
   }
 
   function branchDialog(slug, snapshotId, label) {
@@ -275,7 +260,15 @@ window.DASH = window.DASH || {};
       if (!app) return;
       app.innerHTML = '<div id="projects-page"></div>';
       pageEl().addEventListener('click', onClick);
+      pageEl().addEventListener('scroll', (e) => {
+        const card = e.target.closest && e.target.closest('.pj-card');
+        if (card && e.target.classList.contains('hg-scroll')) stateOf(card.dataset.slug).graphX = e.target.scrollLeft;
+      }, true);
       render();
+      // The draft chip in the writing view sends you here with its project's history open.
+      let ask = null;
+      try { ask = sessionStorage.getItem('ww:expand'); sessionStorage.removeItem('ww:expand'); } catch (e) { /* private mode */ }
+      if (ask && S.projects.some((p) => p.slug === ask)) { stateOf(ask).open = true; loadHistory(ask); }
     } catch (e) {
       D.showError();
     }

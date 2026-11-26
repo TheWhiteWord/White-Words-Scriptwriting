@@ -4,10 +4,10 @@ window.DASH = window.DASH || {};
 // a hollow tip for the branch's open draft. `layout` is pure and returns what to draw;
 // `svg` turns that into markup. Both read `GET /history/` as it is.
 (function (D) {
-  const DX = 132;
+  const DX = 116;
   const DY = 72;
   const LABEL_W = 112;
-  const PAD_X = 20;
+  const X0 = 64;
   const PAD_Y = 30;
 
   const esc = (s) => String(s == null ? '' : s)
@@ -53,7 +53,7 @@ window.DASH = window.DASH || {};
       return 0;
     };
 
-    const at = (c, l) => ({ x: PAD_X + LABEL_W + c * DX, y: PAD_Y + l * DY });
+    const at = (c, l) => ({ x: X0 + c * DX, y: PAD_Y + l * DY });
     const nodes = {};
     (summary.snapshots || []).forEach((s) => {
       nodes['s:' + s.id] = Object.assign({ kind: 'draft', id: s.id, label: s.label, note: s.note || '', branch: s.branch_id }, at(col[s.id], laneOfDraft(s)));
@@ -74,7 +74,9 @@ window.DASH = window.DASH || {};
       add('s:' + b.base_snapshot_id, 't:' + b.id, 'tip');
       (b.pending_merge_parents || []).forEach((p) => add('s:' + p, 't:' + b.id, 'pending'));
     });
+    // A merge declared complete but not yet saved is a pending edge already.
     const seen = new Set();
+    branches.forEach((b) => (b.pending_merge_parents || []).forEach((p) => seen.add('s:' + p + '>' + b.id)));
     (summary.picked_from || []).forEach((p) => {
       const src = p.source || {};
       const from = src.kind === 'branch' ? 't:' + src.id : 's:' + src.id;
@@ -83,7 +85,7 @@ window.DASH = window.DASH || {};
     });
 
     const all = Object.keys(nodes).map((k) => nodes[k]);
-    const width = Math.max.apply(null, all.map((n) => n.x).concat([PAD_X + LABEL_W])) + DX * 0.6;
+    const width = Math.max.apply(null, all.map((n) => n.x).concat([X0])) + DX * 0.6;
     const height = PAD_Y * 2 + Math.max(0, branches.length - 1) * DY + 34;
     return { nodes: all, edges, lanes: branches.map((b, i) => ({ id: b.id, name: b.name, current: !!b.is_current, y: PAD_Y + i * DY })), width, height };
   }
@@ -99,7 +101,7 @@ window.DASH = window.DASH || {};
   function svg(summary) {
     const g = layout(summary);
     const edges = g.edges.map((e) => '<path class="hg-edge ' + e.kind + '" d="' + edgePath(e.from, e.to) + '"/>').join('');
-    const lanes = g.lanes.map((l) => '<text class="hg-lane' + (l.current ? ' current' : '') + '" x="' + PAD_X + '" y="' + (l.y + 4) + '">' + esc(clip(l.name, 14)) + '</text>').join('');
+    const lanes = g.lanes.map((l) => '<text class="hg-lane' + (l.current ? ' current' : '') + '" x="12" y="' + (l.y + 4) + '"><title>' + esc(l.name) + '</title>' + esc(clip(l.name, 14)) + '</text>').join('');
     const nodes = g.nodes.map((n) => {
       if (n.kind === 'draft') {
         return '<g class="hg-node" data-snapshot="' + esc(n.id) + '"><title>' + esc(n.label + (n.note ? ' — ' + n.note : '')) + '</title>'
@@ -113,9 +115,12 @@ window.DASH = window.DASH || {};
         + '<text class="hg-label muted small' + (n.changed ? ' changed' : '') + '" x="' + n.x + '" y="' + (n.y + 40) + '" text-anchor="middle">' + esc(state) + '</text></g>';
     }).join('');
     const words = g.nodes.filter((n) => n.kind === 'draft').length;
-    return '<svg class="hg" width="' + Math.ceil(g.width) + '" height="' + Math.ceil(g.height) + '" viewBox="0 0 ' + Math.ceil(g.width) + ' ' + Math.ceil(g.height) + '" role="img" aria-label="Branch graph: ' + plural(g.lanes.length, 'branch') + ', ' + plural(words, 'draft') + '">'
-      + '<g>' + edges + '</g><g>' + lanes + '</g><g>' + nodes + '</g></svg>';
+    const h = Math.ceil(g.height);
+    // Branch names sit in their own fixed column so they stay put while the drafts scroll.
+    return '<div class="hg-wrap"><svg class="hg-lanes" width="' + LABEL_W + '" height="' + h + '" aria-hidden="true">' + lanes + '</svg>'
+      + '<div class="hg-scroll"><svg class="hg" width="' + Math.ceil(g.width) + '" height="' + h + '" viewBox="0 0 ' + Math.ceil(g.width) + ' ' + h + '" role="img" aria-label="Branch graph: ' + plural(g.lanes.length, 'branch') + ', ' + plural(words, 'draft') + '">'
+      + '<g>' + edges + '</g><g>' + nodes + '</g></svg></div></div>';
   }
 
-  D.historyGraph = { layout, svg };
+  D.historyGraph = { layout, svg, DX };
 })(window.DASH);

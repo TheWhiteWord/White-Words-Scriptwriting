@@ -38,7 +38,7 @@ def summary(project_path: Path) -> dict:
         **listed,
         "current": next((b["id"] for b in listed["branches"] if b["is_current"]), None),
         "head": tips,
-        "picked_from": _picked_from(project_path),
+        "picked_from": _picked_from(project_path, listed),
     }
 
 
@@ -68,18 +68,45 @@ def _tip(project_path: Path, branch: dict, saved: list[dict]) -> dict:
         }
 
 
-def _picked_from(project_path: Path) -> list[dict]:
-    """Applied cherry-picks: the dashed "picked from" edges (§7.9)."""
+def _picked_from(project_path: Path, listed: dict) -> list[dict]:
+    """Applied cherry-picks: the dashed "picked from" edges (§7.9).
+
+    A complete merge is an applied session too, but its source is a parent of the draft
+    the branch saved next, so the graph already draws it as a solid edge; listing it here
+    would draw the same merge twice.
+    """
     import json
     import sqlite3
 
+    parents = {s["id"]: s["parents"] for s in listed["snapshots"]}
+    base = {b["id"]: b["base_snapshot_id"] for b in listed["branches"]}
+
     conn = sqlite3.connect(f"file:{store.history_path(project_path)}?mode=ro", uri=True)
     try:
-        return [
-            {"branch": branch, "source": json.loads(source_ref)}
-            for branch, source_ref in conn.execute(_PICKED)
-        ]
+        rows = conn.execute(_PICKED).fetchall()
     except sqlite3.Error:
         return []
     finally:
         conn.close()
+
+    picks = []
+    for branch, source_ref in rows:
+        source = json.loads(source_ref)
+        merged = source.get("kind") == "snapshot" and source.get("id") in _lineage(
+            base.get(branch), parents
+        )
+        if not merged:
+            picks.append({"branch": branch, "source": source})
+    return picks
+
+
+def _lineage(start: str | None, parents: dict[str, list[str]]) -> set[str]:
+    """`start` and every draft it descends from."""
+    seen: set[str] = set()
+    stack = [start] if start else []
+    while stack:
+        draft = stack.pop()
+        if draft not in seen:
+            seen.add(draft)
+            stack.extend(parents.get(draft, []))
+    return seen

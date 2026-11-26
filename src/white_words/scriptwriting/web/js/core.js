@@ -130,6 +130,7 @@ DASH.loadDashboard = async function(slug) {
   DASH.hideLoading();
   DASH.initStory(data.story_data);
   DASH.watchUpdates(slug);
+  DASH.draftChip.mount(slug);
   return true;
 };
 
@@ -157,6 +158,7 @@ DASH.watchUpdates = function(slug) {
     DASH._es = es;
     es.addEventListener('update', function() {
       DASH.showUpdateIndicator(slug);
+      DASH.draftChip.refresh();
     });
     es.onerror = function() { /* auto-reconnect by browser */ };
   } catch (e) {}

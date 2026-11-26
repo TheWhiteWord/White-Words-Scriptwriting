@@ -65,6 +65,29 @@ def summary(project_path: Path) -> dict:
     }
 
 
+def status(project_path: Path) -> dict:
+    """What the writing view's header shows: `summary` plus the number a save would get.
+
+    The number matches `Draft {seq}` in `store._save`, so the Save dialog can say what an
+    unnamed draft will be called.
+    """
+    out = summary(project_path)
+    out["next_draft_number"] = 1
+    if out["branch_count"]:
+        conn = sqlite3.connect(f"file:{history_path(project_path)}?mode=ro", uri=True)
+        try:
+            row = conn.execute(
+                "SELECT COALESCE(MAX(seq), 0) + 1 FROM snapshots "
+                "WHERE branch_id=(SELECT id FROM branches WHERE is_current=1)"
+            ).fetchone()
+            out["next_draft_number"] = row[0]
+        except sqlite3.Error:
+            pass
+        finally:
+            conn.close()
+    return out
+
+
 def _changes(project_path: Path, base_snapshot_id: str | None) -> int:
     """How many items differ from the current branch's saved draft."""
     if base_snapshot_id is None:

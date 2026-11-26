@@ -16,6 +16,7 @@ global.window = global;
 const JS = path.join(__dirname, '..', 'src', 'white_words', 'scriptwriting', 'web', 'js');
 require(path.join(JS, 'history-graph.js'));
 require(path.join(JS, 'projects.js'));
+require(path.join(JS, 'draft-chip.js'));
 
 const R = global.DASH.projectsRender;
 const G = global.DASH.historyGraph;
@@ -88,8 +89,8 @@ check('a project with no history offers a first save', /Save first draft/.test(o
 const g = G.layout(history());
 const node = (kind, id) => g.nodes.find((n) => n.kind === kind && n.id === id);
 check('the branch holding the first draft is the top lane even on a tie', node('draft', 'd1').y < node('draft', 'd3').y);
-check('a child sits one column right of its parent', node('draft', 'd2').x === node('draft', 'd1').x + 132 && node('draft', 'd3').x === node('draft', 'd1').x + 132);
-check('a branch tip sits one column right of its draft', node('tip', 'main').x === node('draft', 'd2').x + 132 && node('tip', 'alt').x === node('draft', 'd3').x + 132);
+check('a child sits one column right of its parent', node('draft', 'd2').x === node('draft', 'd1').x + G.DX && node('draft', 'd3').x === node('draft', 'd1').x + G.DX);
+check('a branch tip sits one column right of its draft', node('tip', 'main').x === node('draft', 'd2').x + G.DX && node('tip', 'alt').x === node('draft', 'd3').x + G.DX);
 check('the tip carries its change count', node('tip', 'alt').changes === 2 && node('tip', 'alt').changed && !node('tip', 'main').changed);
 check('edges are parents plus one tip edge per branch', g.edges.filter((e) => e.kind === 'parent').length === 2 && g.edges.filter((e) => e.kind === 'tip').length === 2);
 check('the canvas holds every node', g.nodes.every((n) => n.x < g.width && n.y < g.height));
@@ -103,9 +104,13 @@ check('a merge sits right of both parents', gm.nodes.find((n) => n.id === 'd4').
 
 const pending = history();
 pending.branches[1].pending_merge_parents = ['d3'];
-pending.picked_from = [{ branch: 'main', source: { kind: 'snapshot', id: 'd3' } }, { branch: 'main', source: { kind: 'snapshot', id: 'd3' } }, { branch: 'main', source: { kind: 'snapshot', id: 'gone' } }];
+pending.picked_from = [{ branch: 'main', source: { kind: 'snapshot', id: 'd1' } }, { branch: 'main', source: { kind: 'snapshot', id: 'd1' } }, { branch: 'main', source: { kind: 'snapshot', id: 'gone' } }];
 const gp = G.layout(pending);
 check('a pending merge parent is a dashed edge to the tip', gp.edges.filter((e) => e.kind === 'pending').length === 1);
+const complete = history();
+complete.branches[1].pending_merge_parents = ['d3'];
+complete.picked_from = [{ branch: 'main', source: { kind: 'snapshot', id: 'd3' } }];
+check('a pick already drawn as a pending merge is not drawn twice', G.layout(complete).edges.filter((e) => e.kind === 'pick').length === 0);
 check('a pick is one edge however often it was applied, and one from a missing draft is dropped', gp.edges.filter((e) => e.kind === 'pick').length === 1);
 
 const orphan = history();
@@ -114,10 +119,24 @@ check('a draft on a deleted branch lands on a lane that reaches it', Number.isFi
 check('an empty history lays out without throwing', G.layout({ branches: [], snapshots: [] }).nodes.length === 0);
 
 const svg = G.svg(history());
+check('branch names are in their own column, outside the scrolling canvas', /<svg class="hg-lanes"[^>]*aria-hidden="true">[\s\S]*<div class="hg-scroll"><svg class="hg"/.test(svg) && !/<div class="hg-scroll">[\s\S]*hg-lane /.test(svg));
+check('a lane label carries the full branch name', /<title>alt<\/title>alt/.test(svg));
 check('the svg names its size for assistive tech', /role="img" aria-label="Branch graph: 2 branches, 3 drafts"/.test(svg));
 check('graph nodes carry their ids as data, never as handlers', /data-snapshot="d1"/.test(svg) && /data-branch="alt"/.test(svg) && !/onclick/.test(svg));
 check('the svg escapes a draft label', !/<opening>/.test(svg) && /Garden &lt;opening&gt;/.test(svg));
 check('a long label is clipped', /…/.test(G.svg(Object.assign(history(), { snapshots: [snap('d1', 'main', 'A very long draft name indeed', [])] }))));
+
+// ─── the draft chip ───
+const C = global.DASH.draftChip;
+const status = (extra) => Object.assign({ branch_count: 2, current_branch: 'alt', current_draft: 'Garden opening', changes_since_save: 0, next_draft_number: 2 }, extra || {});
+check('an unknown status draws nothing', C.render(null) === '');
+check('a project with no history offers a first save', /No drafts yet/.test(C.render(status({ branch_count: 0 }))) && /Save first draft/.test(C.render(status({ branch_count: 0 }))));
+check('the chip names branch and draft', /alt · Garden opening/.test(C.render(status())));
+check('a clean project has Save draft disabled and says why', /data-dc="save" disabled title="Nothing has changed since Garden opening\."/.test(C.render(status())) && !/dc-chip changed/.test(C.render(status())));
+check('unsaved changes mark the chip and enable Save draft', /dc-chip changed/.test(C.render(status({ changes_since_save: 3 }))) && /3 changes/.test(C.render(status({ changes_since_save: 3 }))) && /data-dc="save">Save draft/.test(C.render(status({ changes_since_save: 3 }))));
+check('one change is singular', /· 1 change"/.test(C.render(status({ changes_since_save: 1 }))));
+check('the chip links to the projects page by data attribute, not a handler', /data-dc="projects"/.test(C.render(status())) && !/\bon[a-z]+\s*=/.test(C.render(status())));
+check('a hostile branch or draft name cannot open a tag', !/<img|<script/.test(C.render(status({ current_branch: '<img src=x>', current_draft: '"><script>' }))));
 
 console.log(failures.length ? '\n' + failures.length + ' FAILED' : '\nall checks passed (' + ran + ' checks)');
 process.exit(failures.length ? 1 : 0);

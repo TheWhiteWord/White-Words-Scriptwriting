@@ -45,15 +45,22 @@ def test_the_harness_reports_how_many_checks_it_ran():
     assert out.returncode == 0, (out.stdout + out.stderr)[-3000:]
     m = re.search(r"all checks passed \((\d+) checks\)", out.stdout)
     assert m is not None, out.stdout[-3000:]
-    assert int(m.group(1)) >= 35, out.stdout[-3000:]
+    assert int(m.group(1)) >= 50, out.stdout[-3000:]
 
 
 def test_the_page_loads_its_scripts_in_an_order_that_works():
-    """projects.js needs the graph and the API wrapper; the boot call comes last."""
+    """projects.js and the chip need the API wrapper, the graph and the shared dialogs."""
     html = (WEB / "index.html").read_text()
     order = [
         html.index(f'src="js/{name}"')
-        for name in ("history-api.js", "history-graph.js", "projects.js", "chat-api.js")
+        for name in (
+            "history-api.js",
+            "history-graph.js",
+            "history-dialogs.js",
+            "draft-chip.js",
+            "projects.js",
+            "chat-api.js",
+        )
     ]
     assert order == sorted(order)
     assert html.index("DASH.boot();") > order[-1]
