@@ -18,6 +18,8 @@ def list_projects(root) -> list[dict]:
     projects_dir = root / "projects"
     if not projects_dir.exists():
         return []
+    from white_words.scriptwriting.core.history import listing
+
     out = []
     for d in sorted(projects_dir.iterdir()):
         if not d.is_dir():
@@ -37,6 +39,7 @@ def list_projects(root) -> list[dict]:
                     meta["name"] = row[0]
             except Exception:
                 pass
+        meta.update(listing.summary(d))
         out.append(meta)
     return out
 
