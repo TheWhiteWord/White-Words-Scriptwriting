@@ -16,6 +16,7 @@ from white_words.scriptwriting.core.writes import edit_entity
 SLUG = "save-the-children"
 EMPTY = {
     "current_draft": None,
+    "current_branch": None,
     "branch_count": 0,
     "last_saved": None,
     "changes_since_save": 0,
@@ -62,6 +63,7 @@ def test_an_adopted_project_reports_its_first_draft(root):
 
     assert row["branch_count"] == 1
     assert row["current_draft"] == "Draft 1"
+    assert row["current_branch"] == "main"
     assert row["last_saved"]
     assert row["changes_since_save"] == 0
 

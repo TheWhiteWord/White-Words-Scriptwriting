@@ -1056,5 +1056,45 @@ and what it changes. No narration.
   (batch). The Trash tab does not surface it yet — it says how many came back,
   not where the scene landed.
 
+### UI patch 1 — the projects page (done; written by the design side, not an agent)
+Scope: `web/js/history-api.js`, `history-graph.js`, `projects.js`, `css/projects.css`,
+`tests/projects_harness.js` + `tests/test_projects_ui.py`. `core.js` lost the old
+`showPicker`; `projects.js` defines it. Open, Switch and open, Save draft, Branch from
+here, Rename, Delete (branch and draft) and the graph are done. Compare, Read and Merge
+are the next patches and are not drawn until they work.
+
+- **Backend fixes the UI exposed** (own commits): a project with no history could never
+  save its first draft (`_save` adopted, compared the head with the Draft 1 it had just
+  written, refused, and the rollback undid the adoption; the message named a draft that
+  did not exist). The tests adopted first. And the project listing now carries
+  `current_branch`.
+- **Opening a project is `location.hash` + `reload()`** (`DASH.openProject`). The old
+  picker's links only changed the hash and loaded nothing. The page rewrites `#app`, as
+  the old picker did, so it is a boot state: `openProjects()` reloads to return to it.
+- **Mutating routes need the `X-White-Words: 1` header** (`server.py`, a CSRF guard); a
+  curl without it gets `missing_custom_header`. `DASH.historyApi` sends it.
+- **`sw.js` does not cache** (it only exists so Chrome offers Install). No cache bump is
+  needed when static files change; an ordinary reload picks them up.
+- **Rendering is pure** (state in, markup out) and every id travels as a `data-*`
+  attribute, never in a handler, as `trash.js` does; the harness checks both.
+- **The delete-branch dialog cannot give the exact count of drafts that will go** (§4.3):
+  no route previews it, so the text says what is kept and the result is a toast. A
+  `dry_run` on `DELETE /branches/{id}` would fix it.
+- **Formatting debt that is not from this patch:** `ruff format --check` flags
+  `core/history/listing.py`, `core/history/session.py` and `tests/test_history_routes.py`.
+  It belongs in its own formatting commit.
+- **Known failure:** `tests/test_no_hermes_imports.py` (a `hermes` string in
+  `app/config.py`); fails without this patch too.
+
+Manual checks (a real browser; none of these can be run by pytest):
+1. Projects page lists every project; a project with no history says "No drafts saved yet".
+2. Expand a project with no history, Save first draft: it becomes Draft 1 on `main`.
+3. Branch from here, with and without "switch and open": the second lands in the
+   writing view on the new branch.
+4. Rename to an existing name: the sentence from the server shows inside the dialog.
+5. Delete is disabled for the current branch and for a draft a branch starts from.
+6. Switch and open on another branch: the writing view shows that branch's data.
+7. Click a graph node: its row in the lists flashes.
+
 ### Deviations
 ### Issues

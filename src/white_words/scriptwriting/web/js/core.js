@@ -150,26 +150,6 @@ DASH.boot = async function() {
   }
 };
 
-DASH.showPicker = async function() {
-  try {
-    const res = await fetch('/api/projects');
-    const data = await res.json();
-    const projects = (data.projects || []);
-    const app = document.getElementById('app');
-    await DASH.hideLoading();   // the splash draws out before it is replaced
-    let html = '<div style="padding:2rem"><h2>Projects</h2>';
-    if (!projects.length) {
-      html += '<p>No projects found. Create one under projects/.</p>';
-    } else {
-      html += '<ul>' + projects.map(p => '<li><a href="#/p/' + encodeURIComponent(p.slug) + '">' + (p.name || p.slug) + '</a></li>').join('') + '</ul>';
-    }
-    html += '</div>';
-    if (app) app.innerHTML = html;
-  } catch (e) {
-    DASH.showError();
-  }
-};
-
 DASH.watchUpdates = function(slug) {
   try {
     if (DASH._es) DASH._es.close();

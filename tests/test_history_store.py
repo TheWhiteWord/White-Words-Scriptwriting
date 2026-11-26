@@ -711,3 +711,27 @@ def test_a_draft_from_another_project_is_refused(project):
     _saved(project, "first")
     with pytest.raises(ValueError, match="No such draft"):
         store.merge_base(project, "s-19700101-000000", "s-19700101-000001")
+
+
+def test_saving_a_project_with_no_history_makes_its_state_the_first_draft(fixture_path):
+    """Every project predates this feature, so its first Save is the adoption itself.
+
+    Adopting writes the live state down as Draft 1; comparing the head to that draft
+    refused the save, rolled the adoption back, and named a draft that did not exist.
+    """
+    assert not store.history_path(fixture_path).exists()
+
+    saved = store.save_snapshot(fixture_path, "Before the rewrite", "the baseline")
+
+    assert saved["label"] == "Before the rewrite"
+    assert saved["note"] == "the baseline"
+    assert saved["parents"] == []
+    listed = store.list_branches(fixture_path)
+    assert [s["label"] for s in listed["snapshots"]] == ["Before the rewrite"]
+    assert [b["is_current"] for b in listed["branches"]] == [True]
+
+
+def test_the_second_save_is_refused_until_something_changes(fixture_path):
+    store.save_snapshot(fixture_path, "First")
+    with pytest.raises(ValueError, match="Nothing has changed since First"):
+        store.save_snapshot(fixture_path)

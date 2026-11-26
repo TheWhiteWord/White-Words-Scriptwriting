@@ -530,6 +530,20 @@ def adopt(project_path: Path) -> dict:
 # ─── operations ───
 
 
+def _name_first_draft(conn: sqlite3.Connection, first: dict, label: str | None, note: str) -> dict:
+    """Saving a project that has no history makes its state Draft 1.
+
+    `_adopt` has just written that state down, so there is no earlier draft for it to
+    differ from; the save is the adoption, under the name and note the caller gave.
+    """
+    name = (label or first["label"]).strip()
+    conn.execute("UPDATE snapshots SET label=?, note=? WHERE id=?", (name, note, first["id"]))
+    named = _snapshot(conn, first["id"])
+    assert named is not None
+    named["parents"] = []
+    return named
+
+
 def _save(
     project_path: Path,
     conn: sqlite3.Connection,
@@ -546,10 +560,13 @@ def _save(
     about to change, which no other caller can freeze. `branch_id` says which branch
     the draft belongs to; the default is the current one.
     """
+    adopting = branch_id is None and _current(conn) is None
     branch = _adopt(project_path, conn) if branch_id is None else _branch(conn, branch_id)
     where = project_path if head is None else head
     base = _snapshot(conn, branch["base_snapshot_id"])
     assert base is not None, "a branch's saved draft is never deleted"
+    if adopting:
+        return _name_first_draft(conn, base, label, note)
     live = fingerprint.of_project(where)
     if live == base["fingerprint"]:
         raise ValueError(

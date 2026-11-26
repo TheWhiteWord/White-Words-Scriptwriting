@@ -28,6 +28,7 @@ def summary(project_path: Path) -> dict:
     """
     empty = {
         "current_draft": None,
+        "current_branch": None,
         "branch_count": 0,
         "last_saved": None,
         "changes_since_save": 0,
@@ -40,7 +41,7 @@ def summary(project_path: Path) -> dict:
     conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     try:
         current = conn.execute(
-            "SELECT id, base_snapshot_id FROM branches WHERE is_current=1"
+            "SELECT id, base_snapshot_id, name FROM branches WHERE is_current=1"
         ).fetchone()
         if current is None:
             return empty
@@ -57,6 +58,7 @@ def summary(project_path: Path) -> dict:
     return {
         **empty,
         "branch_count": count,
+        "current_branch": current[2],
         "current_draft": base[0] if base else None,
         "last_saved": base[1] if base else None,
         "changes_since_save": _changes(project_path, current[1] if base else None),
