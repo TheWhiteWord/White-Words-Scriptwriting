@@ -959,7 +959,32 @@ and what it changes. No narration.
   preview must be triggered by an explicit action, never by a form change.
 
 ### Deviations
+- **A preview reporting unanswered decisions is a 200, not a 409.** §10 lists the
+  route without a status; §T7.7.4 says a stale plan is a 409, and that is kept. But
+  `blocked` is the dry run *doing its job* — it reports which decisions to answer,
+  and the workspace renders them. A 409 would make an ordinary incomplete plan look
+  like a failed request. Only `refused` (stale plan, or ops that would fail) is a 409,
+  and it carries `failures[]`.
+- **A malformed decision key is a 422 from a `DecisionKeyError`, not a 409.**
+  `session.set_decision` raises `DecisionKeyError(ValueError)` so a boundary can tell
+  "this key will never be valid as sent" from "a valid request the rules declined".
+  Both messages already existed; only the type is new. T11 should catch the type, not
+  parse the message.
+- **`changes_since_save` is a count, `head_state`'s `changed` is a bool.** The landing
+  page's "N changes since Draft 3" needs the number; `listing.summary` diffs to get it,
+  so a clean head costs one fingerprint and only a dirty one pays for a copy.
+
 ### Issues
+- **`..` in a history path is answered by Starlette before the route** (404
+  `{"detail": "Not Found"}`, not our envelope). The slug guard still rejects any
+  separator, so the behaviour is safe; only the body shape differs from ours. Not
+  worth a custom router — recording it so nobody reads the odd body as a bug in the
+  slug rule.
+- **A D4 raised by a D2 has an item key that is never a diff item** (`entity:scene:x`
+  for a scene that exists on all sides). The first version of the "not yet asked"
+  check keyed off the plan's item list and therefore never fired for the chained case.
+  It now keys off the decision list alone, which is the only thing that can be true;
+  the distinction is carried by the message, not by a second lookup.
 
 ---
 

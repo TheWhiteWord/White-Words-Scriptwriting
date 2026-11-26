@@ -151,22 +151,31 @@ typo or a stale session.
       suites; app builds.
 - [x] **T10.2 — decision payload** (`85ed841`). `plan._change_item` emits `theirs`/`ours`
       instead of unlabelled `a`/`b` — nothing read them, and D1/D7 already name sides.
-- [ ] **T10.3 — `app/routes/history.py`, reads**: `GET /` (branches + drafts + parents
-      + per-branch tip + current), `GET /diff`, `GET /read/{ref}/entities/{type}/{id}`,
-      `GET /read/{ref}/script`.
-- [ ] **T10.4 — `app/routes/history.py`, writes**: `POST /snapshots`, `POST /branches`,
-      `POST /switch` (with `open_drafts` on refusal), `PATCH /branches/{id}`,
-      `DELETE /branches/{id}`, `DELETE /snapshots/{id}`. Each destructive route requires
-      an explicit `confirm: true` in the body (owner: switch, delete branch, delete
-      draft, apply) and refuses with 422 naming the action when it is absent.
-- [ ] **T10.5 — merge session routes**: `POST /merges`, `GET /merges/{id}`,
-      `PUT /merges/{id}/selection`, `PUT /merges/{id}/decisions/{key}` (D-T10-C's three
-      outcomes), `POST /merges/{id}/preview`, `POST /merges/{id}/apply`, `DELETE /merges/{id}`.
-- [ ] **T10.6 — `services.list_projects` enrichment**: `current_draft`, `branch_count`,
-      `last_saved`, `changes_since_save`; no manifest → the four defaults; never adopt,
-      never `list_branches`.
-- [ ] **T10.7 — `tests/test_history_routes.py`**, and the listing tests for the four keys.
-- [ ] **T10.8 —** `server.py` router registration; `Notes.md` findings.
+- [x] **T10.3 — reads** (`2509210`). `GET /` via the new `graph.summary`; `GET /diff`;
+      `GET /read/{ref}/entities/{type}/{id}`; `GET /read/{ref}/script`. `view.ref_view`
+      resolves any ref — a draft, another branch, or the current branch (which yields the
+      project itself, since its head IS `story.db`).
+- [x] **T10.4 — writes** (`2509210`). `POST /snapshots`, `POST /branches`, `POST /switch`,
+      `PATCH /branches/{id}`, `DELETE /branches/{id}`, `DELETE /snapshots/{id}`. Each
+      destructive route requires `confirm: true` and refuses with 422 naming the action.
+      Rename needs no confirm: it moves no state.
+- [x] **T10.5 — merge session routes** (`2509210`). Start, show, selection, decision
+      (three outcomes), preview, apply, discard. A preview reporting unanswered decisions
+      is a **200** — the report is the answer; only a refused dry run or apply is a 409.
+- [x] **T10.6 — `services.list_projects` enrichment** (`ca775df`).
+      `core/history/listing.py` reads the manifest `mode=ro` — `store.connect` creates
+      and migrates one, so a listing built on it writes on every page load, and
+      `list_branches` reports a branchless manifest as "no history". No manifest, or an
+      unreadable one, gives the four defaults. `changes_since_save` is an item count.
+      `tests/test_project_listing.py` (7 tests) pins the no-write guarantee — swapping in
+      `store.connect` makes `test_a_listing_never_creates_a_manifest` fail, verified.
+- [x] **T10.7 — tests** (`2509210`, `a3cfc7a`). `tests/test_history_routes.py` (21 tests):
+      the exact-slug rule against a neighbouring `…-old` project, every confirm gate, the
+      envelope on each refusal class, the `%23`-encoded decision key, and start → answer →
+      apply end to end asserting the value landed in `story.db`. `tests/test_project_listing.py`
+      (7) covers the four landing keys.
+- [x] **T10.8 — registration and notes** (`2509210`). `server.py` includes the router;
+      the T10 findings below are updated.
 - [x] **T10.9 — the `set_decision` guards** (`4ef042d`). Two refusals, both raised from
       `session.py` so T11 inherits them: malformed key, and a well-formed key this plan
       does not hold ("is not asked (yet)"). The chained D2→D4 case is pinned.
@@ -194,3 +203,36 @@ typo or a stale session.
   calls `show`/`preview`, so there is no stored plan to serve.
 - **T11 will follow this task** and needs the same core functions, so the routes must
   stay thin: resolve, call, translate. No logic that a tool would have to repeat.
+
+## Final Brief
+
+**Landed.** Six commits on `draft-versioning`, each with its own tests:
+`2f8d227` shared `_err`; `85ed841` D2 sides labelled `theirs`/`ours`; `4ef042d` the
+`set_decision` guards; `ca775df` the landing-page listing; `2509210` the routes
+(reads, writes, merge sessions, `graph.summary`, `view.ref_view`); `a3cfc7a` line
+wraps. `2044 passed` on the full suite, with the one known pre-existing failure
+(`test_no_hermes_imports`) unchanged.
+
+**What the UI can now do over HTTP.** Load the branch graph with each head's change
+count, read any entity or the composed script in any state, save/rename/switch/delete
+drafts and branches, and run a merge end to end: start, select, answer decisions,
+preview, apply, discard.
+
+**Three things worth carrying forward.**
+1. `session.set_decision` now refuses any key this plan does not hold. A malformed key
+   and a "not asked yet" key raise `DecisionKeyError` — one type, two messages. **T11
+   must catch the type, not match the text.**
+2. A preview reporting unanswered decisions is a **200**; only a refused dry run or
+   apply is a 409. Without that split, an ordinary incomplete plan would look like a
+   failed request in the workspace.
+3. `listing.summary` and `graph.summary` are deliberately different: the listing never
+   copies a draft (page loads are frequent), the graph always does (it must answer for
+   every parked head). Neither adopts, so neither writes during a read.
+
+**Deviations from the spec**, all recorded in `Notes.md` under T10: preview status,
+`DecisionKeyError`, `changes_since_save` as a count.
+
+**Left for T11.** `open_drafts` on a switch refusal is not attached as a payload — the
+core's message names the ids, and the route passes it through as a 409. If the
+workspace needs to render them as buttons, that is a core change (`store.switch` has
+no payload attribute), not a route one.
