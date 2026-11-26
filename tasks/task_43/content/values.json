@@ -1,0 +1,81 @@
+{
+  "_note": "Five values. Each is named by its positive pole (the id is the slug of `name`). The rung words are the vocabulary a scene's value_turn must use — `from` and `to` must be words of THAT value's ladder, so these are load-bearing, not decoration. Written so no two rungs of one value are near-synonyms, which is what makes a turn readable. See 04-decisions.md §1.",
+
+  "values": [
+    {
+      "id": "home",
+      "fields": {
+        "name": "home",
+        "p": "home",
+        "c": "wandering",
+        "cd": "exile",
+        "nn": "a home that is not yours",
+        "note": "The main plot's value, and the one the whole story argues. `home` is the place you belong to; `wandering` is not belonging anywhere but not being forced out either; `exile` is being pushed out and kept out; `nn` is the perversion — a place that has all the features of home and is not it. Oz is nn. The Emerald City is nn at its most seductive."
+      },
+      "sections": {
+        "Definition": "Home as a chosen belonging rather than a building. The ladder runs from having it, through not having it, through being denied it, to having its counterfeit. Kansas is p; the road is c; the Witch's castle is cd; Oz as a whole, and the Emerald City in particular, is nn.",
+        "Notes": "The turn that matters most in the demo is a nn -> p turn, which is only credible because the story spends three acts making Oz genuinely attractive. If Oz were obviously bad, Dorothy's choice would cost nothing."
+      }
+    },
+    {
+      "id": "mind",
+      "fields": {
+        "name": "mind",
+        "p": "sense",
+        "c": "muddle",
+        "cd": "foolishness",
+        "nn": "cleverness that cannot think",
+        "note": "The Scarecrow's value. `sense` is working judgement; `muddle` is confusion without stupidity; `foolishness` is the settled inability to judge; `nn` is the perversion — the appearance of intelligence, a performance of cleverness, without any capacity to reach a conclusion. The Scarecrow's whole arc is that he demonstrates p throughout while believing he is cd."
+      },
+      "sections": {
+        "Definition": "Judgement, not knowledge. The ladder measures whether a character can reach a workable conclusion, from doing it reliably, through confusion, through incapacity, to the counterfeit: fluent cleverness that decides nothing. The papers in the Scarecrow's head are the nn reading of himself.",
+        "Notes": "Chosen over the more obvious 'brain' or 'intelligence' because the story is not about IQ. The Scarecrow solves every problem he meets and does not notice, which only reads as a value turn if the ladder's top rung is judgement rather than knowledge."
+      }
+    },
+    {
+      "id": "heart",
+      "fields": {
+        "name": "heart",
+        "p": "feeling",
+        "c": "numbness",
+        "cd": "cruelty",
+        "nn": "sentiment that never acts",
+        "note": "The Tin Man's value. `feeling` is the capacity to be moved and to act on it; `numbness` is not being moved; `cruelty` is being moved only toward harm; `nn` is the perversion — declaring tender feeling while doing nothing. The Tin Man fears he is cd (empty) and is visibly p. The nn rung is the one the demo uses for the Wizard, who weeps beautifully and helps nobody."
+      },
+      "sections": {
+        "Definition": "Feeling as a motive force. The difference between the rungs is not intensity but whether the feeling reaches an action. `numbness` and `sentiment that never acts` look opposite and are neighbours: both leave the world unchanged, and nn is worse because it claims otherwise.",
+        "Notes": "The ladders are written so that each value's nn can describe a different character in this story. nn for heart is the humbug; nn for belief is also the humbug from the other side. That overlap is deliberate and is what makes him a two-plot character."
+      }
+    },
+    {
+      "id": "courage",
+      "fields": {
+        "name": "courage",
+        "p": "courage",
+        "c": "caution",
+        "cd": "cowardice",
+        "nn": "bravado",
+        "note": "The Lion's value. `caution` is the middle rung and is not a fault — it is fear used well. `cowardice` is fear in charge. `nn` is the perversion: the performance of courage that is itself a kind of running away. The Lion's arc runs cd -> p while everyone around him reads nn, which lets the demo show a value moving while the characters misread it."
+      },
+      "sections": {
+        "Definition": "The willingness to act while afraid. The ladder is about the relationship between fear and action, not the absence of fear. `caution` is the honest middle: the same fear, correctly used. The Lion begins claiming nn, believing he is cd, and is shown to be p from his first scene.",
+        "Notes": "The only ladder with a middle rung that is genuinely good, which makes it the most interesting one to read in the value graph — the line does not simply go from bad to good, and the perversion sits above the fault rather than below it."
+      }
+    },
+    {
+      "id": "belief",
+      "fields": {
+        "name": "belief",
+        "p": "belief",
+        "c": "doubt",
+        "cd": "fraud",
+        "nn": "a lie people need",
+        "note": "The humbug's value, and the subplot's. `belief` is holding something true and acting on it; `doubt` is the honest middle; `fraud` is knowingly selling what is not there; `nn` is the perversion that the story actually lands on — a lie that does real good, which the ladder has no clean word for and the scene has to argue. The Wizard ends on nn and is not punished."
+      },
+      "sections": {
+        "Definition": "Belief as a transaction between people, not a private state. The ladder runs from holding something true, through uncertainty, through deliberate deception, to the case the story cares about: a deception that produces the good it falsely promised. The demo's value graph shows this plot's line ending on nn rather than p, which is the clearest single demonstration of what the ladder is for.",
+        "Notes": "This is the value that makes the demo worth reading. Three of the four companions gain real things from a Wizard who gave them nothing, and the story declines to call that a happy accident."
+      }
+    }
+  ]
+}

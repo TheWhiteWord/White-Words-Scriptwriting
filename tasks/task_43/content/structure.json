@@ -1,0 +1,195 @@
+{
+  "_note": "3 acts and 6 sequences. Act order is authored (acts are not reorderable through `reorder`, so `order` is a field). Sequences are auto-numbered by create_entity from the live sibling set, but `order` is passed anyway so the JSON is self-describing. `primary_plot` is optional and names the plot a sequence mainly serves — it is a pointer, not a container.",
+  "acts": [
+    {
+      "id": "act-1",
+      "fields": {
+        "title": "Act I",
+        "order": 1,
+        "status": "complete",
+        "act_objective": "Dorothy is separated from Kansas and given a destination."
+      },
+      "sections": {
+        "Summary": "Kansas, the cyclone, and Munchkinland. Two scenes to establish what is being lost, one to carry her out of it, one to tell her where to go and hand her the means of getting there. By the end of the act she has a stated goal and three of the four things she will need.",
+        "Objective": "To get home. The act establishes that the want is physical rather than sentimental: she is not running from Kansas, she is trying to get back to it, and the distance is the problem.",
+        "Value Arc": "Home at the farm is the positive pole, held without her noticing. The cyclone moves her to wandering at a stroke and she does not return until the last scene of the story.",
+        "Reversal": "The act ends on a promise rather than a setback: the Wizard can send her home. It is the wrong answer, offered by someone who has not yet been asked, and the whole of Act II is spent walking toward it.",
+        "Notes": "The shortest act, and deliberately so. It has two jobs — make Kansas worth returning to, and make the road worth walking — and it does both in four scenes."
+      }
+    },
+    {
+      "id": "act-2",
+      "fields": {
+        "title": "Act II",
+        "order": 2,
+        "status": "complete",
+        "act_objective": "Dorothy gathers her companions, reaches the Wizard, and is given a task instead of an answer."
+      },
+      "sections": {
+        "Summary": "The road, the city, and the Witch. Two scenes of gathering, one of delay, two in the Emerald City where the promise is converted into a task, and then the abduction that forces the group to act without permission. Seven scenes, the longest act.",
+        "Objective": "To reach the Wizard and be sent home. The objective survives the act; what changes is that the price of it is revealed to be somebody else's death.",
+        "Value Arc": "Wandering throughout, with Oz's beauty offering the negations of negation in the city scenes. The promised home is the false one, and the act spends five scenes making it attractive enough that refusing it costs something.",
+        "Reversal": "The Wizard does not grant. He sets a task, sends them to kill the one person in the country he is afraid of, and the group's stated goal becomes conditional on an act of violence none of them wanted.",
+        "Notes": "Contains the story's only cut scene and its only two `no_cast` scenes, which is not a coincidence: the middle act is where a writer has room to try something and take it out again."
+      }
+    },
+    {
+      "id": "act-3",
+      "fields": {
+        "title": "Act III",
+        "order": 3,
+        "status": "in-progress",
+        "act_objective": "Dorothy kills the Witch, exposes the Wizard, and gets home by her own means."
+      },
+      "sections": {
+        "Summary": "The castle, the melting, and the return. The task is completed almost by accident, the promised reward is withdrawn as a fraud, and the real answer arrives from Glinda in the last scene. Four scenes, and three of them are refusals of what the previous acts promised.",
+        "Objective": "To get home — unchanged, and now without a Wizard to do it. The act's work is to strip away every external agent and leave the want and the protagonist alone together.",
+        "Value Arc": "Exile in the castle, then the negation of negation held openly in the empty throne room, then home by choice. The ladder is walked backwards through its worst rungs in two scenes and then resolved in one.",
+        "Reversal": "The Wizard is a fraud, which removes the plan; and the shoes always worked, which removes the problem. Both reversals take something away rather than adding, and the story ends lighter than it began.",
+        "Notes": "Marked in-progress while the other two are complete, because the status is a property of the draft the reader is looking at, not a claim about the story. In Draft 3 it is the act still being worked."
+      }
+    }
+  ],
+  "sequences": [
+    {
+      "id": "seq-kansas",
+      "fields": {
+        "title": "Kansas",
+        "order": 1,
+        "status": "complete",
+        "act_id": "act-1",
+        "primary_plot": "there-s-no-place-like-home",
+        "purpose": "Establish the place that is worth returning to, in the least attractive terms available."
+      },
+      "sections": {
+        "Summary": "The farm at dusk and the cyclone. Two scenes, one domestic and one elemental, and the second of them undoes the first entirely without anybody in the story choosing it.",
+        "Purpose": "To make the want physical. Dorothy is not unhappy in a way she can name; she is poor, and she wants to be somewhere else. The sequence gives her a place and then takes it away in the same fifteen minutes.",
+        "Value Arc": "Home, held and then lost. The sequence is the only one in the story at the positive pole of its value, which is why it can afford to be dull.",
+        "Progression": "From a room with a stove in it to a house in the air. The move is vertical and total: everything familiar is below her by the end of the second scene.",
+        "Sequence Climax": "The house lifts off its footings with the girl inside it. Nobody in the house is steering and the one person who could have been in the cellar is not, which is the whole of the scene's meaning.",
+        "Plots": "The main plot only. No companion is introduced here and no subplot is opened, which keeps the opening clean and makes the road feel like a widening.",
+        "Notes": "The sequence carries the story's only transition scene and its only forced heading, which is why both of those features have a scene to point at when the demo is opened."
+      }
+    },
+    {
+      "id": "seq-munchkinland",
+      "fields": {
+        "title": "Munchkinland",
+        "order": 2,
+        "status": "complete",
+        "act_id": "act-1",
+        "primary_plot": "there-s-no-place-like-home",
+        "purpose": "Give Dorothy the destination and the means, and open the shoes as a question nobody asks."
+      },
+      "sections": {
+        "Summary": "The house lands on the Witch of the East, the Munchkins celebrate their freedom, and Glinda tells Dorothy who can send her home and hands her the shoes that could do it.",
+        "Purpose": "To convert the situation into a plot. Before this scene Dorothy is lost; after it she has a road, a destination and a pair of shoes that will turn out to be the answer.",
+        "Value Arc": "Wandering, with the first taste of a place that is welcoming and not hers. The sequence is where the story first offers a substitute home.",
+        "Progression": "From gratitude to instruction. The Munchkins' celebration is about their own freedom; the instruction is about Dorothy's, and the scene is careful to keep them separate.",
+        "Sequence Climax": "Glinda says the shoes are powerful and does not say how. It is the story giving away its ending in a line nobody in the scene understands.",
+        "Plots": "The main plot opens here with its inciting incident. The humbug plot is not opened and is not mentioned, so the story still has somewhere to go when the road runs out.",
+        "Notes": "Introduces the dead witch without ever showing her alive, which is the demo's case of a cast member who exists, is referenced by another character, and never appears in a single scene."
+      }
+    },
+    {
+      "id": "seq-the-road",
+      "fields": {
+        "title": "The road",
+        "order": 1,
+        "status": "complete",
+        "act_id": "act-2",
+        "primary_plot": "there-s-no-place-like-home",
+        "purpose": "Gather the three companions and let each of them open his own plot in one place."
+      },
+      "sections": {
+        "Summary": "The Scarecrow, then the Tin Man and the Lion, then the poppy field. Three scenes of widening company in which the group is assembled and each companion opens his own plot by standing at the roadside.",
+        "Purpose": "To assemble the group without moving the main plot an inch. The road is the story's gathering device, and each companion joins by being met rather than by being sought, which keeps the protagonist passive and the destination fixed.",
+        "Value Arc": "Wandering, and for the companions the full arc of their own values compressed into a first appearance. Each is shown at his positive pole while claiming his negative one.",
+        "Progression": "One traveller, then two, then four. The scene count per companion shrinks as the group grows, which is how the sequence avoids repeating its own introduction three times.",
+        "Sequence Climax": "The poppy field: the group asleep and helpless in the open, which is the first time their number is a liability rather than a strength, and the last time the story lets a place rather than a person be the danger.",
+        "Plots": "Opens the mind, heart and courage plots, one in each of the first two scenes. The humbug plot is not touched here, which is why the Emerald City arrives as a change of subject rather than a new errand.",
+        "Notes": "Contains the cut scene. In Draft 3 the sequence drops to two scenes and the group never sleeps, which changes the group's first real danger from a place to a person."
+      }
+    },
+    {
+      "id": "seq-emerald-city",
+      "fields": {
+        "title": "The Emerald City",
+        "order": 2,
+        "status": "complete",
+        "act_id": "act-2",
+        "primary_plot": "the-humbug",
+        "purpose": "Convert the promise into a task, and make the false home attractive enough that refusing it costs something."
+      },
+      "sections": {
+        "Summary": "The gates and the audience. Spectacles are locked onto their faces at the door, and the Wizard sets them a task instead of granting a wish, without ever being seen.",
+        "Purpose": "The act's turn and the story's midpoint. Everything promised is deferred, and the deferral carries a price nobody agreed to: the death of a person the group has never met.",
+        "Value Arc": "The negation of negation at its most seductive, and then doubt. The city offers Dorothy a home with every feature except the one she wants, and the audience converts surety into uncertainty.",
+        "Progression": "From awe at a gate to argument with a voice. The sequence moves from spectacle to negotiation, and the Wizard is never seen in either.",
+        "Sequence Climax": "The task. Four people are sent to kill a witch by a voice behind a curtain, and they go, which is the moment the false home is paid for with somebody else's life.",
+        "Plots": "The humbug plot opens and turns here. The three companion plots are all complicated in the same scene, which is where the demo's scene with four roles earns its place.",
+        "Notes": "Sets in the base location. Its final scene is the story's largest cast and the one that carries four plot roles at once, which makes it the demo's densest single scene."
+      }
+    },
+    {
+      "id": "seq-the-witch",
+      "fields": {
+        "title": "The Witch",
+        "order": 3,
+        "status": "complete",
+        "act_id": "act-2",
+        "primary_plot": "there-s-no-place-like-home",
+        "purpose": "Take the protagonist out of the group's control and put the antagonist in charge of the story for one sequence."
+      },
+      "sections": {
+        "Summary": "The winged monkeys take Dorothy out of the road and into the castle. Two scenes in which the group is broken up and the antagonist holds the protagonist, the shoes and the initiative.",
+        "Purpose": "To change who is driving. For two scenes the plot belongs to the Witch and the group's plan is irrelevant, which is what makes their arrival at the castle feel like an interruption rather than a rescue.",
+        "Value Arc": "Exile: the first rung below wandering, and the first time Dorothy is somewhere she cannot leave. The castle is the ladder's third rung and it is held for two whole scenes.",
+        "Progression": "From a group on a road to one girl in a room. The sequence strips the group away one member at a time, which is what makes the next act's reunion mean anything.",
+        "Sequence Climax": "The castle. The Witch has the shoes within reach and cannot take them off a living wearer, which is her entire problem stated physically and the one rule she cannot argue with.",
+        "Plots": "The main plot reaches its crisis. The humbug plot is complicated by the delay, since a task cannot be completed from a locked room, and the group's promise to the Wizard is never mentioned while they are inside.",
+        "Notes": "The antagonist's only sequence. She appears in both of its scenes, which is more screen time than she gets anywhere else in the story, and it is still less than any companion."
+      }
+    },
+    {
+      "id": "seq-the-humbug",
+      "fields": {
+        "title": "The humbug",
+        "order": 1,
+        "status": "in-progress",
+        "act_id": "act-3",
+        "primary_plot": "the-humbug",
+        "purpose": "Complete the task the Wizard set, then take the reward away and replace it with a fraud."
+      },
+      "sections": {
+        "Summary": "The melting and the empty throne room. The Witch is destroyed almost by accident and the Wizard is exposed in the same half hour, which is the story taking away both its answers at once.",
+        "Purpose": "To complete the plot's action and then refuse to pay it. The task set in Act II is finished, and finishing it earns nothing, which is what makes the last sequence possible.",
+        "Value Arc": "Exile gives way to the negation of negation held openly: the green glasses are off, the throne is empty, and the false home is revealed as an ordinary room in an ordinary city.",
+        "Progression": "From a death to a disappearance. The Witch goes first and the Wizard second, and the second leaves no body, which is the difference between a resolved plot and an abandoned one.",
+        "Sequence Climax": "The curtain. A man from Omaha is discovered operating a machine in a room, and the country's entire authority turns out to have been a voice and a great deal of green glass.",
+        "Plots": "Reaches the main plot's climax and the humbug's crisis. The three companion plots are suspended here, since their answers depend on the Wizard and the Wizard is gone.",
+        "Notes": "Sets in the variant location. It is the only sequence whose location is a `variant_of` another, which is why the transformation has to be a real change of state and not a change of hour."
+      }
+    },
+    {
+      "id": "seq-the-return",
+      "fields": {
+        "title": "The return",
+        "order": 2,
+        "status": "in-progress",
+        "act_id": "act-3",
+        "primary_plot": "there-s-no-place-like-home",
+        "purpose": "Resolve every plot by taking away the thing each was promised, and end on a choice rather than a gift."
+      },
+      "sections": {
+        "Summary": "The balloon, the goodbyes and Glinda. Three scenes that remove every agent who might have solved it for her, and end with the protagonist holding the answer she has been carrying since Act I.",
+        "Purpose": "To pay off five plots without granting a single wish. Every resolution is a refusal of the promised form: the Witch is killed by accident, the Wizard is exposed, the balloon leaves without her.",
+        "Value Arc": "Home by choice, reached from the negation of negation in one move. The last scene turns the ladder's worst rung into its best, which is why this sequence's segment is the steepest in the demo's value graph.",
+        "Progression": "From a departure to a departure to a choice. The Wizard leaves badly, the companions are paid off with objects, and Glinda explains the shoes, which the story described in Act I and never explained.",
+        "Sequence Climax": "Glinda explains the shoes. The reversal is not a new fact — the shoes were described as powerful in Act I — it is the protagonist finally being told what she already knew.",
+        "Plots": "Resolves the main plot and all three companion plots. Leaves the humbug plot active by choice, which is the only plot the story declines to close.",
+        "Notes": "The sequence where every subplot is paid off in one scene. Four plots resolved in a single scene is the demo's densest case of multiple `plot_roles` on one scene."
+      }
+    }
+  ]
+}

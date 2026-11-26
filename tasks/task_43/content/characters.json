@@ -1,0 +1,359 @@
+{
+  "_note": "Eleven characters: ten live in the final state, one trashed in Draft 3. `knowledge` is written so that the lists DIFFER between characters — who knows what is the point of the field. `relationships` is computed and must not be written. Sections are 30-60 words each.",
+  "characters": [
+    {
+      "id": "dorothy",
+      "fields": {
+        "name": "Dorothy Gale",
+        "story_role": "Protagonist",
+        "one_sentence": "A farm girl who wants to be somewhere else and finds out she was already there.",
+        "goals_short": "Get back to Kansas before Aunt Em worries.",
+        "goals_long": "Belong somewhere, and be somebody there.",
+        "knowledge": [
+          "The farm is mortgaged and the bank has written twice.",
+          "Aunt Em never cries in front of her.",
+          "Toto is not allowed on the bed, and is on the bed.",
+          "The Wizard of Oz can send her home — told to her by Glinda.",
+          "The shoes came off a dead woman, which she would rather not think about."
+        ]
+      },
+      "sections": {
+        "Identity": "Twelve or thereabouts. Plain-spoken, stubbornly polite, and not frightened in the way adults expect. She says what she means and means what she says, which is why people tell her things they should not.",
+        "Desires": "To go home. Stated once in the first scene, never abandoned, never complicated by a better offer. Underneath it is the wish to be wanted somewhere, which Kansas has never quite said out loud.",
+        "Background": "Orphaned and taken in. She has no memory of her parents and does not ask. She works the farm like someone who expects to be allowed to stay only as long as she is useful.",
+        "Contradictions": "She wants home and walks away from every place that offers to be one. She is polite to a fault and pushes a witch's servant aside to get to a bucket of water. She believes the Wizard is a fraud before she has any evidence.",
+        "Psychology": "She is not brave; she is determined, which looks similar from outside. Her method is to keep moving toward the stated goal and refuse the substitute, and that refusal is the only real decision she makes in the story.",
+        "Arc": "She travels the whole ladder of home and comes back to where she started, changed only in that she now chooses it. The shoes were on her feet the whole time, which means the arc was never a journey but a recognition.",
+        "Relationships": "She gathers three companions and never once asks them for anything. She is loved by all of them and does not notice. Her one adversary wants her shoes and has no interest in her, which is the loneliest fact in the story.",
+        "Voice": "Short sentences. Direct address. Occasional flat understatement where a stronger reaction is expected. She uses 'we' about the group before the group has agreed to be one.",
+        "Notes": "The protagonist the demo's journey tab is built on: she is a protagonist of the main plot and the target of turns on three plots, so her track has something to draw in every act."
+      }
+    },
+    {
+      "id": "wicked-witch-of-the-west",
+      "fields": {
+        "name": "The Wicked Witch of the West",
+        "story_role": "Antagonist",
+        "one_sentence": "The ruler of the West, who wants a pair of shoes and has nothing else to want.",
+        "goals_short": "Take the silver shoes from the girl.",
+        "goals_long": "Keep the West, and be the last witch standing.",
+        "knowledge": [
+          "Her sister is dead and the shoes are on a child's feet.",
+          "The shoes cannot be taken from a living wearer.",
+          "The Golden Cap commands the winged monkeys three times.",
+          "Water destroys her. She does not know this, or does not believe it.",
+          "The Wizard is a fraud. She has known for years and finds it beneath comment."
+        ]
+      },
+      "sections": {
+        "Identity": "One eye, one object of desire, one method. She is not charming and does not try to be. She rules by fear because fear is cheap and it has always worked.",
+        "Desires": "The shoes. Everything else — her sister's death, the girl, the country — is instrumental. This makes her unusually focused for an antagonist and unusually boring to spend time with, which the story handles by keeping her scenes short.",
+        "Background": "She held the West before the story began and will hold it after, if she is not interrupted. Her sister held the East and was killed by a farmhouse, which is the single fact that defines the plot.",
+        "Contradictions": "She is genuinely powerful and cannot solve her one problem. She knows the Wizard is a fraud and never says so, because the fraud keeps the country quiet. She grieves her sister in the same register she uses to threaten people.",
+        "Psychology": "She is a collector. The shoes are not wanted for what they do but because they were her sister's, and taking them back is the only grief available to her. She would rather have them than be safe.",
+        "Arc": "No arc. She wants the same thing in the first scene she appears in and the last, and she is destroyed by the one thing nobody thought to mention. A character can be a fixed point and still be the engine of a plot.",
+        "Relationships": "Her sister, whom she is avenging without saying so. Dorothy, whom she does not consider a person. The Wizard, whom she despises and protects by staying silent. Her monkeys, who obey and fear her.",
+        "Voice": "Declarative and short. She does not negotiate or explain. She says what she is going to do rather than what she feels, and the effect is a person who has confused intention with fact.",
+        "Notes": "The demo's only Antagonist, and the negative end of the strength scale on the character web. She appears in four scenes, which is enough for the plot's crisis and climax."
+      }
+    },
+    {
+      "id": "scarecrow",
+      "fields": {
+        "name": "The Scarecrow",
+        "story_role": "Supporting",
+        "one_sentence": "A man made of straw who wants a brain and solves every problem he meets.",
+        "goals_short": "Get to the Wizard and ask for a brain.",
+        "goals_long": "Be worth something to somebody.",
+        "knowledge": [
+          "He has no brain and is told so by everyone he meets.",
+          "He can be taken apart and put back together.",
+          "The road goes to the Emerald City and the city has a Wizard in it.",
+          "Crows are afraid of him, which proves nothing about his mind.",
+          "He is the one who thinks of the fire, the river and the ladder."
+        ]
+      },
+      "sections": {
+        "Identity": "Straw in a coat, a painted face, and a hat that does not sit straight. He is the first companion and the one who talks most. He apologises for his own intelligence in the same breath as using it.",
+        "Desires": "A brain, officially. In practice, to be taken seriously by the people he has just met, which he achieves in every scene and never notices achieving.",
+        "Background": "Stood in a field for a season, frightening birds, until a girl came along and asked him to come. He has no history before that and does not pretend to.",
+        "Contradictions": "He believes he cannot think and thinks constantly. He is the most anxious of the three and the most decisive. He is made of the thing that burns, and his finest moment is a fire.",
+        "Psychology": "His fear is not of danger but of being found out. Every solution he offers is framed as a guess, which is a way of not claiming credit for work he is certain about.",
+        "Arc": "No change in capacity; a change in what he is willing to claim. He receives a diploma and immediately demonstrates that he needed the permission rather than the paper.",
+        "Relationships": "The first to join and the one who binds the group together. He and the Tin Man argue about which of them is worse off, fondly. He is the only companion who is not frightened of the Lion.",
+        "Voice": "Runs on, then catches himself. Asks permission before offering the right answer. Uses 'if I had a brain' as a verbal tic and then has one.",
+        "Notes": "Carries the `mind` subplot and its Contradictory type. His value track is the clearest in the demo: he is at sense from his first scene while recording himself at foolishness."
+      }
+    },
+    {
+      "id": "tin-man",
+      "fields": {
+        "name": "The Tin Woodman",
+        "story_role": "Supporting",
+        "one_sentence": "A man of tin who wants a heart and weeps over every living thing he meets.",
+        "goals_short": "Get to the Wizard and ask for a heart.",
+        "goals_long": "Be able to love someone without rusting over it.",
+        "knowledge": [
+          "He was a man of flesh once, and was cut apart and replaced, piece by piece.",
+          "He rusted solid in the forest and stood there for a year.",
+          "He cannot cry without seizing up, which he does constantly.",
+          "The girl is the first person to oil him in a year.",
+          "The tinsmith who made him is the reason he can still be repaired."
+        ]
+      },
+      "sections": {
+        "Identity": "A body of tin with a funnel hat and a hinged jaw. Meticulously polite. He is the only character in the story with a trade, and he uses it to help, which is what the story means by heart.",
+        "Desires": "A heart, which he believes he lacks. What he actually lacks is a body that can survive feeling, which is a different and unfixable problem the story declines to solve.",
+        "Background": "He loved a girl whose mother disapproved, and lost his limbs one at a time to the work he took to afford her. The replacements changed what he was. He has not told anyone this in full.",
+        "Contradictions": "He is the most feeling character and believes himself the least. He is made of a metal that does not rust from tears and seizes up anyway. He grieves a lost love while being unable to say her name.",
+        "Psychology": "He measures his own capacity by whether it produces visible emotion, and his body is built to prevent exactly that. His tragedy is an instrument problem, not a moral one.",
+        "Arc": "He receives a testimonial heart and does not change, because there was nothing to change. The gift is a permission slip, like the Scarecrow's diploma, and the demo shows the same shape twice on purpose.",
+        "Relationships": "He and the Scarecrow are a double act. He is devoted to Dorothy from the moment she oils him and never says so directly. He is unafraid of the Lion and fond of him, which the Lion finds unsettling.",
+        "Voice": "Formal, complete sentences, old-fashioned courtesy. He announces his feelings rather than showing them, which is the joke and also the point: a man who says 'I am moved' because his face cannot. He apologises for his own tears and then rusts over them.",
+        "Notes": "Carries the `heart` subplot and is the one character whose `changes` entry in a beat sheet is a RELATIONSHIP rather than himself, which the demo needs to show."
+      }
+    },
+    {
+      "id": "lion",
+      "fields": {
+        "name": "The Cowardly Lion",
+        "story_role": "Supporting",
+        "one_sentence": "A lion who wants courage and charges the Witch's castle.",
+        "goals_short": "Get to the Wizard and ask for courage.",
+        "goals_long": "Stop being afraid of his own fear.",
+        "knowledge": [
+          "He is a lion and is expected to be brave.",
+          "He is frightened of almost everything, including the people he is protecting.",
+          "His roar is genuinely frightening and he is embarrassed by it.",
+          "The girl is smaller than him and is not frightened, which he finds unbearable.",
+          "He is the one who carries the group across the last gap."
+        ]
+      },
+      "sections": {
+        "Identity": "Large, loud, and permanently apologising. He joins the group by threatening it and then asking to come along. He is written as comic and ends up being the bravest of the three.",
+        "Desires": "Courage, which he defines as the absence of fear. The story quietly redefines it as action in spite of fear, and he never fully learns the difference, which is what keeps him honest.",
+        "Background": "He has always been a lion. Nobody made him. His fear has no origin story, which is the point: it is not a wound, it is a temperament, and the story refuses to explain it away.",
+        "Contradictions": "He threatens the companions and then weeps at the thought of losing them. He is terrified of the Witch and walks into her castle first. He asks for courage with the loudest voice in the story.",
+        "Psychology": "His fear is performative and real at the same time. He frightens people because a loud lion is frightening, and he is frightened because he is a loud lion.",
+        "Arc": "Testing, on the ladder, from cowardice through caution to courage — and everyone around him reads bravado the whole way. He receives a medal and is still afraid, which the story presents as the correct outcome.",
+        "Relationships": "Terrified of the Witch. Devoted to Dorothy and unable to say so except by roaring. The Tin Man's affection confuses him. He and the Scarecrow are the closest pair after the double act.",
+        "Voice": "Exclamatory. He interrupts himself, revises downward, and roars to cover the revision. He compares himself unfavourably to everyone present, at volume, and is genuinely surprised when nobody agrees with him.",
+        "Notes": "Carries the `courage` subplot and its Complicating type. His ladder is the only one whose middle rung (caution) is genuinely good, which is why his value line is the most interesting to read in the graph."
+      }
+    },
+    {
+      "id": "the-wizard",
+      "fields": {
+        "name": "The Wizard of Oz",
+        "story_role": "Supporting",
+        "one_sentence": "A man behind a curtain who has been pretending to be a wizard for so long that the pretending has done real good.",
+        "goals_short": "Keep the curtain closed.",
+        "goals_long": "Leave before anyone looks behind it.",
+        "knowledge": [
+          "He is from Omaha and arrived in a balloon.",
+          "There is no magic. There is a throne, a curtain, a megaphone, and a talent for voices.",
+          "The country is peaceful because it believes he is watching.",
+          "The Witch knows. She has never said so.",
+          "The gifts he gives the companions are worthless objects and they work."
+        ]
+      },
+      "sections": {
+        "Identity": "A middle-aged man in a green coat who has been running a country by ventriloquism. Not cruel, not clever, and considerably better at the job than he is willing to admit.",
+        "Desires": "To be believed, then to leave. He has no wish to rule and no plan for what happens after he goes, which is the most irresponsible and most honest thing about him.",
+        "Background": "A balloonist from Omaha who was blown off course and found a country prepared to accept him. He has been improvising ever since, and the improvisation has held for years.",
+        "Contradictions": "He is a fraud whose fraud is load-bearing. He gives the companions nothing and it works. He is a coward who has kept a country peaceful longer than any honest ruler in the story.",
+        "Psychology": "He believes his own performance enough to be caught out by it. The gifts are not cynical: he chooses them carefully, and the choice is where his real skill lives.",
+        "Arc": "Disillusionment, and the ladder ends on nn rather than p: a lie people need. He is exposed, forgiven, and leaves in a balloon, and the story declines to punish him. That refusal is its most interesting moral position.",
+        "Relationships": "He and Dorothy share the `belief` plot. He is the second protagonist of that plot, which is why the demo's plots view shows two names on one subplot. Glinda knows what he is and lets him work.",
+        "Voice": "Large and theatrical when he is behind the curtain, with a voice he has practised for years. Small, fast and apologetic the moment it is pulled. The switch between the two is the whole character, and he cannot do both at once.",
+        "Notes": "The only character in two plots (belief and, as the object of it, Dorothy's home plot). His `secret` flag on the relationship with Dorothy is what the demo uses to demonstrate that field."
+      }
+    },
+    {
+      "id": "glinda",
+      "fields": {
+        "name": "Glinda",
+        "story_role": "Supporting",
+        "one_sentence": "The witch of the South, who knows how the shoes work and says so only at the end.",
+        "goals_short": "See the girl finish what she started.",
+        "goals_long": "Keep the South out of it.",
+        "knowledge": [
+          "The silver shoes carry their wearer anywhere, and always could.",
+          "The Wizard is a fraud and has been useful.",
+          "Dorothy could have gone home on the first day.",
+          "The Witch of the West could be destroyed by water.",
+          "She withheld all of this, and has reasons she considers sufficient."
+        ]
+      },
+      "sections": {
+        "Identity": "Elegant, unhurried, and the only powerful figure in the story who tells the truth when asked directly. She answers questions accurately and volunteers nothing, which is a form of honesty the story treats as questionable.",
+        "Desires": "For Dorothy to arrive at the answer herself. Whether that is wisdom or a taste for watching is left open, and the demo's Notes for her scene record the ambiguity rather than resolving it.",
+        "Background": "Ruled the South throughout, took no part in the war with the West, and arrived at the end of both plots. She is the only character who is never in danger and never explains why.",
+        "Contradictions": "She is the mentor who withholds the answer. She is kind and lets a child walk across a country to learn something she could have said in the first minute. She is honest and evasive.",
+        "Psychology": "She thinks in terms of what a person is ready to hear, which is a real principle and also a convenient one for someone who does not want to intervene.",
+        "Arc": "None. She is the same at the end as at the beginning, which is what a mentor figure is for: she is the fixed point the protagonist's change is measured against.",
+        "Relationships": "Sends Dorothy off in the first act and receives her in the last. Knows the Wizard's secret and leaves him to it. Her relationship with the West witch is never shown and is mentioned once.",
+        "Voice": "Slow, warm, and slightly amused. She answers exactly the question asked. She uses Dorothy's name often, which is disarming and also a way of not answering.",
+        "Notes": "The demo's mentor relationship type. She delivers the controlling idea in the final scene, which makes her the story's last word rather than its helper."
+      }
+    },
+    {
+      "id": "aunt-em",
+      "fields": {
+        "name": "Aunt Em",
+        "story_role": "Minor",
+        "one_sentence": "A woman who has stopped expecting anything and is frightened by a girl who has not.",
+        "goals_short": "Get through the day and keep the farm.",
+        "goals_long": "Keep the child, which she has never said.",
+        "knowledge": [
+          "The mortgage is behind and the bank has written twice.",
+          "The cellar is the safe place in a storm.",
+          "Dorothy talks about leaving and means it.",
+          "Her own face frightens the child, and she knows it.",
+          "She has lost someone before and does not discuss it."
+        ]
+      },
+      "sections": {
+        "Identity": "Work-worn, unsentimental, and incapable of saying the thing she means. Her one scene establishes the emotional stake of the whole story and she never appears again.",
+        "Desires": "To keep the farm and the child, in that order on paper and the other order in fact. The story never makes her choose between them and rewards her anyway.",
+        "Background": "Took in her sister's child. Has been holding a household together on a debt for years. The loss that made her this way is referred to once and never explained.",
+        "Contradictions": "She is stern with the child she cannot bear to lose. She tells her to stay out of trouble and then screams for her when the storm comes. She is the least demonstrative person in the story and its emotional centre.",
+        "Psychology": "She has learned that feeling things out loud costs more than it gives. Her flatness is protective, and Dorothy reads it as not being wanted, which is the misunderstanding the whole journey happens inside.",
+        "Arc": "None, and that is deliberate. She is exactly the same woman when Dorothy comes back as when Dorothy left, working the same land with the same set face. That constancy is what makes coming back mean something rather than merely resolve.",
+        "Relationships": "Dorothy's guardian and the person Dorothy is trying to get back to. Uncle Henry is beside her and says almost nothing. She is the reason the word 'home' has a face.",
+        "Voice": "Short, practical, and always about the immediate task: the pigs, the storm, the cellar. The one thing she means she says sideways, to nobody, and then goes back to work. She never raises her voice and is heard anyway.",
+        "Notes": "The demo's Minor tier, and a deliberate one-scene appearance. She also demonstrates that a character can be emotionally central and structurally peripheral at once, which is the difference between role and importance."
+      }
+    },
+    {
+      "id": "guardian-of-the-gates",
+      "fields": {
+        "name": "The Guardian of the Gates",
+        "story_role": "Cameo",
+        "one_sentence": "A man at a green gate who fits spectacles to visitors and repeats a speech about them.",
+        "goals_short": "Fit the spectacles and say the speech.",
+        "goals_long": "Keep the gate.",
+        "knowledge": [
+          "The spectacles are locked on and have no key.",
+          "The speech is required.",
+          "Nobody has ever asked what the spectacles are for.",
+          "The city's green is not entirely the marble."
+        ]
+      },
+      "sections": {
+        "Identity": "One scene, one function, one speech delivered as if for the first time. He is not a fool; he is a man with a job that requires him not to think.",
+        "Desires": "To complete the procedure, in order, without a question he has no answer for. His distress when the visitors ask one is real and entirely without malice: the procedure is the job, and the job is the whole of his life in the city.",
+        "Background": "Employed at the gate long enough that the speech is automatic and his hand finds the lock without looking. He did not design the procedure, has never met the man who did, and has never been inside the throne room.",
+        "Contradictions": "He locks spectacles onto people's faces for their protection and cannot say what they protect against. He is the first obstacle in the city and is entirely harmless.",
+        "Psychology": "He is the story's cleanest example of a person inside a system that works by not being examined. His discomfort at questions is the only crack in it.",
+        "Arc": "None. He appears once, does his job, and is not seen again. He is the demo's proof that the Cameo tier exists and renders differently from Minor.",
+        "Relationships": "He meets the group at the gate and admits them. He is the only person in the city who speaks to them before the Wizard does.",
+        "Voice": "Recited. The speech is in a fixed form and he returns to it whenever he is uncertain, which is most of the scene. Outside the speech he speaks in short, worried fragments, as though interrupting himself costs something.",
+        "Notes": "The Cameo role in the demo, and deliberately the smallest part in the story: one scene, one function, no arc. He is the proof that the tier renders differently from Minor, and nothing more is asked of him."
+      }
+    },
+    {
+      "id": "queen-of-the-field-mice",
+      "fields": {
+        "name": "The Queen of the Field Mice",
+        "story_role": "Minor",
+        "one_sentence": "The ruler of a field of mice, who repays a rescue with a rescue.",
+        "goals_short": "Get her people out of the path of the sleepers.",
+        "goals_long": "Be owed nothing and owe nothing.",
+        "knowledge": [
+          "The Tin Man saved her from a wildcat.",
+          "The poppies put people to sleep and the sleep can kill.",
+          "Her mice can carry a person if there are enough of them.",
+          "The road belongs to nobody."
+        ]
+      },
+      "sections": {
+        "Identity": "Small, formal, and scrupulous about debts. She appears in one scene, speaks in complete sentences, and commands a great many very small subjects who move as one animal when she raises a paw.",
+        "Desires": "To discharge an obligation. She is not interested in the travellers beyond what she owes them, which makes her the most honest character in the story.",
+        "Background": "Rules a field beside the road. Her people are numerous and organised and have been at war with a wildcat, which the Tin Man ended.",
+        "Contradictions": "She is the smallest character and has the most rigid sense of obligation. She can save four people who could not save her, and does it without comment.",
+        "Psychology": "Her world is governed by debt and repayment, and she finds the travellers' lack of such a system confusing rather than wrong. She does not understand charity; she understands an obligation discharged and a ledger closed.",
+        "Arc": "None. She arrives, pays what she owes, and leaves. She is a function with a personality attached, which is exactly what a good Minor character is, and she is not asked to change.",
+        "Relationships": "Owes the Tin Man her life and says so in those words. Commands her mice absolutely. Has no relationship with Dorothy and does not want one; the debt is to the metal man and the rest are cargo.",
+        "Voice": "Formal and precise. She uses the language of obligation rather than of feeling, thanks people by naming what she owes them, and considers a compliment a failure to state a debt clearly.",
+        "Notes": "Trashed in Draft 3 along with the poppy field scene, because she exists only inside it. This is the demo's cascaded deletion: she is not invented into the bin, she goes there with her scene."
+      }
+    },
+    {
+      "id": "wicked-witch-of-the-east",
+      "fields": {
+        "name": "The Wicked Witch of the East",
+        "story_role": "Minor",
+        "one_sentence": "The tyrant of the East, killed by a farmhouse before the story begins and never seen alive.",
+        "goals_short": "None. She is dead.",
+        "goals_long": "None.",
+        "knowledge": [
+          "Nothing. She is dead before the first scene."
+        ]
+      },
+      "sections": {
+        "Identity": "Two feet under a house and a pair of shoes on them. She has no lines, no scene, and no living appearance, and she is the cause of everything that follows.",
+        "Desires": "None that the story can show. What she wanted while alive is inferred from her sister, who wants it still and calls it justice. The shoes are the only surviving evidence of her taste.",
+        "Background": "Ruled the East and took what she wanted. Her people celebrate her death within hours, which is the only measure of her the story offers.",
+        "Contradictions": "She is the most consequential character in the story and the least present. She appears only as a pair of feet and a pair of shoes.",
+        "Psychology": "Not available to the reader and not needed. She is a fact rather than a person, and the story is honest about that: it gives her no interior because it would be an invention, and her function does not require one.",
+        "Arc": "None. Dead at the start and dead at the end, which is what makes her the demo's proof that a character can exist without appearing in a single scene.",
+        "Relationships": "Sister to the Witch of the West, who is avenging her without saying so. Owner of the shoes, which now belong to Dorothy. Neither relationship requires her to speak.",
+        "Voice": "No lines. Her voice exists only in what her sister says about her and in what the Munchkins will not say, which makes her the demo's clearest case of characterisation by reference rather than by presence.",
+        "Notes": "Correction recorded: death is not deletion. She is never trashed. She stays in the cast with no scenes, referenced by her sister's relationship, and her death lives in beats and `changes` rather than in the bin."
+      }
+    },
+    {
+      "id": "toto",
+      "fields": {
+        "name": "Toto",
+        "story_role": "Cameo",
+        "one_sentence": "A small dog who wants nothing and is therefore the only character in the story who is never wrong.",
+        "goals_short": "Stay with Dorothy.",
+        "goals_long": "Nothing beyond that. He has no arc and the story does not give him one.",
+        "knowledge": [
+          "Where Dorothy is, at all times.",
+          "That the balloon basket was not a safe place to be.",
+          "Nothing about the Wizard, the Witch or the road."
+        ]
+      },
+      "sections": {
+        "Identity": "A small black dog with no collar, carried for most of the story and put down about six times. He is present in eleven of fifteen scenes, says nothing, wants nothing and is never the reason anything happens.",
+        "Desires": "None that the story counts. He follows Dorothy because she is where he is, which is the only relationship in the script with no objective in either direction, and the demo uses him as the control case for that reason.",
+        "Background": "He was already there. The story never explains where he came from and he is the only member of the cast with no history at all, which makes him the cheapest kind of character to include and the hardest kind to leave out.",
+        "Contradictions": "He is the only character whose single action decides the plot, and he takes it without agency, intention or awareness. He runs away from the balloon at the one moment when following Dorothy would have cost her the ending she wanted.",
+        "Psychology": "Not applicable, and the demo keeps the section rather than blanking it so that a field can hold the honest answer. His behaviour is animal and consistent: he seeks the person he belongs to and avoids things that are loud or high.",
+        "Arc": "None. He begins the story on Dorothy's lap and ends it on Dorothy's lap. The demo's arc view is worth opening on him precisely because it shows a character with a flat line who is still load-bearing.",
+        "Relationships": "Dorothy, at maximum strength on both sides and with no complication in it. He has no other relationship and does not interact with the rest of the cast in any scene, although he is carried through most of them.",
+        "Voice": "None. He does not speak, is not given a thought in the script and is never the subject of a line of dialogue except as an instruction about a table or a bed. His characterisation is entirely physical.",
+        "Notes": "The demo's zero-objective character, and the case for `Cameo` describing a role that is neither minor nor decorative. His one act — running from the basket — is recorded in the balloon beat sheet as a change on Dorothy, not on him, because he has nothing to change."
+      }
+    },
+    {
+      "id": "uncle-henry",
+      "fields": {
+        "name": "Uncle Henry",
+        "story_role": "Minor",
+        "one_sentence": "A farmer who says four lines, all of them about the weather, and is the only adult in the story who is not managing anything.",
+        "goals_short": "Get the stock in before the storm.",
+        "goals_long": "Keep the farm, which he does not discuss and cannot do.",
+        "knowledge": [
+          "The mortgage is four months behind.",
+          "A cyclone is coming and it is a bad one.",
+          "Dorothy is not in the cellar and he cannot leave the stock to go and get her."
+        ]
+      },
+      "sections": {
+        "Identity": "A man in his fifties in a house with one room in it, on a farm that is not working. He is on stage for one scene, speaks four lines, and three of them are about the sky.",
+        "Desires": "To get the stock in and the family under cover, in that order, which is the order that loses him the argument he is not having. His want is entirely practical and the story never lets him state it.",
+        "Background": "Farmed the same land his father farmed and has been losing it slowly for years. Everything the audience learns about the farm's finances comes from Aunt Em, never from him, which is itself the characterisation.",
+        "Contradictions": "He is the head of the household and has no authority in it. He gives Dorothy the instruction the story needs her to disobey — go to the cellar — and she does not, and he never finds out in time to do anything about it.",
+        "Psychology": "A man who manages what he can see and not what he cannot. Weather, stock and machinery are his register because they respond to work; the mortgage and the child do not, so he is silent about both and busy about the first.",
+        "Arc": "None in the script, and the demo needs one adult with no arc. He is absent from the story's middle entirely and returns only in the final shot, where he is doing the same thing he was doing at the start.",
+        "Relationships": "Aunt Em, steady and unspoken at 0.8 on both sides. Dorothy, whom he treats as a worker rather than a child, which is affection in his only available vocabulary.",
+        "Voice": "Short sentences about practical things. He answers questions with statements about the sky. The demo's example of a character whose dialogue never touches the subject of the scene, which is a legitimate way to write a minor character.",
+        "Notes": "The demo's case for `Minor` as a real role rather than a leftover: he moves nothing, wants almost nothing and is necessary, because somebody has to be in the yard when the house goes up."
+      }
+    }
+  ]
+}

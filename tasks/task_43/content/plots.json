@@ -1,0 +1,105 @@
+{
+  "_note": "Five plots: one main, four sub. `plot_type` is required for every sub and is what the plots view badges in colour. `characters` lists the plot's PROTAGONISTS ONLY — value_turns validate their effects against this list, so a character named in an effect must be here. The six role fields (setups/inciting_incident/...) are computed from scenes and must not be written.",
+
+  "plots": [
+    {
+      "id": "there-s-no-place-like-home",
+      "fields": {
+        "name": "There's no place like home",
+        "one_sentence": "A girl carried out of Kansas walks the length of a country to get back, and finds the way home was on her feet the whole time.",
+        "status": "resolved",
+        "characters": ["dorothy"],
+        "value_arc": "Education",
+        "plot_scope": "main"
+      },
+      "sections": {
+        "Summary": "The main line. Dorothy is taken from Kansas by a cyclone, told that only the Wizard can send her back, and spends three acts walking toward him. She gets the answer from Glinda instead, and it is the thing she was carrying.",
+        "Role": "The spine every other plot hangs from. It supplies the forward motion — a stated want and a stated destination — and the other four plots attach to it at the road, the city and the castle. Its shape is a bare want that survives every substitute offered.",
+        "Threads": "The want is stated in the first scene and never revised. Three temptations test it: the beauty of Munchkinland, the comfort of the Emerald City, and the promise of the Wizard's power. Each is refused without an argument. The shoes run underneath all of it as the answer nobody explains.",
+        "Value": "Runs the ladder of home: home at the farm, wandering on the road, exile in the Witch's castle, and the negation of negation in Oz itself — a place with every feature of home that is not hers. It returns to the positive pole only when she names Kansas as her own choice, which is the one active move she makes.",
+        "Characters": "Dorothy alone is the protagonist, which is what keeps the plot clean. Every companion is a supporting figure in this plot and a protagonist in his own. That separation is what lets five plots share one road without any of them becoming a subplot of the others.",
+        "Notes": "Education as a value arc, not Maturation: she does not become a different person, she learns what she already had. The distinction is visible in the demo's value graph, where the line returns to a rung it has already occupied rather than climbing to a new one."
+      }
+    },
+    {
+      "id": "a-brain",
+      "fields": {
+        "name": "A brain",
+        "one_sentence": "A scarecrow who believes he cannot think solves every problem on the road and asks a fraud for a diploma.",
+        "status": "resolved",
+        "characters": ["scarecrow"],
+        "value_arc": "Maturation",
+        "plot_scope": "sub",
+        "plot_type": "Contradictory"
+      },
+      "sections": {
+        "Summary": "The Scarecrow joins to ask the Wizard for a brain. Between joining and asking he works out the fire, the river and the ladder. He receives a diploma and is immediately the same as he was, which is the plot's whole argument.",
+        "Role": "Contradictory: it opposes the main plot's premise directly. Dorothy travels to be given something she cannot give herself; the Scarecrow already has what he travels for. His plot is the standing counter-argument to hers, and it is what makes her final scene land rather than merely conclude.",
+        "Threads": "His belief in his own incapacity is stated in his first line and contradicted in his first action. Nobody argues him out of it; the story simply keeps showing him thinking. The Wizard's gift is a permission slip, not a cure, and the plot is careful to say so.",
+        "Value": "Runs mind from foolishness through muddle to sense — except he is at sense from his first scene and only records himself at foolishness. The ladder is climbed in what the characters believe rather than in what happens, which is the most interesting thing the value tracking has to show.",
+        "Characters": "The Scarecrow alone. He is also the group's social centre, which is why his plot can be entirely internal and still keep the road scenes alive.",
+        "Notes": "The clearest track in the demo for the journey tab: one protagonist, one value, a recorded shift in most scenes he appears in, and a final state that matches his first."
+      }
+    },
+    {
+      "id": "a-heart",
+      "fields": {
+        "name": "A heart",
+        "one_sentence": "A man of tin who weeps over everything and asks a fraud for a testimonial.",
+        "status": "resolved",
+        "characters": ["tin-man"],
+        "value_arc": "Maturation",
+        "plot_scope": "sub",
+        "plot_type": "Resonant"
+      },
+      "sections": {
+        "Summary": "The Tin Man joins to ask for a heart. He is the most feeling character in the story and believes himself the emptiest. He receives a silk heart and rusts over it, which is the same joke as the Scarecrow's diploma told with a body instead of a mind.",
+        "Role": "Resonant: it restates the main plot's premise in a different register rather than opposing it. Where the Scarecrow contradicts Dorothy, the Tin Man echoes her — he too wants a thing he cannot verify he lacks. Two subplots, one opposing and one echoing, is what makes the five-plot structure read as designed.",
+        "Threads": "His feeling is demonstrated before it is claimed: he weeps at a crushed beetle within a minute of meeting the group. The obstacle is his body, not his character — he cannot cry without seizing. The gift does not solve the body, and the story is honest enough to leave that unresolved.",
+        "Value": "Runs heart from cruelty through numbness to feeling, and never visits cruelty. The interesting move is the negation of negation: sentiment that never acts, which is the Tin Man's fear about himself and is actually the Wizard's condition. His plot and the humbug's share that rung from opposite ends.",
+        "Characters": "The Tin Man alone, with the Scarecrow as his double act. Their arguments about which of them is worse off are the story's comic engine and never touch the plot's value, which is why they can be funny without diluting it.",
+        "Notes": "The one character whose `changes` entry in a beat sheet is a relationship rather than himself, which the demo needs in order to show that `changes` accepts four entity types."
+      }
+    },
+    {
+      "id": "a-nerve",
+      "fields": {
+        "name": "A nerve",
+        "one_sentence": "A lion who is frightened of everything charges the Witch's castle and asks a fraud for a medal.",
+        "status": "resolved",
+        "characters": ["lion"],
+        "value_arc": "Testing",
+        "plot_scope": "sub",
+        "plot_type": "Complicating"
+      },
+      "sections": {
+        "Summary": "The Lion joins by threatening the group and then asking to come along. He is terrified throughout and walks into the castle first. He receives a medal and is still afraid, which the story presents as the correct outcome rather than a failure of the gift.",
+        "Role": "Complicating: he makes the main plot harder rather than echoing or opposing it. His fear costs the group time and nearly costs them the journey, and his courage at the castle is the reason the climax is reachable. A Complicating subplot that actually obstructs is rarer than one that merely runs alongside, and the demo shows the difference.",
+        "Threads": "His fear has no origin and the story refuses to supply one, which keeps it a temperament rather than a wound. He misreads himself consistently: he calls his fear cowardice, the group reads his behaviour as bravado, and he is in fact cautious — the ladder's honest middle rung — until the castle, where he is simply brave.",
+        "Value": "Runs courage from cowardice through caution to courage, and everyone around him reads bravado the whole way. The ladder is the only one whose middle rung is genuinely good, so his line does not simply climb from bad to good — which is what makes it worth drawing.",
+        "Characters": "The Lion alone. He is also the plot's comic relief and its most physical presence, which is why his scenes carry the group's biggest set pieces.",
+        "Notes": "Testing as a value arc: he is not changed by what he learns, he is tested by it. The medal is a joke about certification that the story means sincerely."
+      }
+    },
+    {
+      "id": "the-humbug",
+      "fields": {
+        "name": "The humbug",
+        "one_sentence": "A man behind a curtain has been pretending to be a wizard for so long that the pretending has done real good.",
+        "status": "active",
+        "characters": ["dorothy", "the-wizard"],
+        "value_arc": "Disillusionment",
+        "plot_scope": "sub",
+        "plot_type": "Complicating"
+      },
+      "sections": {
+        "Summary": "The Wizard sets the group a task instead of granting their wishes, sends them to kill a witch he is afraid of, and is exposed as a balloonist from Omaha. He gives them worthless objects that work. He leaves, badly, and the country is better for having been lied to.",
+        "Role": "Complicating, and the story's argument dressed as a subplot. It obstructs the main plot twice: it converts a request into a task, and it replaces the promised answer with a fraud. It is the only subplot with two protagonists, one of whom is the main plot's, which is how the demo shows a plot crossing another.",
+        "Threads": "The task is the midplot turn. The exposure is the second. Both are refusals of the expected shape: the wizard does not grant, and when caught he is not punished. The gifts are chosen with real care by a man who claims to be a fraud, and that care is the evidence against his own account of himself.",
+        "Value": "Runs belief from fraud through doubt to belief, and then to the negation of negation: a lie people need. It is the only plot in the demo whose line ends on nn rather than on the positive pole, and it is the clearest single demonstration of why the ladder has four rungs rather than two.",
+        "Characters": "Dorothy and the Wizard share it. Dorothy is here because she is the one who is deceived and who forgives; the Wizard because he is the one who deceives and is forgiven. Their relationship is the only one in the story carrying a `secret` flag on one side.",
+        "Notes": "Left `active` at the end while the other four are `resolved`, because the story deliberately does not close it: the Wizard escapes into the sky and the lie persists in a country that is happier for it. That is an authored judgement, and the demo shows the status field carrying one."
+      }
+    }
+  ]
+}

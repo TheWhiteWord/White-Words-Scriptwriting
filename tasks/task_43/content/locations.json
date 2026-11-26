@@ -1,0 +1,150 @@
+{
+  "_note": "Six locations across two worlds. `world` is stored as parent_id (ENTITY_COLUMN_MAP). `variant_of` is a location_variant relation and is set on exactly one: the Emerald City after. `name` must not contain ' - ', because it becomes the heading's middle segment.",
+  "locations": [
+    {
+      "id": "gale-farm",
+      "fields": {
+        "name": "The Gale Farm",
+        "one_sentence": "A mortgaged farmhouse on flat land, where nothing is wasted and nothing is said.",
+        "mood": "threadbare endurance",
+        "dramatic_function": "The thing Dorothy leaves, and the only reason the whole journey means anything",
+        "world": "kansas"
+      },
+      "sections": {
+        "Description": "One storey, painted more than once over bare boards. A porch, a well, a barn, a pigpen. The front room holds a stove, a table and four chairs. There is no ornament that is only an ornament.",
+        "Atmosphere": "Grey, and the grey is not restful. The light is flat until the sky changes. Everything indoors is quieter than it should be, as if noise would cost something.",
+        "Image System": "Boards, buckets, wire, and the worn place in the floor by the stove. Round things — the well, the table, the cyclone — against square things: the house, the fields, the fences. The round shapes are the ones that move.",
+        "History": "The farm has been in the family for two generations and the debt for one. Aunt Em and Uncle Henry have already lost one thing to the land and do not discuss it. The house has been repainted to cover the last mortgage's repairs.",
+        "Dramatic Function": "Establishes the world that the story's argument is about, in the least attractive terms possible. Every later beauty in Oz is measured against this room, and the point is that Dorothy chooses the room.",
+        "Notes": "Written deliberately plain, with no colour that is only there to be pretty. If Kansas were charming, Dorothy's return would be nostalgia rather than a choice, and the story's whole argument would collapse into sentiment it has not earned."
+      }
+    },
+    {
+      "id": "the-cyclone",
+      "fields": {
+        "name": "The Cyclone",
+        "one_sentence": "The inside of the storm, where the house is travelling and nobody is steering it.",
+        "mood": "noise and helplessness",
+        "dramatic_function": "The transition between the two worlds, and the only place Dorothy is completely without agency",
+        "world": "kansas"
+      },
+      "sections": {
+        "Description": "A column of moving air that takes up the whole sky and lifts the house off its footings. Inside the house, everything loose is falling sideways. Outside the window there is no horizon, only the wall of the storm going up and round.",
+        "Atmosphere": "Deafening, then oddly quiet. After the first minute the storm is a steady roar and the fear becomes boredom, which is worse. The house turns slowly, so the same pieces of a neighbour's fence go past more than once.",
+        "Image System": "Circles and repetition. The same fence, the same shed, the same hen going past. The storm is the only thing in the story that moves without choosing to.",
+        "History": "This cyclone is not the first in the county and will not be the last. The cellar is the sensible place to be and Dorothy is not in it, which the story never explains and does not need to.",
+        "Dramatic Function": "Carries the protagonist from one world to the other with no decision of her own. It is the story's purest transition scene and the reason a `transition` dramatic role exists in the demo at all.",
+        "Notes": "Deliberately no cast in the script: the house is empty and the storm does the acting, so the scene carries `no_cast` and a stepped-out beat where the world is the actor."
+      }
+    },
+    {
+      "id": "munchkinland",
+      "fields": {
+        "name": "Munchkinland",
+        "one_sentence": "The bright country where the house landed, grateful to the girl who killed a tyrant by accident.",
+        "mood": "relief with an edge of ceremony",
+        "dramatic_function": "Where Dorothy is told who to look for, and where she acquires the shoes that make the ending possible",
+        "world": "oz"
+      },
+      "sections": {
+        "Description": "Low, round houses in blue and white, set among fields and orchards. A wide road of yellow brick begins here and goes on past the horizon. The light is brighter than it should be, with no dust in it.",
+        "Atmosphere": "Festive, and slightly too rehearsed. The Munchkins have been waiting for something to celebrate and Dorothy is convenient. Under the singing there is a real and recent fear, which is why the celebration is so loud.",
+        "Image System": "Blue and white against yellow. Small things in large numbers: hats, faces, hands. The dead witch's feet sticking out from under the house, which nobody looks at directly.",
+        "History": "The East was ruled by a witch who took what she wanted and gave nothing. She died this morning. Nobody in Munchkinland has been free long enough to be sure it will last, which is why they treat Dorothy as a deliverance rather than a visitor.",
+        "Dramatic Function": "Delivers the task and the means in one scene: the Wizard can send her home, and the shoes are hers now. It also introduces the one rule that makes the ending work — that the shoes carry their wearer — while nobody, including the owner, understands it.",
+        "Notes": "The scene where the story gives away its ending and hides it in plain sight. The Good Witch says the shoes are powerful and then does not explain how, which is honest and is also the trick."
+      }
+    },
+    {
+      "id": "yellow-brick-road",
+      "fields": {
+        "name": "The Yellow Brick Road",
+        "one_sentence": "A road of yellow brick running through farmland and orchard toward a green city, with room for anyone who joins.",
+        "mood": "companionable walking",
+        "dramatic_function": "The story's gathering place — every companion is met on it, and it is where the group becomes a group",
+        "world": "oz"
+      },
+      "sections": {
+        "Description": "A road wide enough for four abreast, paved in yellow brick, crossing fields of wheat and orchards and then a wide plain of poppies. Fences beside it are in good repair. The city is visible from some way off as a green smear on the horizon.",
+        "Atmosphere": "Open and unhurried. The road is the friendliest place in the story, and that is a problem: it is easy to keep walking, and the walking is the delay.",
+        "Image System": "The brick as a line through everything. Wheat, then apples, then poppies — three colours in sequence, and the poppy red is the warning. People are met standing at the roadside, as if waiting for exactly this.",
+        "History": "The road was built to the city by the Munchkins, who no longer travel it. The fields beside it are worked but the farmhouses are set back and quiet, which is how the story keeps the country from feeling populated.",
+        "Dramatic Function": "Its purpose is structural: it lets four scenes of gathering happen in one place without repetition, and it stage-manages the departure from Oz as a single walk back along it. It carries `place` values that change per scene — the wheat field, the orchard, the poppy field — so the location's computed `places` list has something to show.",
+        "Notes": "The only location with several distinct places. That is deliberate: `location.places` is computed from scene `place` fields, and the demo needs at least one place with enough of them to prove the computation."
+      }
+    },
+    {
+      "id": "poppy-field",
+      "fields": {
+        "name": "The Poppy Field",
+        "one_sentence": "A field of poppies that crosses the road and puts travellers to sleep in it.",
+        "mood": "beautiful and stuporous",
+        "dramatic_function": "The danger that has no antagonist in it — a place that defeats the party by being pleasant",
+        "world": "oz"
+      },
+      "sections": {
+        "Description": "Poppies to the horizon in every direction, with the yellow brick still showing through in a line. The road does not stop at the field; it goes under it and comes out the other side, which is the only reason anyone tries to cross.",
+        "Atmosphere": "Warm, still and quiet. There is no wind except what moves the flowers, and the flowers move all together. The light is good and gets better as the afternoon goes on, which is the trap.",
+        "Image System": "Red and yellow in horizontal bands, and a brick line that will not go away. The only location in Oz whose beauty is entirely working against the party, so the image system is the same one the Emerald City uses for the opposite purpose.",
+        "History": "The field has been here longer than the road and was not consulted about it. Travellers cross it in the afternoon when the pollen is up, and the sensible ones cross at dawn; the party does not know this and nobody warns them.",
+        "Dramatic Function": "Removes the group's strength without a villain and leaves the protagonist alone with three people she cannot carry. It is the only place in the story where the danger is a property of the ground rather than of somebody's intention.",
+        "Notes": "Cut along with its scene in Draft 3, which makes it the demo's case of a location trashed because the portion of story that used it was cut. Its variant relationship to nothing, and its single-scene life, are both accurate rather than convenient."
+      }
+    },
+    {
+      "id": "emerald-city",
+      "fields": {
+        "name": "The Emerald City",
+        "one_sentence": "A green city of gates and domes, seen through spectacles that are locked onto your face at the door.",
+        "mood": "manufactured awe",
+        "dramatic_function": "The false home — the most beautiful place in the story, and the one that is least real",
+        "world": "oz"
+      },
+      "sections": {
+        "Description": "Walls and towers of green stone, a gate of green glass, streets of green marble. Everything is the same green, which after an hour is less beautiful than it was at the gate. There is a throne room high in the centre of it that nobody is admitted to.",
+        "Atmosphere": "Immaculate and airless. Nobody is working. The citizens are proud of a city that produces nothing they can name, and they do not like being asked what it produces.",
+        "Image System": "Green on everything — green light, green cloth, green faces through green lenses. The glasses are the key image: the city's colour is a property of the spectacles, and the story says so at the door.",
+        "History": "Built to be impressive. The throne room was furnished by someone who had never been seen in it. The city's entire administration is one man behind a curtain and a Guardian who repeats a speech.",
+        "Dramatic Function": "The story's temptation. It offers Dorothy everything Kansas cannot — comfort, admiration, importance, a place — and her refusal is the moment the value turns from wandering to home.",
+        "Notes": "This location's `one_sentence` and its `Atmosphere` both name the spectacles, because the meta-joke has to be visible before the curtain is pulled or the reveal reads as a cheat."
+      }
+    },
+    {
+      "id": "the-witchs-castle",
+      "fields": {
+        "name": "The Witch's Castle",
+        "one_sentence": "A black rock fortress in the West, where the Witch keeps what she has taken.",
+        "mood": "cold stone and patient cruelty",
+        "dramatic_function": "The place the protagonist cannot leave — the story's one true prison",
+        "world": "oz"
+      },
+      "sections": {
+        "Description": "A fortress of black rock built into a hillside. One tower, one courtyard, one room with a chair in it and a table for the bucket. The corridors are narrow and the doors are iron and there is no window that opens.",
+        "Atmosphere": "Cold, dry and quiet. Nothing in the castle has been cleaned recently and nothing in it is broken. The Witch does not shout; she waits, and the waiting is the atmosphere.",
+        "Image System": "Iron, stone and one bucket of water that nobody looks at twice. Black against the green of everything else in Oz. The shoes are the only bright thing in any scene set here.",
+        "History": "Built to hold what the Witch takes and has held for years. Her sister's death is the only thing that has ever reduced its population. The room with the chair has held many people and none of them left with what they came for.",
+        "Dramatic Function": "The ladder's exile rung, made physical: a place Dorothy cannot walk out of. It is the only location in the story where the protagonist has no agency, which is what makes the next transition a reversal rather than a development.",
+        "Notes": "The one location in the story without welcome in it. Oz has been hospitable until now, and the castle is where the country stops pretending."
+      }
+    },
+    {
+      "id": "emerald-city-after",
+      "fields": {
+        "name": "The Emerald City, after the Wizard",
+        "one_sentence": "The same green city with the green glasses off and the throne room empty.",
+        "mood": "disappointed relief",
+        "dramatic_function": "The transformation of the false home into an ordinary one — what the city is when nobody is performing",
+        "world": "oz",
+        "variant_of": "emerald-city"
+      },
+      "sections": {
+        "Description": "The same streets, without the lenses. The green is ordinary marble in places and paint in others. The throne room holds a throne, a curtain, a megaphone and a great deal of dust. The gate stands open because there is no longer anything to guard.",
+        "Atmosphere": "Quieter and better. The citizens are embarrassed and then, gradually, relieved. Nobody has to be impressed any more, and the city becomes somewhere people could live rather than somewhere they visit.",
+        "Image System": "The glasses held in the hand instead of worn. Paint seen from close. Dust in a shaft of light where the throne was. The same shapes as the base location, minus the gloss.",
+        "History": "The city did not change. The Wizard left in a balloon, or rather failed to, and the curtain stayed open. What changed is that the spectacle stopped being maintained, which turned out to cost nothing anybody missed.",
+        "Dramatic Function": "The demo's one `location.variant_of`, and it is a transformation with a cause rather than a change of time of day: the same place after an event that altered what it is. It carries the humbug subplot's climax, so the variant is not a decoration but the setting of the story's most important reversal.",
+        "Notes": "This is the instance that has to justify the `variant_of` feature. It is a different entity because the city after the reveal is a different dramatic place — the awe is gone, and awe was the location."
+      }
+    }
+  ]
+}

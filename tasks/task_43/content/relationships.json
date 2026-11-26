@@ -1,0 +1,416 @@
+{
+  "_note": "Twelve relationships. `characters` is exactly two slugs. `perspectives` is keyed by character slug and is where the demo shows divergent POV — the same bond read differently from each side. A `secret: true` perspective is the field the demo uses twice (the Wizard's and the Witch's). `scenes` is a plain list in extra, NOT a relation, so it needs no ordering. `history` is a field; `Nature`/`Tension`/`Perspectives`/`Scenes to Write` are sections.",
+  "relationships": [
+    {
+      "id": "dorothy-aunt-em",
+      "fields": {
+        "name": "Dorothy & Aunt Em",
+        "characters": [
+          "dorothy",
+          "aunt-em"
+        ],
+        "status": "active",
+        "history": "Raised by Em since she was small. They have never had the argument the story is about, and the story never gives them one.",
+        "perspectives": {
+          "dorothy": {
+            "label": "Aunt Em",
+            "feeling": "Loves her and reads her silence as not being wanted",
+            "type": "family",
+            "strength": 0.7
+          },
+          "aunt-em": {
+            "label": "The child",
+            "feeling": "Would give the farm up for her and cannot say so, so she says get out of trouble instead",
+            "type": "family",
+            "strength": 0.9
+          }
+        }
+      },
+      "sections": {
+        "Nature": "Guardian and child, in a house that is failing and does not discuss it. The bond is not in doubt and neither of them says so. Everything affectionate between them is routed through instructions about the dog, the washing or the cellar.",
+        "Tension": "Dorothy wants to be told she is wanted here; Em wants to be told the child is all right. Neither can say either thing, so each hears the other's silence as the opposite of what it is. This is the misunderstanding the whole story happens inside and it is never cleared up.",
+        "Perspectives": "Dorothy reads Em as tired of her. Em reads Dorothy as restless in a way that is her own fault as a guardian. Both readings are wrong and both are reasonable, which is what makes the final scene land without a conversation.",
+        "Scenes to Write": "Nothing. The relationship is deliberately not dramatised a second time: it is stated in the first scene and paid off in the last, and a scene in between would explain it.",
+        "Notes": "The demo's case of a relationship with a large asymmetry in strength, 0.7 against 0.9, and no conflict anywhere in the type on either side. The love between them is not in question; only the communication is, and neither of them ever fixes it.",
+        "History": "Em took her in as a baby and has raised her on a farm that has been failing for years. The mortgage is four months behind and Em has not told her. Nothing between them has ever been said outright, which is why the story can end without a conversation."
+      }
+    },
+    {
+      "id": "dorothy-scarecrow",
+      "fields": {
+        "name": "Dorothy & the Scarecrow",
+        "characters": [
+          "dorothy",
+          "scarecrow"
+        ],
+        "status": "resolved",
+        "history": "Met on the road at the start of Act II. He is the first companion and the one who explains the others to her.",
+        "perspectives": {
+          "dorothy": {
+            "label": "The Scarecrow",
+            "feeling": "Trusts him more than the others because he never once asks her to be brave",
+            "type": "ally",
+            "strength": 0.8
+          },
+          "scarecrow": {
+            "label": "Dorothy",
+            "feeling": "Would follow her anywhere and believes this proves he has no brain",
+            "type": "ally",
+            "strength": 0.9
+          }
+        }
+      },
+      "sections": {
+        "Nature": "The first friendship of the story and the least complicated. He offers her company without asking for anything, which nobody else in Oz does, and she accepts it in the same scene she meets him.",
+        "Tension": "None between them. The tension is entirely inside the Scarecrow, who interprets his own loyalty as evidence of the deficiency he claims. Dorothy's patience with this is what the relationship is made of.",
+        "Perspectives": "Dorothy sees a friend who is clever and says he isn't. The Scarecrow sees a girl worth following and does not notice that following her is a decision. Both are affectionate and neither is quite accurate.",
+        "Scenes to Write": "None outstanding. Their farewell in the last scene carries the whole friendship, and a road scene between them would only repeat it. If one were written it would have to test whether his loyalty is a choice or a reflex, which the story deliberately leaves alone.",
+        "Notes": "The demo's cleanest ally relationship: symmetric in type, near-symmetric in strength, no secret flag on either side, and resolved rather than active. It is the baseline every asymmetric pair in the graph is read against.",
+        "History": "They meet in a wheat field at the start of Act II and he joins her within a page. He is the first person in Oz to offer her company without asking for anything, and the friendship never has a crisis in it. It ends with him telling her she will not come back."
+      }
+    },
+    {
+      "id": "tin-man-queen-of-the-field-mice",
+      "fields": {
+        "name": "The Tin Man & the Queen of the Field Mice",
+        "characters": [
+          "tin-man",
+          "queen-of-the-field-mice"
+        ],
+        "status": "resolved",
+        "history": "She owes him her life and says so in those words. He does not remember saving her, which she finds either generous or unbearable and the story does not say which.",
+        "perspectives": {
+          "tin-man": {
+            "label": "The Queen",
+            "feeling": "Fond of her in a general way and cannot place where they met",
+            "type": "ally",
+            "strength": 0.3
+          },
+          "queen-of-the-field-mice": {
+            "label": "The Tin Man",
+            "feeling": "Owes him everything and will repay it in front of witnesses",
+            "type": "ally",
+            "strength": 0.95
+          }
+        }
+      },
+      "sections": {
+        "Nature": "A debt owed by a queen to a man of tin who does not know he is owed it. She commands her subjects absolutely and has placed all of them at his disposal, which is the largest gesture in the story made by the smallest character.",
+        "Tension": "The asymmetry is the tension. She has built an obligation he never accepted, and the repayment she has planned for is one he cannot recognise as a repayment. It never becomes a quarrel, which makes it stranger.",
+        "Perspectives": "The Queen reads the whole relationship as a debt. The Tin Man reads it as an acquaintance he is pleased to have. Neither is wrong and the difference is 0.65 points of `strength`, the widest gap in the demo.",
+        "Scenes to Write": "The rescue itself, which happens off screen and is referred to three times. It is deliberately never shown so that the audience has to take the Queen's word for a debt the Tin Man cannot confirm. Writing it would settle an asymmetry the demo needs to stay open.",
+        "Notes": "The demo's extreme-asymmetry case, and the relationship the Tin Man's `changes` entry in the melting beat sheet refers to. Odd on purpose: a Cameo character holding the strongest feeling in the graph.",
+        "History": "He saved her life at some point before the story and does not remember it. She has never forgotten, has placed her entire colony at his disposal, and repeats the debt to anyone who will listen. He accepts the assistance without understanding what it costs her."
+      }
+    },
+    {
+      "id": "dorothy-the-wizard",
+      "fields": {
+        "name": "Dorothy & the Wizard",
+        "characters": [
+          "dorothy",
+          "the-wizard"
+        ],
+        "status": "resolved",
+        "history": "She arrives believing he is the answer and leaves knowing he is a man from Omaha. He is the only character in the story who tells her the truth when asked directly.",
+        "perspectives": {
+          "dorothy": {
+            "label": "The Wizard",
+            "feeling": "Angry for about a minute and then not, which surprises her more than the fraud did",
+            "type": "mentor",
+            "strength": 0.4
+          },
+          "the-wizard": {
+            "label": "The girl who came back",
+            "feeling": "Has been waiting thirty years for somebody to survive his errands",
+            "type": "mentor",
+            "strength": 0.6,
+            "secret": true
+          }
+        }
+      },
+      "sections": {
+        "Nature": "A false mentor and a girl who needs one. He withholds, sets a lethal task, is exposed, and then gives her nothing — and her regard for him survives all of it, which is the relationship's whole interest.",
+        "Tension": "The tension is that he is not what she was promised and turns out to be something she can still use. He never apologises, and the story never asks him to, which is what keeps the humbug plot open at the end.",
+        "Perspectives": "Dorothy's view moves from reverence to anger to a mild, tired tolerance. His view is secret and was secret for thirty years: he is fond of her in a way he cannot admit without admitting the fraud, so the fondness is filed under `secret` rather than stated.",
+        "Scenes to Write": "None. The audience, the curtain and the balloon are the three movements of this relationship and all three are written. A fourth scene would have to show him apologising, and the story's position is that he never does.",
+        "Notes": "The demo's first `secret: true` perspective, and the mentor type used for a fraud. The asymmetry in `strength` runs the opposite way to the field mice: the one with less power cares less, on the surface.",
+        "History": "She arrives in the city believing he is the answer, is given a task instead of a wish, completes the task, and is told there is nothing for her. The arc runs from reverence to anger to a tired tolerance in the space of three scenes."
+      }
+    },
+    {
+      "id": "the-wizard-wicked-witch-of-the-west",
+      "fields": {
+        "name": "The Wizard & the Wicked Witch of the West",
+        "characters": [
+          "the-wizard",
+          "wicked-witch-of-the-west"
+        ],
+        "status": "complex",
+        "history": "Thirty years of a wizard who cannot reach her and a witch who has never needed reaching. He has sent other people after her and none of them came back, which he knew when he sent them.",
+        "perspectives": {
+          "the-wizard": {
+            "label": "The Witch",
+            "feeling": "Afraid of her in a way he has never had to justify to anyone",
+            "type": "enemy",
+            "strength": -0.7,
+            "secret": true
+          },
+          "wicked-witch-of-the-west": {
+            "label": "The Wizard",
+            "feeling": "Regards him as a noise she has not bothered to locate",
+            "type": "enemy",
+            "strength": -0.4
+          }
+        }
+      },
+      "sections": {
+        "Nature": "The story's only enemy relationship, and it is one-sided: he is afraid of her and she is not interested in him. The whole second act runs on his fear being mistaken for authority.",
+        "Tension": "The tension is that his fear is secret and his orders are public. He sends four people to do a thing he would not dare, and the story never lets him say why, so the audience works it out from the `secret` flag rather than from a speech.",
+        "Perspectives": "He sees an enemy. She sees weather. The `strength` values differ by 0.3 in the same direction, which is the demo's case of two negative perspectives that do not agree about how much the bond matters.",
+        "Scenes to Write": "None. They never share a scene and never will, which is what makes their relationship worth recording at all. Everything between them is conducted through other people, and a scene together would replace thirty years of avoidance with a conversation that neither of them is capable of having.",
+        "Notes": "The demo's negative-strength case and its second secret flag. Also the case of a relationship where neither party is ever on stage with the other at any point, which is why it is recorded as a relationship rather than left in the character notes.",
+        "History": "Thirty years of a wizard who cannot reach her and a witch who has never needed reaching. He has sent other people after her and none came back, which he knew when he sent them. They never meet in the script and never will."
+      }
+    },
+    {
+      "id": "wicked-witch-of-the-west-dorothy",
+      "fields": {
+        "name": "The Wicked Witch of the West & Dorothy",
+        "characters": [
+          "wicked-witch-of-the-west",
+          "dorothy"
+        ],
+        "status": "resolved",
+        "history": "Begins with the death of the Witch's sister and ends with the Witch's own, which the girl causes without intending to either time.",
+        "perspectives": {
+          "wicked-witch-of-the-west": {
+            "label": "The girl",
+            "feeling": "Grieves a sister and cannot get past the fact that it was an accident",
+            "type": "enemy",
+            "strength": -0.9
+          },
+          "dorothy": {
+            "label": "The Witch",
+            "feeling": "Frightened, then sorry, then frightened of being sorry",
+            "type": "enemy",
+            "strength": -0.5
+          }
+        }
+      },
+      "sections": {
+        "Nature": "An antagonist who is owed something and a protagonist who owes it by accident. Both deaths in the story are hers and neither is a victory, which is the relationship's argument.",
+        "Tension": "The Witch's grievance is legitimate and the girl's guilt is real, and neither of them can be resolved by the story's end because one of them is a hat. The tension is left standing on purpose.",
+        "Perspectives": "She grieves and wants the shoes; the girl is frightened and then sorry. The `strength` gap of 0.4 is the demo's case of an enemy relationship where the antagonism is not mutual in intensity — she hates harder than she is hated.",
+        "Scenes to Write": "None. They share two scenes, both written, and the second is where the story's conscience lives. Any further scene would have to resolve the grievance, and the story's whole argument is that it cannot be resolved by anybody still alive.",
+        "Notes": "The demo's strongest negative bond and its clearest case of an antagonist whose own notes record that she is not wrong. The status is resolved only because one party stops existing, which the field records without pretending anything was settled between them.",
+        "History": "It begins with the death of the Witch's sister under a falling house and ends with the Witch's own death by water. Neither killing is intended. The Witch's grievance is legitimate and the story does not resolve it, because by the end one party is a hat."
+      }
+    },
+    {
+      "id": "scarecrow-tin-man",
+      "fields": {
+        "name": "The Scarecrow & the Tin Man",
+        "characters": [
+          "scarecrow",
+          "tin-man"
+        ],
+        "status": "active",
+        "history": "Met on the road within a scene of each other. Their disagreement about which of them is worse off has been running ever since and has settled nothing.",
+        "perspectives": {
+          "scarecrow": {
+            "label": "The Tin Man",
+            "feeling": "Enjoys the argument and would be sorry to win it",
+            "type": "ally",
+            "strength": 0.8
+          },
+          "tin-man": {
+            "label": "The Scarecrow",
+            "feeling": "The only person who has ever taken his trouble seriously enough to argue about it",
+            "type": "ally",
+            "strength": 0.85
+          }
+        }
+      },
+      "sections": {
+        "Nature": "The story's comic engine. Two characters with the same complaint in different materials, who have made a friendship out of comparing it. Neither is ever persuaded and neither wants to be.",
+        "Tension": "There is no conflict in the relationship and that is its function. The tension is the argument itself, which is affectionate, endless and structurally useful: it fills the road without advancing or delaying anything.",
+        "Perspectives": "Near-symmetric, both positive, both high. It is the demo's control case — a relationship with no asymmetry, no secret and no negative charge, so the graph has something ordinary to be measured against.",
+        "Scenes to Write": "None. The argument appears in the orchard scene and is referred to twice afterwards, which is the right dosage for a running joke. More of it would start to compete with the plots it is meant to sit underneath.",
+        "Notes": "The demo's symmetric-ally control. Its status stays active at the end while the plot that introduced them has resolved, because the argument does not stop when the story does. Nothing about this pair is a problem, which is its purpose.",
+        "History": "They meet within a scene of each other on the road and begin arguing immediately about which of them is worse off. Neither has ever won and neither wants to. The argument is the friendship and it outlasts the plot that introduced them."
+      }
+    },
+    {
+      "id": "dorothy-glinda",
+      "fields": {
+        "name": "Dorothy & Glinda",
+        "characters": [
+          "dorothy",
+          "glinda"
+        ],
+        "status": "resolved",
+        "history": "Glinda meets her in the first act, tells her the shoes are powerful, declines to say how, and does not appear again until the last scene.",
+        "perspectives": {
+          "dorothy": {
+            "label": "Glinda",
+            "feeling": "Grateful, and beginning to wonder why she was not told",
+            "type": "mentor",
+            "strength": 0.5
+          },
+          "glinda": {
+            "label": "The girl",
+            "feeling": "Regards the whole journey as the answer and the shoes as the excuse",
+            "type": "mentor",
+            "strength": 0.7
+          }
+        }
+      },
+      "sections": {
+        "Nature": "A mentor who withholds the answer and calls the withholding a lesson. She is present for two scenes out of fifteen and is the single most consequential character in the story after the protagonist.",
+        "Tension": "The tension is entirely retrospective. Nothing in either scene she appears in is hostile, and after the last scene the audience has to decide whether she was wise or whether she enjoyed watching. The story does not answer.",
+        "Perspectives": "Dorothy's gratitude is qualified by the end. Glinda's is untroubled: she regards the journey as the point, and the demo's Notes for her character record that this is arguable rather than wise.",
+        "Scenes to Write": "None. Her two scenes are the first and the last, and the fourteen-scene gap between them is the relationship. A middle appearance would destroy the only thing it has to say, which is that help was available and withheld.",
+        "Notes": "The demo's case of a mentor relationship where the withholding is the drama. `strength` is moderate on both sides, which is the point: she is not warm, and the story does not pretend she is.",
+        "History": "Glinda meets her in the first act, tells her the shoes are powerful, declines to say how, and does not appear again for thirteen scenes. She returns in the last scene to explain what she could have explained on the first day, and calls the delay a lesson."
+      }
+    },
+    {
+      "id": "dorothy-toto",
+      "fields": {
+        "name": "Dorothy & Toto",
+        "characters": [
+          "dorothy",
+          "toto"
+        ],
+        "status": "active",
+        "history": "He has been with her since before the story and is the only relationship in it that is never explained, tested or changed.",
+        "perspectives": {
+          "dorothy": {
+            "label": "Toto",
+            "feeling": "The one thing she would not leave behind, which she demonstrates before she can say it",
+            "type": "family",
+            "strength": 1.0
+          },
+          "toto": {
+            "label": "Dorothy",
+            "feeling": "Attached, uncomplicated, and entirely uninterested in the plot",
+            "type": "family",
+            "strength": 1.0
+          }
+        }
+      },
+      "sections": {
+        "Nature": "A girl and a dog. He is present or nearby in eleven of the fifteen scenes and drives nothing. His whole narrative function is to be the thing she will not give up, and he performs it once, at the balloon.",
+        "Tension": "None, and the demo needs one relationship with none. He is also the only character who never wants anything, which makes him the control for the whole cast: every other character is defined by a want and he is defined by not having one.",
+        "Perspectives": "Symmetric at 1.0 on both sides, the maximum, and the only pair in the demo at the ceiling. The scene where she steps away from the balloon basket to pick him up is the only place the value is spoken aloud without dialogue.",
+        "Scenes to Write": "None. He is written into scenes rather than given any, which is correct for a character who wants nothing. The balloon is his one action and it is better for being the only one, since a second would make him a plot device rather than a presence.",
+        "Notes": "The demo's maximum and symmetric case, and the reason the graph has a top end. A character with no plot, no arc and no objective, who still matters — which is a useful thing for the demo to be able to show.",
+        "History": "He has been with her since before the story begins and is the only relationship in it that is never explained, tested or changed. He is present in eleven of fifteen scenes and speaks in none of them. At the balloon he runs the wrong way and saves her from the wrong ending."
+      }
+    },
+    {
+      "id": "glinda-wicked-witch-of-the-west",
+      "fields": {
+        "name": "Glinda & the Wicked Witch of the West",
+        "characters": [
+          "glinda",
+          "wicked-witch-of-the-west"
+        ],
+        "status": "complex",
+        "history": "Two witches who have divided a country between them and have not spoken in years. Their sisterhood is referred to once and never explained.",
+        "perspectives": {
+          "glinda": {
+            "label": "My sister",
+            "feeling": "Does not mourn her and will not say so in front of the Munchkins",
+            "type": "family",
+            "strength": -0.3
+          },
+          "wicked-witch-of-the-west": {
+            "label": "Glinda",
+            "feeling": "Blames her for the whole arrangement and has stopped expecting an answer",
+            "type": "family",
+            "strength": -0.6
+          }
+        }
+      },
+      "sections": {
+        "Nature": "The story's buried relationship: two sisters on opposite sides of a country, one of whom is killed in the first scene and neither of whom is shown grieving. It exists so the world has a history the story does not explain.",
+        "Tension": "Family and enemy at once, with negative `strength` on both sides — the demo's only case of a `family` type that is not warm. Glinda's restraint in the first scene reads differently once this relationship is known.",
+        "Perspectives": "Glinda's is milder and quieter and is the one the audience never sees enacted. The Witch's is the harder of the two and is directed at the wrong sister, since it is Glinda she blames and Dorothy she pursues.",
+        "Scenes to Write": "The scene where they last spoke, which is deliberately never written. The relationship is more useful as a gap than as a flashback: a scene would explain a division the story only needs the audience to notice, and would have to choose a side, which the script refuses to do.",
+        "Notes": "The demo's case of a family type carrying negative strength, and the relationship that makes Glinda's calm in the first scene ambiguous on a second viewing. Never dramatised, never resolved, and marked complex rather than resolved on purpose.",
+        "History": "Two witches who divided a country between them and have not spoken in years. The sisterhood is named once, in the first scene, by a Munchkin, and never explained. Neither is shown grieving and neither is asked to."
+      }
+    },
+    {
+      "id": "aunt-em-uncle-henry",
+      "fields": {
+        "name": "Aunt Em & Uncle Henry",
+        "characters": [
+          "aunt-em",
+          "uncle-henry"
+        ],
+        "status": "active",
+        "history": "Married a long time, on a farm that is failing, saying almost nothing to each other about either.",
+        "perspectives": {
+          "aunt-em": {
+            "label": "Henry",
+            "feeling": "The only other person who knows how bad it is, which is why they do not discuss it",
+            "type": "family",
+            "strength": 0.8
+          },
+          "uncle-henry": {
+            "label": "Em",
+            "feeling": "Would say something if he could think of anything that would help",
+            "type": "family",
+            "strength": 0.8
+          }
+        }
+      },
+      "sections": {
+        "Nature": "Two people managing a failing farm and a child, in a house with one room in it. They are on stage together for one scene and speak to each other twice.",
+        "Tension": "The tension is the mortgage, which is named once, in the first scene, by Em, and never again. It is the only economic fact in the story and it is what makes Dorothy's restlessness a luxury and Em's flatness a strategy.",
+        "Perspectives": "Symmetric at 0.8 and entirely without conflict. It is the demo's case of a steady relationship with no drama in it at all, which the graph needs in order not to look like every bond is a problem.",
+        "Scenes to Write": "None. They are a background pair and the story is careful not to give them a story of their own, because their function is to be the ordinary life Dorothy is trying to get back to. A scene of theirs would make Kansas interesting, which would break the ending.",
+        "Notes": "The demo's plainest relationship: symmetric, positive, no secret, no conflict, active throughout. Useful precisely because there is nothing to say about it, which the graph needs in order not to look like every bond is a problem.",
+        "History": "Married a long time, on a farm that is failing, saying almost nothing to each other about either. They are on stage together for one scene and exchange two lines. Their marriage is a background fact the story neither tests nor explains."
+      }
+    },
+    {
+      "id": "the-wizard-guardian-of-the-gates",
+      "fields": {
+        "name": "The Wizard & the Guardian of the Gates",
+        "characters": [
+          "the-wizard",
+          "guardian-of-the-gates"
+        ],
+        "status": "active",
+        "history": "The Guardian has worked the gate for years and has never seen the Wizard. He defends a regulation he cannot explain, which he was given by a man he cannot name.",
+        "perspectives": {
+          "guardian-of-the-gates": {
+            "label": "The Wizard",
+            "feeling": "Believes in him completely and has never been given a reason to",
+            "type": "professional",
+            "strength": 0.7
+          },
+          "the-wizard": {
+            "label": "The man at the gate",
+            "feeling": "Grateful that somebody is still doing the spectacles without asking why",
+            "type": "professional",
+            "strength": 0.4,
+            "secret": true
+          }
+        }
+      },
+      "sections": {
+        "Nature": "The fraud's infrastructure in one relationship: a believer and the man he believes in, who has never met him and arranges never to. The spectacles are the relationship's whole content.",
+        "Tension": "The Guardian's faith is total and unexamined and the Wizard's gratitude is secret, because admitting it would require admitting what the Guardian is being grateful for. The gap between 0.7 and 0.4 is the demo's clearest case of belief outrunning its object.",
+        "Perspectives": "One sees a wizard, one sees a useful employee. The `secret` flag is what makes the asymmetry legible: the Wizard's mild fondness is real and can never be shown, so the relationship stays lopsided by design.",
+        "Scenes to Write": "None. They never meet, and the never meeting is the entire content of the relationship. A scene at the gate with the Wizard present would answer the only question the Guardian's faith depends on, which is whether there is anybody behind the curtain at all.",
+        "Notes": "The demo's third secret flag and its professional type. It is also the case of a relationship between two characters who never share a scene, alongside the Wizard and the Witch, and the only one where the believer is entirely satisfied.",
+        "History": "The Guardian has worked the gate for years and has never seen the Wizard. He enforces a regulation he cannot explain, given to him by a man he cannot name, and defends it with total conviction. The relationship is conducted entirely through a tray of spectacles."
+      }
+    }
+  ]
+}

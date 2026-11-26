@@ -1,0 +1,30 @@
+{
+  "_note": "Project entity. `name` is the display title; the folder slug is `demo` — the name the app ships it under.",
+  "slug": "demo",
+  "fields": {
+    "name": "The Wizard of Oz",
+    "status": "active",
+    "logline": "A Kansas girl is carried into a country of witches and humbugs, and spends the whole journey trying to get home — only to learn the way back was on her feet the entire time.",
+    "structure_type": "Classical",
+    "genre": "Fantasy adventure",
+    "act_count": 3,
+    "setting": "Kansas, 1900, and the country of Oz beyond the cyclone",
+    "spine": "Dorothy wants to go home, and every step she takes toward it carries her further away.",
+    "controlling_idea": "You are not given a home; you choose one, and the power to get there was yours before anyone told you so.",
+    "screenplay_title": "THE WIZARD OF OZ",
+    "credit": "Written by",
+    "author": "Demo Project",
+    "contact": "demo@white-words.local",
+    "draft_date": "1900",
+    "draft": "Third Draft"
+  },
+  "sections": {
+    "Premise": "A cyclone lifts a farmhouse out of Kansas and sets it down on a witch. Dorothy, unhurt and far from home, is told the only person who can send her back is the Wizard of Oz. She walks to him, gathering three companions who each want a part of themselves they believe they are missing.",
+    "Spine": "Dorothy's want is single and physical: get back to Kansas. It survives every temptation the story offers — the beauty of Oz, the comfort of the Emerald City, the promise of the Wizard — and it is what makes her refuse Glinda's first advice and walk anyway. The answer arrives only when she stops looking for someone else to carry her.",
+    "Controlling Idea": "The story argues that a home is not a place you are delivered to but a thing you choose, and that the qualities people travel to find in a Wizard were always in the travellers. It is proved twice: the companions discover they had what they sought, and Dorothy discovers the shoes could have taken her home the day she landed.",
+    "Value Arc": "The main plot runs the ladder of home, from home through wandering and exile to its negation of negation — a home that is not yours. Oz is that false home: beautiful, welcoming, and not Dorothy's. The story ends on the positive pole only after she names Kansas herself.",
+    "Structure": "Classical three acts on a road: separation, the gathering of allies and the false promise, then the stripping of the promised answer and its replacement with the true one. Six sequences, two per act. The midpoint is the audience with the Wizard, which sets a task instead of granting a wish.",
+    "Genre": "Fantasy adventure with a comic humbug at its centre. The fantastic machinery exists to test a plain domestic want, which is why the Kansas frame is not decoration: it is the thing being argued for, and it is deliberately unglamorous.",
+    "Notes": "Built as the shipped demo for White Words. It is deliberately public-domain, dialogue-heavy and structurally regular, so a new reader spends their attention on the application rather than on the plot."
+  }
+}

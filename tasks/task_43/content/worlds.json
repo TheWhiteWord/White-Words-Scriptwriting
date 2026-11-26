@@ -1,0 +1,75 @@
+{
+  "_note": "Two worlds. `variant_of` is left empty on both, deliberately — see 04-decisions.md §8. The Kansas-is-the-dream-of-Oz reading is recorded as prose in oz's History section, not as a field, because the field would then be displayed as a structural claim.",
+
+  "worlds": [
+    {
+      "id": "kansas",
+      "fields": {
+        "name": "Kansas",
+        "one_sentence": "Grey farmland under a sky that is always about to do something.",
+        "rules": [
+          "Nothing comes free; the work is the day.",
+          "Weather is the only power that cannot be argued with.",
+          "A neighbour's help is owed and repaid, never hired."
+        ],
+        "period": "1900, the Kansas prairie",
+        "values": [
+          "work over talk",
+          "thrift",
+          "endurance without complaint",
+          "family kept close because distance cannot be afforded"
+        ],
+        "power": [
+          "The bank holds the mortgage on the farm and does not negotiate.",
+          "Aunt Em runs the household; Uncle Henry runs the land.",
+          "Nobody in the county has the money to overrule either."
+        ]
+      },
+      "sections": {
+        "Description": "A farmhouse, a barn, a well, and flat land in every direction. The house is small and clean. Nothing has been thrown away that might be used again. The horizon is the same distance from every side of it.",
+        "History": "The farm is mortgaged and the mortgage is behind. This is not a crisis in the story so much as a condition the story begins inside. Nobody explains it; it is simply why Aunt Em's face is set and why a piglet is more interesting than it should be.",
+        "Livelihood": "Wheat and pigs, worked by three people and a hired hand who is paid in food. The farm produces enough to live and not enough to leave.",
+        "Power": "The bank owns the debt and therefore the decision. Weather owns the crop. Aunt Em owns the house. Dorothy owns nothing, which is why the cyclone takes everything she has in one motion.",
+        "Rituals": "Supper at dusk. The counting of the piglets. Aunt Em holding a hand to her forehead when she is frightened rather than saying so. The dog on the bed, which is forbidden and permitted.",
+        "Values": "Endurance is the virtue. Complaint is a luxury of people who can afford to move. Being wanted is not something anybody in this world says out loud, and that restraint is what makes Dorothy's last line land.",
+        "Conflict": "The conflict is with the land and the debt, and neither can be defeated. Dorothy's private conflict is that she cannot name what is missing, only that she wants to be somewhere else.",
+        "Notes": "Kansas is deliberately the dullest place in the demo. Its job is to be the thing the whole story argues is worth returning to, so it is written without a single flourish."
+      }
+    },
+    {
+      "id": "oz",
+      "fields": {
+        "name": "Oz",
+        "one_sentence": "A country of four quarters, ruled by whoever is currently wearing the right object.",
+        "rules": [
+          "The silver shoes carry whoever wears them, and no one may take them from a living wearer.",
+          "The Golden Cap commands the winged monkeys three times, and no more.",
+          "A witch can be destroyed by water, and cannot be destroyed by anything else.",
+          "Nothing in Oz is quite the size it appears."
+        ],
+        "period": "The same year as Kansas, at the other end of a cyclone",
+        "values": [
+          "hospitality offered before questions",
+          "the appearance of greatness",
+          "bravery rewarded regardless of its cause",
+          "a promise treated as binding even when the one who made it is a fraud"
+        ],
+        "power": [
+          "East and West were ruled by witches who took what they wanted.",
+          "The Emerald City is ruled by a Wizard nobody has seen.",
+          "Glinda rules the South and is the only power that tells the truth."
+        ]
+      },
+      "sections": {
+        "Description": "Four quarters arranged around a green city. The Munchkins are small and numerous; the Winkies are tall and were enslaved; the South is wealthy and quiet. Everything is brightly coloured, which the story uses as a warning as often as a pleasure.",
+        "History": "Two witches held the East and the West. One is dead when the story begins, killed by a farmhouse that fell out of the sky, and her people are grateful. The other is alive and wants the shoes.",
+        "Livelihood": "Farming in the country, manufacture in the city. The Emerald City produces nothing visible and is entirely sustained by the belief that the Wizard is inside it.",
+        "Power": "Power in Oz is an object and a reputation. The shoes, the cap, the throne, the curtain. When the object is removed or the curtain is pulled, the power evaporates — which is the story's whole argument about authority.",
+        "Rituals": "The Munchkins dance when a tyrant dies. The Emerald City requires green spectacles at the gate, locked on, supposedly for the visitor's protection. The Guardian of the Gates repeats a speech he has clearly given many times.",
+        "Values": "Oz values the performance of greatness over its substance, and is not punished for it — the humbug is forgiven. That forgiveness is the story's most interesting moral position and the reason the Wizard survives his exposure.",
+        "Conflict": "The visible conflict is over the shoes. The real conflict is that everyone Dorothy meets is missing something they already have, and the country's whole economy of wishes depends on them not noticing.",
+        "Notes": "The reading that Oz is a dream of Kansas is recorded here rather than as a `variant_of` field: it is an interpretation of the text, not a structural fact, and the app would display a field as though it were one."
+      }
+    }
+  ]
+}

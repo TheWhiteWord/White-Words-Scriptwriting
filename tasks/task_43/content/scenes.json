@@ -1,0 +1,1119 @@
+{
+  "_note": "Fifteen scenes; fourteen live in the final state. `number` is the position in its sequence and is NOT a field — the generator passes `order`. `plot_roles` is written at create time (relations_for_insert reads the merged fm). `forced_heading` is exclusive with int_ext/place/time_of_day. Content is Fountain BODY ONLY — never a heading line, since the heading is composed from the fields. Scene 6 (the poppy field) is the one cut in Draft 3.",
+  "scenes": [
+    {
+      "id": "the-farm-at-dusk",
+      "fields": {
+        "title": "The farm at dusk",
+        "sequence_id": "seq-kansas",
+        "order": 1,
+        "status": "locked",
+        "one_sentence": "Dorothy wants to be somewhere else and cannot say where, and Aunt Em tells her to stay out of trouble.",
+        "scene_objective": "Dorothy wants Aunt Em to hear that she is unhappy here.",
+        "location": "gale-farm",
+        "int_ext": "INT.",
+        "place": "The kitchen",
+        "time_of_day": "DUSK",
+        "characters": [
+          "dorothy",
+          "aunt-em",
+          "toto"
+        ],
+        "dramatic_role": "plot_role",
+        "plot_roles": [
+          {
+            "plot": "there-s-no-place-like-home",
+            "role": "setup",
+            "description": "Establishes the place Dorothy will spend the story trying to reach, in terms that make reaching it a choice."
+          }
+        ]
+      },
+      "sections": {
+        "Content": "The kitchen is small and clean and everything in it has been used too long.\n\nAUNT EM stands at the stove with her back to the room. DOROTHY sits at the table with a dog in her lap.\n\nDOROTHY\nAunt Em.\n\nAUNT EM\nMm.\n\nDOROTHY\nDo you ever think about being somewhere else.\n\nAUNT EM\nI think about the mortgage.\n\nDOROTHY\nI mean somewhere that isn't here.\n\nAunt Em turns. Her face is not unkind. It is the face of a woman who has been asked this before by somebody else.\n\nAUNT EM\nWhat's wrong with here.\n\nDOROTHY\nNothing's wrong with it.\n\nAUNT EM\nThen what.\n\nDOROTHY\nI don't know. That's what I keep telling you.\n\nAUNT EM\nToto's on the table.\n\nDOROTHY\nHe's not doing anything.\n\nAUNT EM\nHe's on the table.\n\nDorothy puts the dog down. He gets straight back up.\n\nAUNT EM\nThere's a storm coming. Get the washing in and stay out of the cellar unless I call you.\n\nDOROTHY\nWhy wouldn't I go in the cellar.\n\nAUNT EM\nBecause I said stay out of it.\n\nShe goes back to the stove. Dorothy watches her back for a moment, then takes the dog and goes out.\n\nAUNT EM\n(to herself)\nSomewhere else.",
+        "Objective": "Dorothy's objective is to be heard. She is not asking to leave; she is asking to be told that wanting to leave is not a fault. Aunt Em's objective is to end a conversation she cannot afford to have, and she wins it by naming the dog.",
+        "Conflict": "The conflict is entirely in what is not said. Aunt Em knows the farm is failing and that the child is unhappy, and saying either out loud would make both worse. Dorothy reads the flatness as not being wanted, which is the misunderstanding the whole story happens inside.",
+        "Beats": "1. Dorothy opens obliquely and Aunt Em answers literally. 2. Dorothy asks the real question and is asked what is wrong. 3. Dorothy cannot name it, which is the scene's honest centre. 4. Aunt Em deflects to the dog and then to the storm. 5. Dorothy is dismissed, and the dismissal is affectionate.",
+        "Value Turn": "Home begins at the positive pole, held without being noticed. The scene does not turn the value; it establishes the rung the other fourteen scenes will be measured against, which is why it can be this quiet.",
+        "Dramatic Function": "Setup for the main plot. It gives the story a place worth returning to and a girl whose want is real but unnameable, which is the only configuration that makes the ending mean anything.",
+        "Production": "One interior, two actors, dusk light through one window. The whole scene is played at a table and a stove, and the only movement is the dog. Cheap and quiet by design: it has to feel like a place a crew could shoot in an afternoon.",
+        "Notes": "The faint message under 'somewhere else' is deliberate and its meaning is never resolved. It is the story's one unearned grace note and it belongs to Aunt Em, not to Dorothy."
+      }
+    },
+    {
+      "id": "the-house-lifts",
+      "fields": {
+        "title": "The house lifts",
+        "sequence_id": "seq-kansas",
+        "order": 2,
+        "status": "drafted",
+        "one_sentence": "The house lifts with Dorothy inside it and travels through the storm.",
+        "scene_objective": "Dorothy wants to get to the cellar and cannot.",
+        "forced_heading": ".THE CYCLONE",
+        "no_cast": true,
+        "characters": [],
+        "dramatic_role": "transition",
+        "plot_roles": [],
+        "location": "the-cyclone",
+        "value_turns": [
+          {
+            "plot": "there-s-no-place-like-home",
+            "value": "home",
+            "from": "home",
+            "to": "wandering",
+            "effects": [
+              {
+                "character": "dorothy",
+                "levels": [
+                  {
+                    "conflict_level": "extra-personal",
+                    "effect": "The storm takes her out of the only home she has and offers her no action to take against it."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sections": {
+        "Content": "The house is empty and the house is moving.\n\nThrough the window there is no horizon. There is a wall of grey going up and around, and pieces of things going past it — a fence, a shed, a hen, a length of somebody's roof — all turning slowly in the same direction.\n\nThe floor tilts. A chair crosses the room without being pushed. A bucket rolls and stops against the wall and rolls again.\n\nThe house turns. The same fence goes past a second time.\n\nThe noise is steady now, which is worse than when it was not. The stove is still warm. A cup is still on the table, upright, because nothing has touched it yet.\n\nThe house turns. The fence goes past a third time.\n\nThen the light through the window changes from grey to something with colour in it, and holds.",
+        "Objective": "Dorothy's objective is to reach the cellar, and the scene denies it by making the house itself the thing that is moving. Her objective and her means of pursuing it are both taken away in the first line.",
+        "Conflict": "The conflict is between a person and weather, which is the only conflict in the story that cannot be argued with, negotiated with or understood. The elements have no interest in her and that is the point.",
+        "Beats": "1. The house is already airborne and already empty. 2. Debris passes and the fence repeats, establishing the storm's turning. 3. The room's objects begin to move. 4. The repetition of the fence makes the duration real. 5. The light changes colour, which is the transition itself.",
+        "Value Turn": "Home moves from the positive pole to wandering in a single cut, with no decision taken by anybody. The turn is performed by the world rather than by a character, which is why the scene carries a `transition` role and no plot entries.",
+        "Dramatic Function": "The story's purest transition. It exists to move the protagonist between worlds and it deliberately has nobody in it, so the audience watches an empty house with a person somewhere inside — which is a different kind of fear from watching her.",
+        "Production": "One interior, one actor, no dialogue. The whole scene is practical effects and sound design: a gimballed set, a repeating backdrop, and a fence on a rail going past. Written to be the cheapest spectacular scene in the script.",
+        "Notes": "The story's `forced_heading` case: `.THE CYCLONE` composes from no int/ext, place or time, because it is one continuous movement rather than a location at an hour. It is also the `no_cast` case, and the two are related — the scene has no cast because the house is the character."
+      }
+    },
+    {
+      "id": "the-house-lands",
+      "fields": {
+        "title": "The house lands",
+        "sequence_id": "seq-munchkinland",
+        "order": 1,
+        "status": "locked",
+        "one_sentence": "The house lands on the Witch of the East, and Glinda tells Dorothy who can send her home.",
+        "scene_objective": "Dorothy wants to know where she is and how to get back.",
+        "location": "munchkinland",
+        "int_ext": "EXT.",
+        "place": "The village square",
+        "time_of_day": "DAY",
+        "characters": [
+          "dorothy",
+          "toto",
+          "glinda"
+        ],
+        "dramatic_role": "plot_role",
+        "plot_roles": [
+          {
+            "plot": "there-s-no-place-like-home",
+            "role": "inciting_incident",
+            "description": "Dorothy is given a destination and the means to reach it, which converts being lost into a plot."
+          },
+          {
+            "plot": "the-humbug",
+            "role": "setup",
+            "description": "The country's dependence on a Wizard it has never seen is established as ordinary fact."
+          }
+        ]
+      },
+      "sections": {
+        "Content": "The house sits on its side in the middle of a village square, and a great many very small people are standing around it at a distance, in blue and white, not saying anything.\n\nUnder one corner of the house, two feet in silver shoes stick out.\n\nDOROTHY\nExcuse me.\n\nThey all move back at once.\n\nDOROTHY\nI'm sorry about the house.\n\nGLINDA steps forward out of the crowd. She is tall here and nobody finds that strange.\n\nGLINDA\nIt was not your house and it was not your landing. You are welcome.\n\nDOROTHY\nWhere am I?\n\nGLINDA\nMunchkinland. The East.\n\nDOROTHY\nI need to get to Kansas.\n\nGLINDA\nI assumed. The Wizard can help you with that.\n\nDOROTHY\nThen I'll go to the Wizard.\n\nGLINDA\nThe road is yellow. Follow it.\n\nDorothy looks at the feet under the house.\n\nDOROTHY\nWhat about her.\n\nGLINDA\nShe took what she wanted for a long time. The shoes are yours now; they came with the house.\n\nDOROTHY\nI don't want her shoes.\n\nGLINDA\nWear them anyway. They are powerful and it would be a shame to leave them in a field.\n\nShe fastens them on. They fit.\n\nDOROTHY\nHow are they powerful?\n\nGLINDA\n(is already leaving)\nYou will find out, or you will not.\n\nThe Munchkins begin to sing. Dorothy stands in the shoes, holding the dog, looking at the road.",
+        "Objective": "Dorothy's objective is information: where she is, and how to leave. She gets both, and the scene gives them to her without any effort on her part, which is what makes the rest of the story her responsibility.",
+        "Conflict": "There is no opposition in the scene at all, and that is deliberate. Glinda's mildness is the only pressure: she answers every question exactly and volunteers nothing, and her last line closes a door while sounding helpful.",
+        "Beats": "1. A stranger is surrounded by silence. 2. Apology is met with a welcome she did not earn. 3. The destination is named. 4. The Wizard is offered as the solution. 5. The shoes are given, and the explanation of them is waved away.",
+        "Value Turn": "Wandering, firmly. Home is named and located and put at the far end of a road, which is the first rung the story actually needs to show. The shoes move onto her feet while the ladder's answer is standing in front of her.",
+        "Dramatic Function": "The main plot's inciting incident and the humbug plot's setup, in one scene. It is also where the story gives away its ending: the shoes are powerful and nobody explains how.",
+        "Production": "Exterior village square, daylight, a small crowd of extras. The house is the hero prop and the only set-built element. The blocking is one long move of Dorothy turning a full circle while the crowd backs away from her.",
+        "Notes": "Glinda's line 'you will find out, or you will not' is the story at its most honest. Every subsequent delay is her choice, and the Notes for her character record that this is arguable rather than wise."
+      }
+    },
+    {
+      "id": "the-scarecrow",
+      "fields": {
+        "title": "The Scarecrow",
+        "sequence_id": "seq-the-road",
+        "order": 1,
+        "status": "written",
+        "one_sentence": "Dorothy meets a scarecrow who wants a brain and immediately solves the problem of the fire.",
+        "scene_objective": "Dorothy wants to help a stranger get down from his pole.",
+        "location": "yellow-brick-road",
+        "int_ext": "EXT.",
+        "place": "A wheat field",
+        "time_of_day": "DAY",
+        "characters": [
+          "dorothy",
+          "scarecrow",
+          "toto"
+        ],
+        "dramatic_role": "plot_role",
+        "plot_roles": [
+          {
+            "plot": "a-brain",
+            "role": "inciting_incident",
+            "description": "The Scarecrow states what he believes he lacks and asks to come, which opens his plot."
+          },
+          {
+            "plot": "there-s-no-place-like-home",
+            "role": "complication",
+            "description": "The road acquires a second traveller, which slows the journey and widens the story."
+          }
+        ],
+        "value_turns": [
+          {
+            "plot": "a-brain",
+            "value": "mind",
+            "from": "muddle",
+            "to": "sense",
+            "effects": [
+              {
+                "character": "scarecrow",
+                "levels": [
+                  {
+                    "conflict_level": "inner",
+                    "effect": "He resolves the fire and the broken bridge in the same scene he denies having the capacity to resolve anything."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sections": {
+        "Content": "A SCARECROW is on a pole in a wheat field beside the road. He is not good at his job: the crows are on the fence, watching him, unbothered.\n\nSCARECROW\nGood morning.\n\nDOROTHY\nYou can talk.\n\nSCARECROW\nThat's the only thing I can do. I can't think at all.\n\nDOROTHY\nWho told you that.\n\nSCARECROW\nEveryone. It's the first thing anyone says to a scarecrow.\n\nHe gets down, which takes a while and involves losing an arm.\n\nSCARECROW\nWhere are you going?\n\nDOROTHY\nThe Emerald City. To see the Wizard about getting home.\n\nSCARECROW\nDoes he give out brains?\n\nDOROTHY\nHe might.\n\nSCARECROW\nThen I'll come. If I had a brain I'd have thought of that myself.\n\nThey walk. After a few steps he stops.\n\nSCARECROW\nIf we go that way we'll be walking into the fire.\n\nDOROTHY\nWhat fire.\n\nSCARECROW\nThat one. Ahead. It's been getting bigger since we started.\n\nDOROTHY\nThen we should go around it.\n\nSCARECROW\nI'd have said that if I had a brain.\n\nThey walk around it. Further along the road, a river has taken out the bridge.\n\nSCARECROW\nWe can fell that tree across it. There's a good place to stand and it won't move once it's down.\n\nHe does it. He looks pleased, then remembers.\n\nSCARECROW\nThat's the sort of thing you'd know about if you had a brain.",
+        "Objective": "Dorothy wants to get the stranger down and keep moving. The Scarecrow wants company, and asks for it by naming a deficiency rather than a need, which is how he gets everything in the story.",
+        "Conflict": "The scene's conflict is comic and structural at once: the Scarecrow argues against his own competence in every line while demonstrating it. The real opposition is between what he says about himself and what the road keeps showing.",
+        "Beats": "1. A voice from a pole. 2. The deficiency is announced before it is evidenced. 3. He joins, and explains the joining as a failure of thought. 4. He spots the fire and the bridge. 5. He credits the solutions to an absent brain.",
+        "Value Turn": "Mind enters at sense and the character records himself at foolishness. This is the demo's clearest case of the ladder moving in what a character believes rather than in what happens.",
+        "Dramatic Function": "Opens the Scarecrow's plot and complicates the main one. It is also the story's introduction of the road's method: a companion is met, states his lack, and is immediately proved wrong about it.",
+        "Production": "Exterior wheat field and roadside, daylight. Two actors and one scarecrow appliance designed to come apart safely. The fire is a practical effect seen from a distance and never approached.",
+        "Notes": "The fire and the bridge are the demo's evidence for the Scarecrow's beats. They exist purely to be solved by him so that his claim and his conduct can be seen to disagree."
+      }
+    },
+    {
+      "id": "the-tin-man-and-the-lion",
+      "fields": {
+        "title": "The Tin Man and the Lion",
+        "sequence_id": "seq-the-road",
+        "order": 2,
+        "status": "written",
+        "one_sentence": "An orchard yields a rusted man of tin, and a forest yields a lion who threatens them and then asks to come along.",
+        "scene_objective": "Dorothy wants to help a man who has been standing still for a year, and then to survive the lion.",
+        "location": "yellow-brick-road",
+        "int_ext": "EXT.",
+        "place": "An orchard",
+        "time_of_day": "DAY",
+        "characters": [
+          "dorothy",
+          "scarecrow",
+          "tin-man",
+          "lion",
+          "toto"
+        ],
+        "dramatic_role": "plot_role",
+        "plot_roles": [
+          {
+            "plot": "a-heart",
+            "role": "inciting_incident",
+            "description": "The Tin Man states what he believes he lacks and asks to come, which opens his plot."
+          },
+          {
+            "plot": "a-nerve",
+            "role": "inciting_incident",
+            "description": "The Lion states what he believes he lacks and asks to come, which opens his plot."
+          },
+          {
+            "plot": "a-brain",
+            "role": "complication",
+            "description": "The Scarecrow's argument becomes a three-way disagreement about who is worse off, which the plot has to keep carrying."
+          },
+          {
+            "plot": "there-s-no-place-like-home",
+            "role": "complication",
+            "description": "The travelling party reaches four, and the journey's cost is now shared by everyone."
+          }
+        ],
+        "value_turns": [
+          {
+            "plot": "a-brain",
+            "value": "mind",
+            "from": "sense",
+            "to": "muddle",
+            "effects": [
+              {
+                "character": "scarecrow",
+                "levels": [
+                  {
+                    "conflict_level": "personal",
+                    "effect": "He trades the road's problems for an argument with the Tin Man about which of them is worse off."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "plot": "a-heart",
+            "value": "heart",
+            "from": "numbness",
+            "to": "feeling",
+            "effects": [
+              {
+                "character": "tin-man",
+                "levels": [
+                  {
+                    "conflict_level": "inner",
+                    "effect": "He says his lack of a heart does not trouble him and then admits in the next line that it does."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "plot": "a-nerve",
+            "value": "courage",
+            "from": "bravado",
+            "to": "cowardice",
+            "effects": [
+              {
+                "character": "lion",
+                "levels": [
+                  {
+                    "conflict_level": "inner",
+                    "effect": "The roar costs him one blow on the nose and he drops the performance in front of three strangers."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sections": {
+        "Content": "An orchard. Apples, and a man made of tin standing among them with his arm raised, not moving.\n\nDOROTHY\nAre you all right?\n\nTIN MAN\n(muffled)\nOil. Please. My jaw.\n\nShe finds the can at his feet and oils the joint. He lowers his arm with a sound like a door.\n\nTIN MAN\nA year. Thank you.\n\nSCARECROW\nWhy didn't you oil yourself.\n\nTIN MAN\nI couldn't reach the can. That is the whole of the problem, and I have had a year to consider it.\n\nDOROTHY\nWhat are you doing here?\n\nTIN MAN\nI was going to see a girl. I was cut apart on the way, one piece at a time, and a tinsmith made replacements until there was none of me left.\n\nDOROTHY\nI'm sorry.\n\nTIN MAN\nI have no heart, so it does not trouble me. Except that it does, and I cannot explain that, and I have had a year for that too.\n\nA ROAR. The LION comes out of the trees at a run and stops in front of them, being as large as possible.\n\nLION\nWhich of you is first.\n\nDorothy hits him on the nose.\n\nThe Lion sits down and begins to cry.\n\nLION\nI'm sorry. I'm not brave at all. I'm frightened of everything.\n\nTIN MAN\nEven the girl?\n\nLION\nEspecially the girl. She hit me.\n\nSCARECROW\nWhy did you roar at us?\n\nLION\nI don't know. It's what I do. Then I'm ashamed.\n\nDOROTHY\nWe're going to the Emerald City. The Wizard might help you.\n\nLION\nCould he make me brave?\n\nDOROTHY\nHe might.\n\nLION\nThen I'll come. If I was brave I wouldn't need to, and that's the whole difficulty.",
+        "Objective": "Dorothy wants to help the man in the orchard and then to not be eaten. Both objectives are met by the same act — she oils a jaw and then hits a nose — which is what makes her competence visible without anybody saying she is competent.",
+        "Conflict": "Two conflicts in sequence: a man who cannot ask for help and a beast who can only ask by threatening. The Tin Man's is internal and polite; the Lion's is loud and is over in one blow, and the scene's joke is that the loud one is the easier of the two.",
+        "Beats": "1. A man who cannot move is found. 2. He asks for oil and explains a year of standing. 3. He tells a story of being replaced and denies that it troubles him. 4. A lion threatens and is struck. 5. The lion cries and asks to be made brave.",
+        "Value Turn": "Heart and courage both enter at their characters' claimed negative poles while the scene shows the opposite. Heart's first move is feeling that acts; courage's first move is a threat that collapses into an apology.",
+        "Dramatic Function": "Opens two plots in one scene and complicates a third. It is the story's largest cast before the city, and the only scene where all four companions and Dorothy are on screen together in the first half.",
+        "Production": "Exterior orchard and forest edge, daylight. Four actors, one set with two distinct areas, and a tin costume built for a single slow arm movement. The lion's entrance is the scene's only action beat.",
+        "Notes": "The demo's densest first-half cast list and its clearest case of a scene carrying four plot roles at once, which is what the plots view's role tags are for."
+      }
+    },
+    {
+      "id": "the-poppy-field",
+      "fields": {
+        "title": "The poppy field",
+        "sequence_id": "seq-the-road",
+        "order": 3,
+        "status": "written",
+        "one_sentence": "The road crosses a field of poppies and everyone but the girl and the dog falls asleep in it.",
+        "scene_objective": "The party wants to cross the field before dark.",
+        "location": "poppy-field",
+        "int_ext": "EST.",
+        "place": "The poppy field",
+        "time_of_day": "DAY",
+        "no_cast": true,
+        "characters": [],
+        "dramatic_role": "non-event",
+        "plot_roles": []
+      },
+      "sections": {
+        "Content": "The road goes into a field of poppies and the poppies go on further than the eye can follow.\n\nThe road is still under them. The yellow brick shows through in a line, which is the only thing that says this is a field and not a sea.\n\nThe four of them walk into it.\n\nThen three of them are lying down.\n\nThe Scarecrow goes first, folding at the knees without a sound. The Tin Man sits and then leans and then is still. The Lion walks two more steps and falls forward and does not get up.\n\nThe girl and the dog keep walking.\n\nShe pulls at the Tin Man's arm. He is very heavy and does not move. She pulls at the Lion's paw. Nothing. She stands in the middle of the field with three sleeping friends and a road going out the other side, and the light begins to go.\n\nThe poppies move in the wind. Nothing else does.",
+        "Objective": "The party's objective is to cross, and the field defeats it without malice. The girl's objective becomes to wake them, and she cannot, and the scene ends before she finds out whether she can.",
+        "Conflict": "There is no opposition, no antagonist and no argument. The field is beautiful and it stops them, which is the scene's entire proposition: a place can be a danger by being pleasant.",
+        "Beats": "1. The field begins. 2. The road continues through it, so the way is not lost. 3. They walk in. 4. Three of them lie down, one at a time, without drama. 5. She is alone with them and the light is going.",
+        "Value Turn": "No plot value moves, which is why the scene carries a `non-event` role and no plot entries. Its function is atmospheric and situational: it removes the group's strength and leaves the protagonist with a problem she cannot solve by walking.",
+        "Dramatic Function": "The story's deliberate non-event: a scene that moves no plot and changes the situation anyway. It is also the demo's second `no_cast` case, and the one that proves `no_cast` is not only for empty rooms.",
+        "Production": "Exterior field, daylight into dusk, four actors who spend most of the scene lying down. Practical poppies to the horizon and a visible brick line. The cheapest scene in the script and the one that most depends on the camera staying very still.",
+        "Notes": "This is the scene cut in Draft 3. Its beats, its `non-event` role and its `no_cast` flag are all real in Drafts 1 and 2, so the deletion in the draft history removes a scene that was genuinely written rather than a placeholder."
+      }
+    },
+    {
+      "id": "the-gates",
+      "fields": {
+        "title": "The gates",
+        "sequence_id": "seq-emerald-city",
+        "order": 1,
+        "status": "drafted",
+        "one_sentence": "At the gate of the Emerald City, green spectacles are locked onto their faces.",
+        "scene_objective": "The party wants to be admitted to the city.",
+        "location": "emerald-city",
+        "int_ext": "EXT.",
+        "place": "The city gate",
+        "time_of_day": "DAY",
+        "characters": [
+          "dorothy",
+          "scarecrow",
+          "tin-man",
+          "lion",
+          "guardian-of-the-gates",
+          "toto"
+        ],
+        "dramatic_role": "plot_role",
+        "plot_roles": [
+          {
+            "plot": "the-humbug",
+            "role": "complication",
+            "description": "The city's procedure is a performance with no content, which is the fraud's method shown before the fraud is named."
+          }
+        ],
+        "value_turns": [
+          {
+            "plot": "a-brain",
+            "value": "mind",
+            "from": "muddle",
+            "to": "sense",
+            "effects": [
+              {
+                "character": "scarecrow",
+                "levels": [
+                  {
+                    "conflict_level": "extra-personal",
+                    "effect": "He stops trying to make the regulation make sense and asks the question that has an answer."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "plot": "the-humbug",
+            "value": "belief",
+            "from": "belief",
+            "to": "doubt",
+            "effects": [
+              {
+                "character": "dorothy",
+                "levels": [
+                  {
+                    "conflict_level": "extra-personal",
+                    "effect": "A rule nobody can justify is the first thing in the city that does not behave like a promise."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "plot": "there-s-no-place-like-home",
+            "value": "home",
+            "from": "wandering",
+            "to": "a home that is not yours",
+            "effects": [
+              {
+                "character": "dorothy",
+                "levels": [
+                  {
+                    "conflict_level": "extra-personal",
+                    "effect": "The city has every feature of a home and locks a pair of spectacles onto her face so that she stays a visitor."
+                  },
+                  {
+                    "conflict_level": "personal",
+                    "effect": "The Guardian's welcome is warm and is a procedure, and she is the only one of the five who notices."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sections": {
+        "Content": "A wall of green stone and a gate of green glass, and a great deal of green on the other side of it.\n\nA GUARDIAN stands at the gate with a tray of spectacles.\n\nGUARDIAN\nSpectacles must be worn. City regulation.\n\nDOROTHY\nWhy?\n\nGUARDIAN\nFor your protection.\n\nDOROTHY\nFrom what?\n\nGUARDIAN\n(pause)\nThe city is very bright.\n\nHe fits them. Small locks click at the hinges. Dorothy puts a hand up to take hers off.\n\nGUARDIAN\nThey don't come off.\n\nDOROTHY\nAt all?\n\nGUARDIAN\nThe regulation does not say at all. It says they must be worn, and they don't come off, and I have never been asked what happens if they did.\n\nSCARECROW\nDoes the Wizard see everyone who comes?\n\nGUARDIAN\nNot everyone. He is very busy.\n\nTIN MAN\nIs he busy now?\n\nGUARDIAN\nHe is always busy. That is what busy means.\n\nThe Lion is behind them and does not say anything.\n\nHe steps aside. The gate opens.\n\nGUARDIAN\nEnjoy the city. It is the finest city there is. That is not a regulation, that is my own opinion, and I am allowed one.",
+        "Objective": "The party wants to enter. The Guardian wants to complete a procedure he cannot explain, and his distress at being questioned is the scene's only real pressure.",
+        "Conflict": "The conflict is between a question and a script. Every answer the Guardian gives is correct and empty, and the party's persistence is met with a man retreating into a speech he has given many times.",
+        "Beats": "1. A gate and a tray of spectacles. 2. The rule is stated and defended with nothing. 3. The locks engage, and the possibility of removal is closed. 4. The Wizard's availability is deferred. 5. They are admitted, and the Guardian's opinion is offered as the only true thing said.",
+        "Value Turn": "Belief enters the scene at fraud-shaped ease: a procedure with no content is accepted by everyone in it. The subplot's value is already on the ladder's fourth rung when the plot formally opens, which is the demo showing a value that begins where it will end.",
+        "Dramatic Function": "The humbug plot's first scene and a complication on it rather than a setup, because the fraud is already operating before anybody asks about it. It also demonstrates the Cameo role.",
+        "Production": "Exterior gate, daylight, five actors. The gate is the set. The spectacles are the props that matter and there are five of them, all identical, which is the visual joke.",
+        "Notes": "The Guardian's last speech is the story's thesis disguised as comedy: an opinion about a city, offered by a man who has been forbidden every other kind."
+      }
+    },
+    {
+      "id": "the-audience",
+      "fields": {
+        "title": "The audience with the Wizard",
+        "sequence_id": "seq-emerald-city",
+        "order": 2,
+        "status": "planned",
+        "one_sentence": "A voice in a green light sets the party a task instead of granting a wish.",
+        "scene_objective": "The party wants their wishes granted.",
+        "location": "emerald-city",
+        "int_ext": "INT.",
+        "place": "The throne room",
+        "time_of_day": "DAY",
+        "characters": [
+          "dorothy",
+          "scarecrow",
+          "tin-man",
+          "lion",
+          "the-wizard",
+          "toto"
+        ],
+        "dramatic_role": "plot_role",
+        "plot_roles": [
+          {
+            "plot": "the-humbug",
+            "role": "inciting_incident",
+            "description": "The Wizard sets a task, converting a request into an errand and opening the plot's action."
+          },
+          {
+            "plot": "a-brain",
+            "role": "complication",
+            "description": "The Scarecrow's request is deferred, which he accepts without argument."
+          },
+          {
+            "plot": "a-heart",
+            "role": "complication",
+            "description": "The Tin Man's request is deferred, and he weeps about the deferral."
+          },
+          {
+            "plot": "a-nerve",
+            "role": "complication",
+            "description": "The Lion's request is deferred, and he is too frightened to object."
+          }
+        ],
+        "value_turns": [
+          {
+            "plot": "a-brain",
+            "value": "mind",
+            "from": "sense",
+            "to": "muddle",
+            "effects": [
+              {
+                "character": "scarecrow",
+                "levels": [
+                  {
+                    "conflict_level": "extra-personal",
+                    "effect": "He accepts 'consider it an entrance examination' as an answer and stops objecting to the errand."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "plot": "the-humbug",
+            "value": "belief",
+            "from": "doubt",
+            "to": "belief",
+            "effects": [
+              {
+                "character": "dorothy",
+                "levels": [
+                  {
+                    "conflict_level": "personal",
+                    "effect": "She takes the task because a voice that can send her home has finally named a price for it."
+                  }
+                ]
+              },
+              {
+                "character": "the-wizard",
+                "levels": [
+                  {
+                    "conflict_level": "inner",
+                    "effect": "He converts his own fear of the Witch into an errand for other people and calls the result authority."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sections": {
+        "Content": "A great green room. A throne at the far end. Something is sitting in it and the light does not reach that far.\n\nA VOICE comes from above and from the walls at once.\n\nVOICE\nI am Oz. Who are you.\n\nDOROTHY\nI'm Dorothy. I want to go home.\n\nVOICE\nAnd the rest of you.\n\nSCARECROW\nA brain.\n\nTIN MAN\nA heart.\n\nLION\nCourage, if it isn't too much trouble.\n\nVOICE\nYou ask for large things.\n\nDOROTHY\nYou're the Wizard.\n\nVOICE\nI am.\n\nDOROTHY\nThen it isn't large.\n\nThe green light moves. Somebody in the throne shifts, and the shift is wrong — it is a person sitting, not a presence reigning.\n\nVOICE\nThere is a witch in the West. She holds a country I cannot reach and she has done it long enough.\n\nDOROTHY\nWhat's that got to do with us.\n\nVOICE\nBring me her broom and I will grant what you ask.\n\nSCARECROW\nShe's a witch.\n\nVOICE\nAnd you want a brain. Consider it an entrance examination.\n\nSilence. The Lion looks at the floor. The Tin Man begins, quietly, to rust at the eyes.\n\nDOROTHY\nWe'll go.\n\nVOICE\nI thought you might.",
+        "Objective": "Four objectives, one answer. The party wants four wishes; the Wizard wants a task done by somebody who will not come back to ask again. He answers none of them and satisfies all four, which is the scene's trick.",
+        "Conflict": "The conflict is a negotiation where one party has all the information and the other has none, and the scene is careful to keep the Wizard off screen so the imbalance is spatial as well as factual. Dorothy's 'then it isn't large' is the only attempt to close the gap, and it fails.",
+        "Beats": "1. A voice and a throne that the light does not reach. 2. Four requests, stated plainly. 3. The requests are called large. 4. Dorothy argues and loses. 5. A task is set instead of a grant, and accepted.",
+        "Value Turn": "Belief falls from belief to doubt in one line: 'there is a witch in the West' is a task disguised as a promise, and every character on stage hears it as one. On the main plot the same scene is a complication, because the price of home is now somebody else's death.",
+        "Dramatic Function": "The story's midpoint and its largest multi-plot scene: one inciting incident and four complications in one room. It converts four wishes into one errand, which is the only mechanism that could keep the second act moving.",
+        "Production": "Interior throne room, four actors plus a voice, and a body in a chair that is never lit. The whole scene is played against the back of the room. It is the most expensive set in the script and it is used for four minutes.",
+        "Notes": "The demo's `planned` scene in Draft 1: its prose exists and is readable, but the writer had not finished it, and the status records that honestly. The Wizard's wrongness of posture is the clue the draft plants and does not use until Act III."
+      }
+    },
+    {
+      "id": "the-monkeys",
+      "fields": {
+        "title": "The monkeys",
+        "sequence_id": "seq-the-witch",
+        "order": 1,
+        "status": "written",
+        "one_sentence": "Winged monkeys take Dorothy out of the road and carry her to the Witch.",
+        "scene_objective": "The party wants to reach the Witch's castle; Dorothy wants not to be carried away.",
+        "location": "yellow-brick-road",
+        "int_ext": "EXT.",
+        "place": "The edge of the western woods",
+        "time_of_day": "NIGHT",
+        "characters": [
+          "dorothy",
+          "scarecrow",
+          "tin-man",
+          "lion",
+          "toto"
+        ],
+        "dramatic_role": "plot_role",
+        "plot_roles": [
+          {
+            "plot": "there-s-no-place-like-home",
+            "role": "crisis",
+            "description": "Dorothy is taken out of the journey entirely and held where she cannot walk home."
+          },
+          {
+            "plot": "the-humbug",
+            "role": "complication",
+            "description": "The task cannot be completed from a cell, and the Wizard's errand stalls without the Wizard knowing it."
+          }
+        ],
+        "value_turns": [
+          {
+            "plot": "there-s-no-place-like-home",
+            "value": "home",
+            "from": "a home that is not yours",
+            "to": "exile",
+            "effects": [
+              {
+                "character": "dorothy",
+                "levels": [
+                  {
+                    "conflict_level": "extra-personal",
+                    "effect": "The monkeys lift her off the road and out of the journey entirely, which is a place she cannot walk out of."
+                  },
+                  {
+                    "conflict_level": "inner",
+                    "effect": "She has no answer to being carried and nothing to offer the friends she is taken from."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "plot": "a-nerve",
+            "value": "courage",
+            "from": "cowardice",
+            "to": "caution",
+            "effects": [
+              {
+                "character": "lion",
+                "levels": [
+                  {
+                    "conflict_level": "inner",
+                    "effect": "He refuses the excuse the Tin Man offers him and says out loud that he was frightened, which is fear used honestly."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sections": {
+        "Content": "Night on the road at the edge of the woods. They are walking and the Lion is talking, quietly, about how he is not frightened, and nobody believes him.\n\nThen the sky fills with wings.\n\nThey come down in numbers that have no shape. The Scarecrow is pulled apart in the first ten seconds — straw in the air, coat on the ground. The Tin Man is lifted and dropped and dents, and is lifted again. The Lion is on his back with four of them on his chest.\n\nDOROTHY\nLet him go!\n\nThey take her.\n\nShe is carried up and over the trees with the dog held against her and the road going away beneath her in a straight yellow line, and the last thing she sees of her friends is the Tin Man standing up.\n\nThe sky is empty again.\n\nThe Scarecrow puts himself back together on the road, badly. The Tin Man is bent. The Lion is lying where they left him.\n\nLION\nThey took her and I did nothing.\n\nTIN MAN\nYou were held.\n\nLION\nI was frightened. Those are not the same and I know which one it was.",
+        "Objective": "Dorothy wants to keep the group together and is taken; the group wants to protect her and cannot. Everybody's objective fails in the same thirty seconds, which is what a crisis is.",
+        "Conflict": "Somebody else's opposition is finally. The party has been unbeatable by persuasion and accident for seven scenes, and their first encounter with organised force ends the argument in half a page.",
+        "Beats": "1. A quiet walk and a joke about fear. 2. The sky fills. 3. The Scarecrow is disassembled, the Tin Man dented, the Lion pinned. 4. Dorothy is taken and the road is shown from above. 5. The three are left, and the Lion tells the truth about himself.",
+        "Value Turn": "Home falls from wandering to exile: she is removed from the road, which is the only route she has. Courage moves too — the Lion's first honest self-assessment happens here, and honouring it is what lets the ladder's middle rung be reached in the next scene.",
+        "Dramatic Function": "The main plot's crisis and the story's only sequence where the antagonist holds the initiative. It also breaks the group so the next act can reunite it, which is why every member is separately disabled rather than simply losing.",
+        "Production": "Exterior road at night, four actors and a large number of winged figures. The monkeys are the script's only large-scale effect and they are shot as silhouettes and hands. The overhead shot of the road is the scene's one expensive image.",
+        "Notes": "The Lion's last line is the character's real turn and it happens in a scene he does not drive. The beat sheet records it as a `true_character` moment, which is the demo's case of a choice made by a character who is not the driver."
+      }
+    },
+    {
+      "id": "the-castle",
+      "fields": {
+        "title": "The castle",
+        "sequence_id": "seq-the-witch",
+        "order": 2,
+        "status": "drafted",
+        "one_sentence": "The Witch has the shoes within reach and cannot take them, and Dorothy learns what the shoes will not do.",
+        "scene_objective": "The Witch wants the shoes; Dorothy wants to leave.",
+        "location": "the-witchs-castle",
+        "int_ext": "INT.",
+        "place": "The room with the chair",
+        "time_of_day": "DAY",
+        "characters": [
+          "dorothy",
+          "toto",
+          "wicked-witch-of-the-west"
+        ],
+        "dramatic_role": "plot_role",
+        "plot_roles": [
+          {
+            "plot": "there-s-no-place-like-home",
+            "role": "complication",
+            "description": "Exile deepens: the protagonist is held, questioned and given a deadline she cannot meet."
+          },
+          {
+            "plot": "the-humbug",
+            "role": "crisis",
+            "description": "The task becomes impossible in the time allowed, which is the moment the Wizard's errand fails him."
+          }
+        ],
+        "value_turns": [
+          {
+            "plot": "the-humbug",
+            "value": "belief",
+            "from": "belief",
+            "to": "fraud",
+            "effects": [
+              {
+                "character": "dorothy",
+                "levels": [
+                  {
+                    "conflict_level": "extra-personal",
+                    "effect": "The shoes she was told were powerful do nothing at all, and the promise standing behind them starts to look like a con."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sections": {
+        "Content": "A stone room with a chair in it and a table for a bucket. The girl is in the chair. The Witch is standing, which is worse.\n\nWITCH\nTake them off.\n\nDOROTHY\nNo.\n\nWITCH\nI am not asking.\n\nShe reaches. The shoes do not move. She pulls harder and the girl's foot comes up with the shoe still on it, and the Witch lets go and stands back.\n\nWITCH\nThey never did come off a living wearer.\n\nDOROTHY\nThen you can't have them.\n\nWITCH\nI can have you. Those are not the same thing and you will learn the difference before morning.\n\nShe goes to the door and stops.\n\nWITCH\nA year ago my sister had a country and a pair of shoes and a great deal of confidence. Now she has a field.\n\nDOROTHY\nI didn't mean to.\n\nWITCH\nI know. That is the part I cannot get past.\n\nShe leaves. The door is iron and there is no window that opens. Dorothy sits in the chair with the dog on her knee and the shoes on her feet, and puts her hand on the wall, and the wall is stone.\n\nDOROTHY\n(to the dog)\nThey're powerful. She said they were powerful.",
+        "Objective": "The Witch wants the shoes, by force, and cannot have them by force. Dorothy wants to leave and cannot. Both objectives are blocked by the same object, which is the scene's construction.",
+        "Conflict": "A two-hander where one party has all the power except the one thing that matters. The Witch's grief is real and is expressed entirely as a threat, and Dorothy's only defence is an accident she feels guilty about.",
+        "Beats": "1. An order, refused. 2. Force, and the rule holds. 3. The Witch restates the situation as an intention. 4. She names her sister, and the revenge is admitted without being called revenge. 5. She leaves, and the girl talks to a dog.",
+        "Value Turn": "Home is at exile, held. Belief falls to fraud outright: the shoes were described as powerful and have just been shown to do nothing at all, which is the story quietly warning the audience about the Wizard before the Wizard is exposed.",
+        "Dramatic Function": "The main plot's complication and the humbug's crisis in one room. It is also where the antagonist is humanised in a single line and where the story's central object is shown to be useless, ten minutes before it is shown to be the answer.",
+        "Production": "Interior stone room, two actors and a dog. One door, one chair, one bucket. The scene depends entirely on the moment the shoe does not come off, which is a practical effect and the reason the shoes must be built to resist.",
+        "Notes": "The Witch's 'that is the part I cannot get past' is the demo's case for an antagonist whose grievance is legitimate. The demo's Notes for her character record that she is not wrong, which is what makes her an antagonist rather than a villain."
+      }
+    },
+    {
+      "id": "the-melting",
+      "fields": {
+        "title": "The melting",
+        "sequence_id": "seq-the-humbug",
+        "order": 1,
+        "status": "written",
+        "one_sentence": "Dorothy throws a bucket of water at the Witch and the Witch dissolves.",
+        "scene_objective": "Dorothy wants to stop the Witch from taking the shoes.",
+        "location": "the-witchs-castle",
+        "int_ext": "INT.",
+        "place": "The great hall",
+        "time_of_day": "DAY",
+        "characters": [
+          "dorothy",
+          "wicked-witch-of-the-west",
+          "scarecrow",
+          "tin-man",
+          "lion",
+          "toto"
+        ],
+        "dramatic_role": "plot_role",
+        "plot_roles": [
+          {
+            "plot": "there-s-no-place-like-home",
+            "role": "climax",
+            "description": "The obstacle between Dorothy and home is removed, by accident rather than by courage."
+          },
+          {
+            "plot": "the-humbug",
+            "role": "complication",
+            "description": "The task is completed, which leaves the Wizard owing four wishes he has no intention of granting."
+          },
+          {
+            "plot": "a-nerve",
+            "role": "complication",
+            "description": "The Lion enters the castle first, which is his ladder's turn from caution to courage."
+          }
+        ],
+        "value_turns": [
+          {
+            "plot": "there-s-no-place-like-home",
+            "value": "home",
+            "from": "exile",
+            "to": "wandering",
+            "effects": [
+              {
+                "character": "dorothy",
+                "levels": [
+                  {
+                    "conflict_level": "extra-personal",
+                    "effect": "The obstacle is gone and the road is open again, which is all she has ever needed in order to be moving."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "plot": "a-brain",
+            "value": "mind",
+            "from": "muddle",
+            "to": "sense",
+            "effects": [
+              {
+                "character": "scarecrow",
+                "levels": [
+                  {
+                    "conflict_level": "inner",
+                    "effect": "He is set alight, put out, and says the one accurate thing available about what has just happened."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "plot": "a-nerve",
+            "value": "courage",
+            "from": "caution",
+            "to": "courage",
+            "effects": [
+              {
+                "character": "lion",
+                "levels": [
+                  {
+                    "conflict_level": "personal",
+                    "effect": "He pushes the Tin Man through the door ahead of himself and follows him in, which is courage done without being felt."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sections": {
+        "Content": "The great hall of the castle. The Witch has a torch in one hand and the shoes are three feet away and she cannot have them.\n\nThe Tin Man comes through the door first because the Lion pushed him.\n\nThe Witch turns and the torch goes into the straw of the Scarecrow and the Scarecrow is on fire and running.\n\nDOROTHY\nWater!\n\nThere is a bucket. She takes it and throws it.\n\nIt hits the Witch.\n\nThe Witch stops. Looks down at her own hands. They are going.\n\nWITCH\nOh.\n\nShe does not scream. She looks, for a moment, relieved, which is the last thing anybody expects.\n\nWITCH\n(to Dorothy)\nYou did not know.\n\nShe is a puddle and a hat and then she is a hat.\n\nThe Lion comes through the door, sees the hat, and sits down.\n\nLION\nIs it done?\n\nSCARECROW\n(still smoking)\nIt's done.\n\nThey stand in the hall. The Tin Man picks up the hat and puts it down again.\n\nTIN MAN\nSomebody should tell the country.\n\nDOROTHY\nSomebody should tell the Wizard.",
+        "Objective": "Dorothy wants to save the Scarecrow from the fire, and her objective is not the Witch at all. That is the scene's construction: the climax of the main plot is a by-product of an act of care aimed at somebody else.",
+        "Conflict": "The Witch brings the conflict and loses it to water, which nobody in the scene knows is a weapon. The story has kept this rule out of the dialogue entirely, so the audience sees a death that the characters experience as an accident with a good outcome.",
+        "Beats": "1. The Witch holds the room and cannot take the shoes. 2. The companions arrive, the Lion having pushed the Tin Man through first. 3. The Scarecrow is set alight. 4. Dorothy throws the water at the fire and hits the Witch. 5. The Witch dissolves, and nobody in the room knows what they have done.",
+        "Value Turn": "Home reaches climax by removing the obstacle rather than by overcoming it. Courage reaches courage: the Lion's first act in the castle is to send somebody else through the door, which is the most honest form the value takes in the story. Belief falls to fraud, because the task is done and will now not be paid.",
+        "Dramatic Function": "The main plot's climax, the humbug's complication and the courage plot's turn, in one scene and one accident. It is the demo's clearest demonstration that a climax can serve four plots without any character intending to serve one.",
+        "Production": "Interior great hall, five actors, a bucket and a torch. The melting is the script's single most expensive effect and is shot as hands and a hat. The fire and the water are practical and adjacent, which is the only reason the accident reads.",
+        "Notes": "The Witch's last line is the story's conscience: the girl did not know, and the story does not present the death as a victory. The beat sheet records the Witch's death as a `changes` entry on the world rather than on the character."
+      }
+    },
+    {
+      "id": "behind-the-curtain",
+      "fields": {
+        "title": "Behind the curtain",
+        "sequence_id": "seq-the-humbug",
+        "order": 2,
+        "status": "planned",
+        "one_sentence": "The Wizard is a man from Omaha operating a machine, and the country's authority turns out to have been a voice.",
+        "scene_objective": "The party wants the reward they were promised. The Wizard wants to not be looked at.",
+        "location": "emerald-city-after",
+        "int_ext": "INT.",
+        "place": "The throne room",
+        "time_of_day": "DAY",
+        "characters": [
+          "dorothy",
+          "scarecrow",
+          "tin-man",
+          "lion",
+          "the-wizard",
+          "toto"
+        ],
+        "dramatic_role": "plot_role",
+        "plot_roles": [
+          {
+            "plot": "the-humbug",
+            "role": "climax",
+            "description": "The fraud is exposed, and the plot's value reaches its perversion: the lie people needed is named and forgiven."
+          },
+          {
+            "plot": "there-s-no-place-like-home",
+            "role": "resolution",
+            "description": "The promised answer is withdrawn, which leaves Dorothy with nothing but her own means."
+          },
+          {
+            "plot": "a-brain",
+            "role": "complication",
+            "description": "The Scarecrow's brain will not arrive, and he asks for it anyway."
+          },
+          {
+            "plot": "a-heart",
+            "role": "complication",
+            "description": "The Tin Man's heart will not arrive, and he is the first to speak for the Wizard."
+          }
+        ],
+        "value_turns": [
+          {
+            "plot": "the-humbug",
+            "value": "belief",
+            "from": "fraud",
+            "to": "a lie people need",
+            "effects": [
+              {
+                "character": "dorothy",
+                "levels": [
+                  {
+                    "conflict_level": "personal",
+                    "effect": "She is told outright that nothing was ever on offer and stays, because the man admitting it is the first honest thing in the city."
+                  }
+                ]
+              },
+              {
+                "character": "the-wizard",
+                "levels": [
+                  {
+                    "conflict_level": "inner",
+                    "effect": "He tells the truth the moment it is asked of him, which is the only move he had left and the one that costs him nothing."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "plot": "a-brain",
+            "value": "mind",
+            "from": "sense",
+            "to": "muddle",
+            "effects": [
+              {
+                "character": "scarecrow",
+                "levels": [
+                  {
+                    "conflict_level": "extra-personal",
+                    "effect": "He asks what the task was for, having completed it on the understanding that it would be paid for."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sections": {
+        "Content": "The throne room with the glasses off. It is a large room with a chair in it and a great deal of dust, and the green is paint where the light reaches.\n\nThe VOICE is still going.\n\nVOICE\nI am Oz, the great and terrible —\n\nDOROTHY\nWe know.\n\nVOICE\n(stops)\nAh.\n\nA CURTAIN at the side of the room moves. The Tin Man goes to it and pulls it back.\n\nA MAN is standing at a machine with levers and a megaphone and a great many wires.\n\nWIZARD\nHello.\n\nLION\nYou're a man.\n\nWIZARD\nI'm a man from Omaha. The rest was amplification.\n\nSCARECROW\nBut the task.\n\nWIZARD\nYou did the task. I did not expect you to do the task. I expected you to be eaten in the first week and I have been waiting to hear about it ever since.\n\nDOROTHY\nWe want what you promised.\n\nWIZARD\nI can't give you those things. Nobody can give you those things. I have been in this country for thirty years pretending otherwise and it has been very restful for everybody.\n\nTIN MAN\nThen it was a lie.\n\nWIZARD\nYes. But you did come back. Nobody has ever come back before.",
+        "Objective": "The party wants four gifts and an answer. The Wizard wants to survive the discovery, and his whole strategy is to be charming enough that nobody remembers to be angry.",
+        "Conflict": "The conflict is between a demand and an admission. The Wizard never denies anything, which is why he wins: he agrees with every accusation and names a cost nobody can collect.",
+        "Beats": "1. The voice begins its performance and is interrupted. 2. The curtain is pulled. 3. A man from Omaha explains himself. 4. The task is acknowledged and the reward refused. 5. The Tin Man speaks for him, and Dorothy is left with nothing.",
+        "Value Turn": "Belief reaches its perversion: fraud is admitted and immediately ceases to be a fraud, because the country's peace was real and the gifts will work. It is the demo's only plot whose value line ends on the ladder's fourth rung rather than returning to the positive pole.",
+        "Dramatic Function": "The humbug's climax and the main plot's resolution-by-withdrawal. It takes away the promised answer and leaves the protagonist holding a problem she must now solve herself, which is the only way the last sequence can work.",
+        "Production": "Interior throne room in the variant location, five actors plus a machine. The machine is a prop with no function and should look like one to the audience before it is explained. The curtain is the set change.",
+        "Notes": "The demo's `variant_of` scene: the same room as the audience scene, played with the glasses off and the light on. The transformation is the point, and it is a change of state caused by an event, not a change of hour."
+      }
+    },
+    {
+      "id": "the-balloon",
+      "fields": {
+        "title": "The balloon",
+        "sequence_id": "seq-the-return",
+        "order": 1,
+        "status": "drafted",
+        "one_sentence": "The Wizard leaves in a balloon and Dorothy misses it by ten seconds.",
+        "scene_objective": "The Wizard wants to escape; Dorothy wants to go with him.",
+        "location": "emerald-city-after",
+        "int_ext": "EXT.",
+        "place": "The city square",
+        "time_of_day": "DAY",
+        "characters": [
+          "dorothy",
+          "scarecrow",
+          "tin-man",
+          "lion",
+          "the-wizard",
+          "toto"
+        ],
+        "dramatic_role": "plot_role",
+        "plot_roles": [
+          {
+            "plot": "the-humbug",
+            "role": "resolution",
+            "description": "The fraud leaves, unpunished and unrepentant, and the country keeps what the fraud produced."
+          },
+          {
+            "plot": "there-s-no-place-like-home",
+            "role": "complication",
+            "description": "Home is offered a second time and taken away again, which is the last substitute the story provides."
+          }
+        ],
+        "value_turns": [
+          {
+            "plot": "a-heart",
+            "value": "heart",
+            "from": "feeling",
+            "to": "sentiment that never acts",
+            "effects": [
+              {
+                "character": "tin-man",
+                "levels": [
+                  {
+                    "conflict_level": "extra-personal",
+                    "effect": "He puts a hand on her shoulder and says nothing, which is comfort offered in the one moment it cannot change anything."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sections": {
+        "Content": "A green balloon in a city square, with a basket, and the Wizard already in the basket.\n\nWIZARD\nIt's all arranged. I take you with me, we go up, and the wind does the rest. It brought me here and it can take me back.\n\nDOROTHY\nHow long.\n\nWIZARD\nAs long as the ropes hold.\n\nA rope slips. The balloon lifts a foot and stops.\n\nWIZARD\nThat's early. Dorothy —\n\nShe runs for the basket. The dog runs the other way.\n\nShe stops. She turns. She picks up the dog.\n\nThe balloon goes up.\n\nWIZARD\n(shouting down)\nIt'll come back! I'll come back!\n\nIt does not come back. It becomes a green dot and then it is not there.\n\nThe three companions are standing beside her. The Tin Man has a hand on her shoulder and does not say anything.\n\nSCARECROW\nHe said he'd come back.\n\nLION\nHe said a lot of things.",
+        "Objective": "The Wizard wants to leave and takes Dorothy as a passenger. Dorothy wants to go and is offered the chance, and loses it to a dog, which is the story's cruellest and most in-character joke.",
+        "Conflict": "There is no opposition except a dog and a rope. The scene's conflict is entirely between two claims on Dorothy — the balloon and the animal — and she chooses without hesitating and without being told to.",
+        "Beats": "1. A balloon, packed and ready. 2. The offer is made and accepted. 3. A rope slips and the balloon begins to go. 4. Dorothy has to choose between the basket and the dog. 5. She chooses, and the balloon goes without her.",
+        "Value Turn": "Home almost resolves and does not. The value holds at the negation of negation: this is a home being offered by a fraud in an escape vehicle, and she refuses it without knowing that is what she is doing, which is the turn her character needed to make.",
+        "Dramatic Function": "The humbug plot's resolution — the Wizard leaves and is not punished — and a complication on the main plot that keeps it open for one more scene. It is also the story's proof that Dorothy's want is a place and not an escape.",
+        "Production": "Exterior square, six actors, a balloon rigged to lift. The whole scene is one continuous take of a balloon rising and a girl standing still. The dog is the scene's antagonist and is played as one.",
+        "Notes": "The turning point in Draft 2's version and the reason Draft 3 leaves this scene `drafted`: the writer was not satisfied with it, which the status records honestly rather than claiming it finished."
+      }
+    },
+    {
+      "id": "the-goodbyes",
+      "fields": {
+        "title": "The goodbyes",
+        "sequence_id": "seq-the-return",
+        "order": 2,
+        "status": "written",
+        "one_sentence": "The Wizard's worthless gifts are handed out, and the three companions discover they already have what they asked for.",
+        "scene_objective": "The companions want to receive what they were promised; the Wizard wants to leave having paid his debts.",
+        "location": "emerald-city-after",
+        "int_ext": "INT.",
+        "place": "The throne room",
+        "time_of_day": "DAY",
+        "characters": [
+          "dorothy",
+          "scarecrow",
+          "tin-man",
+          "lion",
+          "the-wizard",
+          "toto"
+        ],
+        "dramatic_role": "plot_role",
+        "plot_roles": [
+          {
+            "plot": "a-brain",
+            "role": "resolution",
+            "description": "The Scarecrow receives a diploma and is told what he already was, which resolves the plot without changing him."
+          },
+          {
+            "plot": "a-heart",
+            "role": "resolution",
+            "description": "The Tin Man receives a silk heart and weeps over it, which is the plot's joke and its resolution."
+          },
+          {
+            "plot": "a-nerve",
+            "role": "resolution",
+            "description": "The Lion receives a medal and stays frightened, which the story presents as the correct outcome."
+          },
+          {
+            "plot": "the-humbug",
+            "role": "complication",
+            "description": "The gifts are the fraud's last performance and they work, which complicates the account of him as a fraud."
+          }
+        ],
+        "value_turns": [
+          {
+            "plot": "a-brain",
+            "value": "mind",
+            "from": "muddle",
+            "to": "sense",
+            "effects": [
+              {
+                "character": "scarecrow",
+                "levels": [
+                  {
+                    "conflict_level": "personal",
+                    "effect": "He objects that a diploma is a piece of paper and then accepts that it answers the question he asked."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "plot": "a-heart",
+            "value": "heart",
+            "from": "sentiment that never acts",
+            "to": "feeling",
+            "effects": [
+              {
+                "character": "tin-man",
+                "levels": [
+                  {
+                    "conflict_level": "inner",
+                    "effect": "He weeps over a silk heart until his jaw seizes, which is the first time his feeling costs him something physical."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sections": {
+        "Content": "The throne room, with the machine uncovered and the man not hiding behind it.\n\nWIZARD\nI have been thinking about what to give you, and I have decided to give you what I have.\n\nHe gives the Scarecrow a diploma.\n\nSCARECROW\nThis is a piece of paper.\n\nWIZARD\nIt's a diploma. Nobody who has one can be called a fool, because they have a diploma. That is the entire system and it has never once failed.\n\nHe gives the Tin Man a silk heart on a ribbon.\n\nTIN MAN\nThis is not a heart.\n\nWIZARD\nIt is a heart and it is the shape of one. Wear it and see whether you weep, and then tell me it is not a heart.\n\nThe Tin Man looks at it. He begins to weep, which seizes his jaw, which makes him weep more.\n\nWIZARD\n(to the Lion)\nAnd for you.\n\nA medal on a ribbon.\n\nLION\nWill it make me brave?\n\nWIZARD\nNo. Nothing makes anyone brave. It will remind you that somebody once thought you were, and you can decide what to do with that.\n\nThe Lion puts it on and stands up straighter and is still frightened, and everybody in the room can see both things at once.\n\nWIZARD\n(to Dorothy)\nI have nothing for you. I'm sorry. I'm going to get in a balloon.",
+        "Objective": "The companions want their gifts and receive objects; the Wizard wants to discharge four obligations with the contents of a cupboard and succeeds, which is the scene's joke and its argument.",
+        "Conflict": "The conflict is between what a gift is and what it is worth. Every companion objects to the object and every objection is answered with a justification that is entirely true and entirely absurd.",
+        "Beats": "1. The Wizard declares he will give what he has. 2. A diploma is given and defended. 3. A silk heart is given and the Tin Man proves it by rusting. 4. A medal is given and honestly described. 5. Dorothy is told there is nothing for her.",
+        "Value Turn": "Three plots resolve without a value moving: mind, heart and courage each end where they began, and the resolution is a recognition rather than a change. Belief reaches its perversion openly: worthless gifts that work are the clearest possible statement of the ladder's fourth rung.",
+        "Dramatic Function": "Resolves three subplots in one scene and complicates the humbug. It is the demo's densest resolution scene and the one that most clearly shows why dealing with a scene's plots as separate entries matters.",
+        "Production": "Interior throne room, four actors, three props. Nothing moves but hands and one jaw. The scene's whole effect depends on the props being visibly cheap.",
+        "Notes": "The Lion's medal speech is the closest the story comes to stating its own argument about courage. It is given to the character least able to act on it, which is deliberate."
+      }
+    },
+    {
+      "id": "glinda-and-home",
+      "fields": {
+        "title": "Glinda, and home",
+        "sequence_id": "seq-the-return",
+        "order": 3,
+        "status": "written",
+        "one_sentence": "Glinda explains the shoes, and Dorothy goes home by an act of her own will.",
+        "scene_objective": "Dorothy wants to get home and has run out of people to ask.",
+        "location": "emerald-city-after",
+        "int_ext": "EXT.",
+        "place": "The city square",
+        "time_of_day": "DAY",
+        "characters": [
+          "dorothy",
+          "scarecrow",
+          "tin-man",
+          "lion",
+          "glinda",
+          "toto"
+        ],
+        "dramatic_role": "plot_role",
+        "plot_roles": [
+          {
+            "plot": "there-s-no-place-like-home",
+            "role": "resolution",
+            "description": "The value reaches the positive pole by choice: the answer was on her feet and the act is hers."
+          },
+          {
+            "plot": "a-brain",
+            "role": "resolution",
+            "description": "The Scarecrow is told he always had a brain, which completes the recognition his plot needed."
+          },
+          {
+            "plot": "a-heart",
+            "role": "resolution",
+            "description": "The Tin Man is told he always had a heart, which completes the recognition his plot needed."
+          },
+          {
+            "plot": "a-nerve",
+            "role": "resolution",
+            "description": "The Lion is told he was brave the whole time, and is not convinced, which is the correct ending for him."
+          },
+          {
+            "plot": "the-humbug",
+            "role": "resolution",
+            "description": "Glinda confirms what the Wizard was, and declines to condemn him, which closes the plot without punishing it."
+          }
+        ],
+        "value_turns": [
+          {
+            "plot": "there-s-no-place-like-home",
+            "value": "home",
+            "from": "wandering",
+            "to": "home",
+            "effects": [
+              {
+                "character": "dorothy",
+                "levels": [
+                  {
+                    "conflict_level": "inner",
+                    "effect": "She knocks her heels together and names the place out loud, which is the only active move she makes in the entire story."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sections": {
+        "Content": "The city square, with the balloon gone and the population standing about not knowing what to do.\n\nGLINDA\nYou have had a difficult week.\n\nDOROTHY\nI want to go home and there's nobody left to ask.\n\nGLINDA\nThere never was. The shoes.\n\nDOROTHY\nThe shoes are powerful. You said that.\n\nGLINDA\nI did.\n\nDOROTHY\nThey haven't done anything.\n\nGLINDA\nThey haven't been asked. Knock them together three times and say where you want to be.\n\nDOROTHY\nThat's all?\n\nGLINDA\nThat is all. It was all on the first day. I did not tell you then because you would not have believed me and you would have stayed.\n\nDOROTHY\nAunt Em's worried.\n\nGLINDA\nYes.\n\nDOROTHY\n(to the Scarecrow)\nI'll come back.\n\nSCARECROW\nYou won't. That's all right. You know the way now, and knowing the way is the same as being able to come.\n\nShe looks at the three of them. She knocks her heels together three times.\n\nDOROTHY\nThere's no place like home.",
+        "Objective": "Dorothy wants to get home and has exhausted every agent who might take her. Glinda wants her to arrive at the answer herself, which she has been able to give since the first scene and has not.",
+        "Conflict": "The conflict is Glinda's withholding, and the scene turns it into a virtue only after the fact. Nothing opposes Dorothy here; she is simply told what she already had, which is the last and mildest obstacle in the story.",
+        "Beats": "1. A square with no balloon in it. 2. Dorothy states that nobody is left to ask. 3. The shoes are named. 4. The method is explained and it is trivial. 5. She chooses, and says the line, and goes.",
+        "Value Turn": "Home reaches the positive pole. The move is from the negation of negation straight to home, in one act by the protagonist and with no help from an agent, which is the longest single jump on the ladder in the whole demo.",
+        "Dramatic Function": "Resolves the main plot and all three companion plots, and closes the humbug plot by confirming it without condemning it. It is the demo's densest resolution: five plots in one scene, which is the strongest possible argument for `plot_roles` being a list.",
+        "Production": "Exterior square, five actors and a crowd, and a pair of shoes. The scene is played almost without movement until the heels come together. Everything expensive has already happened.",
+        "Notes": "Glinda's justification is the story's most arguable line and the demo does not resolve it. Her character Notes record that whether this is wisdom or a taste for watching is left open, which is what makes her a better mentor than a helpful one."
+      }
+    }
+  ]
+}

@@ -1,0 +1,1427 @@
+{
+  "_note": "One scene_beats record per scene, keyed by `scene` (stored as parent_id). `driver` is who wants in the scene and may differ from who acts first. A beat's `action.by` / `reaction.by` may be a character, a LOCATION or a WORLD — that is the demo's case of a place acting. `changes[].entity` may be a character, relationship, location or world; only where something changed. `gap` stops at the break, it does not resolve it. No `value_turns` here — those are the next layer, written once the beats exist.",
+  "beats": [
+    {
+      "id": "the-farm-at-dusk-beats",
+      "fields": {
+        "scene": "the-farm-at-dusk",
+        "driver": "dorothy",
+        "scene_objective": "to be told that wanting to be elsewhere is not a fault",
+        "turning_point": "Aunt Em names the dog instead of answering, and Dorothy understands the conversation is over",
+        "true_character": [
+          {
+            "character": "dorothy",
+            "dilemma": "say plainly that she is unhappy here, which would hurt the woman feeding her, or leave the question unasked and stay unheard",
+            "choice_reveals": "She asks obliquely and lets the answer go, choosing not to wound Em over being understood — which is the patience she will need for the whole road"
+          }
+        ],
+        "changes": [
+          {
+            "entity": "dorothy",
+            "change": "knows she will not be told she is wanted here, and has decided to stop asking rather than press it"
+          },
+          {
+            "entity": "aunt-em",
+            "change": "has named the mortgage out loud for the first time, which she will not do again"
+          }
+        ],
+        "beats": [
+          {
+            "action": {
+              "by": "dorothy",
+              "surface": "'Do you ever think about being somewhere else.'",
+              "subtext": "asking whether it is allowed to want out"
+            },
+            "reaction": {
+              "by": "aunt-em",
+              "surface": "'I think about the mortgage.'",
+              "subtext": "refusing the question by answering it honestly about something else"
+            },
+            "gap": "Dorothy offers a feeling; Em returns an obligation."
+          },
+          {
+            "action": {
+              "by": "dorothy",
+              "surface": "'I mean somewhere that isn't here.'",
+              "subtext": "naming the want in the smallest available form"
+            },
+            "reaction": {
+              "by": "aunt-em",
+              "surface": "turns from the stove and asks what is wrong with here",
+              "subtext": "hearing a criticism where a confession was offered"
+            },
+            "gap": "She expects to be understood and is instead asked to defend herself."
+          },
+          {
+            "action": {
+              "by": "dorothy",
+              "surface": "'Nothing's wrong with it.'",
+              "subtext": "retreating from the want rather than defending it"
+            },
+            "reaction": {
+              "by": "aunt-em",
+              "surface": "'Then what.'",
+              "subtext": "closing a door she has just been shown was open"
+            },
+            "gap": "The honest answer is that she does not know, and there is no way to say that which does not sound like ingratitude."
+          },
+          {
+            "action": {
+              "by": "aunt-em",
+              "surface": "'Toto's on the table.'",
+              "subtext": "ending the conversation by finding a smaller problem"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "puts the dog down and watches him get straight back up",
+              "subtext": "accepting the change of subject as the answer"
+            },
+            "gap": "Dorothy is answered with a rule about furniture."
+          },
+          {
+            "action": {
+              "by": "aunt-em",
+              "surface": "sends her to get the washing in and tells her to stay out of the cellar",
+              "subtext": "keeping the child upstairs and in sight"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "asks why she would go in the cellar",
+              "subtext": "hearing an instruction where affection was meant"
+            },
+            "gap": "Em offers protection; Dorothy receives a restriction. Neither of them notices the exchange."
+          },
+          {
+            "action": {
+              "by": "dorothy",
+              "surface": "takes the dog and goes out",
+              "subtext": "removing herself, as she has learned to"
+            },
+            "reaction": {
+              "by": "aunt-em",
+              "surface": "says 'Somewhere else' to the stove when the door has shut",
+              "subtext": "admitting the wish belongs to her too, to nobody"
+            },
+            "gap": "The one person who could have answered is now speaking to a stove."
+          }
+        ]
+      },
+      "sections": {
+        "Notes": "The demo's case of a scene where the driver and the actor of the first beat are the same person, and the scene ends on the OTHER character acting alone. Also the case of a `changes` entry on two characters where neither change is dramatic: both know slightly more and neither will act on it."
+      }
+    },
+    {
+      "id": "the-house-lifts-beats",
+      "fields": {
+        "scene": "the-house-lifts",
+        "driver": "dorothy",
+        "scene_objective": "to reach the cellar and get out of the house",
+        "turning_point": "The window shows the same fence going past a third time, and the house is no longer falling",
+        "true_character": [],
+        "changes": [
+          {
+            "entity": "dorothy",
+            "change": "is no longer in Kansas, and has no way to act on the fact"
+          },
+          {
+            "entity": "gale-farm",
+            "change": "is gone from the story, left behind in the storm with nobody in it"
+          },
+          {
+            "entity": "the-cyclone",
+            "change": "is carrying the house rather than destroying it, which is not what a cyclone does"
+          }
+        ],
+        "beats": [
+          {
+            "action": {
+              "by": "the-cyclone",
+              "surface": "takes the house off its footings and lifts it",
+              "subtext": "removing the protagonist from the board without touching her"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "reaches the cellar door and finds the house already above the ground",
+              "subtext": "discovering that her objective has become impossible while she was walking toward it"
+            },
+            "gap": "She expected weather; she has been given transportation."
+          },
+          {
+            "action": {
+              "by": "the-cyclone",
+              "surface": "turns the house so the same fence passes the window again",
+              "subtext": "making the duration of the journey felt"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "looks out and sees nothing that tells her where she is",
+              "subtext": "losing the last means of orientation she had"
+            },
+            "gap": "She expects the storm to end or the house to fall; neither happens."
+          },
+          {
+            "action": {
+              "by": "the-cyclone",
+              "surface": "passes the fence a third time and changes the light to colour",
+              "subtext": "delivering her somewhere and not saying where"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "stops at the window and waits for the landing",
+              "subtext": "accepting a situation she cannot affect"
+            },
+            "gap": "The house is still moving and the light says it has arrived."
+          }
+        ]
+      },
+      "sections": {
+        "Notes": "The demo's case of a LOCATION acting: `the-cyclone` is the `by` on every action side, because in this scene the place is the character and the person is the object. No `true_character` moment, because nobody makes a choice. The beats are all gap and no dialogue, which is what a transition looks like on the page."
+      }
+    },
+    {
+      "id": "the-house-lands-beats",
+      "fields": {
+        "scene": "the-house-lands",
+        "driver": "dorothy",
+        "scene_objective": "to find out where she is and how to leave",
+        "turning_point": "Glinda says the shoes are powerful and refuses to say how",
+        "true_character": [
+          {
+            "character": "dorothy",
+            "dilemma": "accept the shoes off a woman she has just killed, or refuse them and keep her hands clean",
+            "choice_reveals": "She takes the shoes and says she does not want them in the same breath — she will use what she is given without pretending she is untroubled by it"
+          }
+        ],
+        "changes": [
+          {
+            "entity": "dorothy",
+            "change": "has a destination and a pair of shoes she did not earn"
+          },
+          {
+            "entity": "wicked-witch-of-the-east",
+            "change": "is dead, and is now a pair of feet under a house rather than a person"
+          },
+          {
+            "entity": "dorothy-glinda",
+            "change": "Glinda has given her the means to get home and declined to explain them, which Dorothy will remember"
+          }
+        ],
+        "beats": [
+          {
+            "action": {
+              "by": "dorothy",
+              "surface": "apologises about the house to a silent crowd",
+              "subtext": "treating an accident as a fault, before anyone has accused her"
+            },
+            "reaction": {
+              "by": "glinda",
+              "surface": "'It was not your house and it was not your landing. You are welcome.'",
+              "subtext": "absolving her of a death without mentioning the death"
+            },
+            "gap": "She expects to be blamed and is congratulated."
+          },
+          {
+            "action": {
+              "by": "dorothy",
+              "surface": "'I need to get to Kansas.'",
+              "subtext": "stating the want plainly now that somebody is listening"
+            },
+            "reaction": {
+              "by": "glinda",
+              "surface": "'The Wizard can help you with that.'",
+              "subtext": "handing her a destination instead of an answer"
+            },
+            "gap": "She asks how to leave and is given somebody else to ask."
+          },
+          {
+            "action": {
+              "by": "glinda",
+              "surface": "gives her the dead woman's shoes and says they are powerful",
+              "subtext": "teaching her that the answer is under her feet, without saying so"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "'How are they powerful?'",
+              "subtext": "asking the only question that matters and expecting a straight answer"
+            },
+            "gap": "She is given a tool and told to find out what it does."
+          },
+          {
+            "action": {
+              "by": "glinda",
+              "surface": "'You will find out, or you will not', and leaves",
+              "subtext": "closing the conversation while appearing to open it"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "stands in the shoes holding the dog, looking at the road",
+              "subtext": "accepting a partial answer because it is the only one offered"
+            },
+            "gap": "She expects help and has been given a walk."
+          }
+        ]
+      },
+      "sections": {
+        "Notes": "The demo's case of a `changes` entry on a character who never appears: the Witch of the East is dead, is in the cast, and is the object of a change in a scene she is not in. Also the first `changes` entry on a RELATIONSHIP, recording the withholding rather than the meeting."
+      }
+    },
+    {
+      "id": "the-scarecrow-beats",
+      "fields": {
+        "scene": "the-scarecrow",
+        "driver": "scarecrow",
+        "scene_objective": "to stop being alone on the pole",
+        "turning_point": "He spots the fire before she does, having just said he cannot think",
+        "true_character": [
+          {
+            "character": "scarecrow",
+            "dilemma": "claim the fire as his own judgement, which would contradict the story he tells about himself, or credit it to a brain he does not have",
+            "choice_reveals": "'I'd have said that if I had a brain' — he would rather be consistent about his deficiency than take credit for being right"
+          }
+        ],
+        "changes": [
+          {
+            "entity": "scarecrow",
+            "change": "is off the pole and travelling, and has decided his own competence is not evidence"
+          },
+          {
+            "entity": "dorothy",
+            "change": "is no longer alone on the road, which she did not ask for and does not refuse"
+          },
+          {
+            "entity": "dorothy-scarecrow",
+            "change": "has become company rather than an encounter, within a page of meeting"
+          }
+        ],
+        "beats": [
+          {
+            "action": {
+              "by": "scarecrow",
+              "surface": "'Good morning. That's the only thing I can do. I can't think at all.'",
+              "subtext": "introducing himself by his deficiency so he is not asked for more"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "'Who told you that.'",
+              "subtext": "questioning the story rather than accepting it"
+            },
+            "gap": "He offers an apology and is asked for evidence."
+          },
+          {
+            "action": {
+              "by": "scarecrow",
+              "surface": "'Everyone. It's the first thing anyone says to a scarecrow.'",
+              "subtext": "reporting other people's opinion as his own self-knowledge"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "tells him about the Wizard and the road",
+              "subtext": "offering him a way to get what he claims to want"
+            },
+            "gap": "He expects to be agreed with and is recruited."
+          },
+          {
+            "action": {
+              "by": "scarecrow",
+              "surface": "'If we go that way we'll be walking into the fire.'",
+              "subtext": "seeing clearly, immediately after denying the capacity"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "asks what fire and then agrees to go around it",
+              "subtext": "taking the judgement without remarking on it"
+            },
+            "gap": "He has just proved himself wrong and nobody in the scene notices, including him."
+          },
+          {
+            "action": {
+              "by": "scarecrow",
+              "surface": "fells a tree across the broken bridge",
+              "subtext": "solving a second problem and enjoying it"
+            },
+            "reaction": {
+              "by": "scarecrow",
+              "surface": "'That's the sort of thing you'd know about if you had a brain.'",
+              "subtext": "filing the success as an absence"
+            },
+            "gap": "He does the thing he says he cannot do and credits it to the brain he does not have."
+          }
+        ]
+      },
+      "sections": {
+        "Notes": "The demo's clearest case of the driver acting and reacting in the same beat: the fourth beat has the Scarecrow on both sides, because his own competence is what he is arguing with. It is also the case of a `gap` that opens and is closed by nobody — the audience sees the contradiction the character cannot."
+      }
+    },
+    {
+      "id": "the-tin-man-and-the-lion-beats",
+      "fields": {
+        "scene": "the-tin-man-and-the-lion",
+        "driver": "dorothy",
+        "scene_objective": "to help the man in the orchard and then to survive the lion",
+        "turning_point": "Dorothy hits the Lion on the nose and he sits down and cries",
+        "true_character": [
+          {
+            "character": "lion",
+            "dilemma": "keep roaring and be struck again, or admit the fear in front of three strangers",
+            "choice_reveals": "He sits down and tells them he is frightened of everything, including the girl — the first honest self-assessment in the story, and the reason his courage plot can end without him changing"
+          },
+          {
+            "character": "dorothy",
+            "dilemma": "run from the largest animal she has ever seen, or stand still and strike it",
+            "choice_reveals": "She hits it without hesitating, which is not courage she has decided on but the reflex of someone who has been managing a farm dog"
+          }
+        ],
+        "changes": [
+          {
+            "entity": "tin-man",
+            "change": "can move again after a year, and has told somebody what was done to him"
+          },
+          {
+            "entity": "lion",
+            "change": "has admitted his fear out loud to people who did not ask, and is travelling with them"
+          },
+          {
+            "entity": "tin-man-queen-of-the-field-mice",
+            "change": "the debt she owes him becomes payable, though he does not know it yet"
+          },
+          {
+            "entity": "scarecrow-tin-man",
+            "change": "the argument about which of them is worse off has begun and will not end"
+          }
+        ],
+        "beats": [
+          {
+            "action": {
+              "by": "tin-man",
+              "surface": "(muffled) 'Oil. Please. My jaw.'",
+              "subtext": "asking for the smallest possible thing after a year of not asking"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "finds the can at his feet and oils the joint",
+              "subtext": "helping without needing to be persuaded"
+            },
+            "gap": "He expects to be walked past and is attended to."
+          },
+          {
+            "action": {
+              "by": "tin-man",
+              "surface": "'I have no heart, so it does not trouble me. Except that it does.'",
+              "subtext": "reporting a contradiction and refusing to resolve it"
+            },
+            "reaction": {
+              "by": "scarecrow",
+              "surface": "takes up the comparison immediately",
+              "subtext": "relieved to find somebody with a worse complaint than his own"
+            },
+            "gap": "He offers grief and receives an argument."
+          },
+          {
+            "action": {
+              "by": "lion",
+              "surface": "comes out of the trees roaring and asks which of them is first",
+              "subtext": "announcing a threat in order to be taken seriously"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "hits him on the nose",
+              "subtext": "treating a lion like a dog that has got on the table"
+            },
+            "gap": "He expects terror and receives correction."
+          },
+          {
+            "action": {
+              "by": "lion",
+              "surface": "sits down and cries",
+              "subtext": "dropping the performance the moment it is not believed"
+            },
+            "reaction": {
+              "by": "tin-man",
+              "surface": "'Even the girl?' — and is told especially the girl",
+              "subtext": "finding his own condition in somebody else's"
+            },
+            "gap": "The most frightening thing on the road turns out to be the most frightened."
+          },
+          {
+            "action": {
+              "by": "lion",
+              "surface": "asks to come and be made brave",
+              "subtext": "asking for permission to be less than he appears"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "tells him the Wizard might help",
+              "subtext": "collecting another person who wants something she cannot give"
+            },
+            "gap": "He joins to be changed, and what will change is nothing."
+          }
+        ]
+      },
+      "sections": {
+        "Notes": "The demo's densest scene: four `changes` entries covering a character, a relationship, and a second relationship — and two `true_character` moments in one scene, which is the maximum the field is designed for. The `tin-man-queen-of-the-field-mice` change is recorded here even though she is not in the scene, because the debt begins when he becomes able to be owed."
+      }
+    },
+    {
+      "id": "the-poppy-field-beats",
+      "fields": {
+        "scene": "the-poppy-field",
+        "driver": "dorothy",
+        "scene_objective": "to get the party across the field before the light goes",
+        "turning_point": "The third of them goes down and does not get up, and she is alone with them",
+        "true_character": [],
+        "changes": [
+          {
+            "entity": "poppy-field",
+            "change": "has taken three of the four travellers and is holding them"
+          },
+          {
+            "entity": "dorothy",
+            "change": "is alone and responsible for three people who cannot move"
+          }
+        ],
+        "beats": [
+          {
+            "action": {
+              "by": "poppy-field",
+              "surface": "opens out further than the eye can follow, with the brick line still showing through",
+              "subtext": "offering a way through and making it beautiful"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "keeps walking, because the road is still there",
+              "subtext": "trusting the route over the appearance"
+            },
+            "gap": "Nothing is wrong yet, and the field is already working."
+          },
+          {
+            "action": {
+              "by": "poppy-field",
+              "surface": "the Scarecrow folds at the knees without a sound",
+              "subtext": "taking them one at a time, without drama"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "does not notice until the Tin Man sits down",
+              "subtext": "losing them gradually enough that there is no moment to react to"
+            },
+            "gap": "She expects a danger she can see and is given a sleep she cannot."
+          },
+          {
+            "action": {
+              "by": "poppy-field",
+              "surface": "takes the Lion, who walks two more steps and falls forward",
+              "subtext": "removing the last of the party's strength"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "pulls at the Tin Man's arm and the Lion's paw and moves neither",
+              "subtext": "discovering that her only method does not work"
+            },
+            "gap": "She expects to be able to wake them and they do not wake."
+          },
+          {
+            "action": {
+              "by": "poppy-field",
+              "surface": "moves in the wind and nothing else does",
+              "subtext": "waiting, with no malice in it"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "stands in the middle of the field as the light begins to go",
+              "subtext": "having run out of actions"
+            },
+            "gap": "The scene ends before she finds out whether she can save them."
+          }
+        ]
+      },
+      "sections": {
+        "Notes": "The demo's `non-event` beat sheet: no plot moves, there is no `true_character` choice, and the location is the actor throughout. It is the case for `changes` accepting a LOCATION as the entity that changed — the field is holding three people and Dorothy is alone, and neither fact is a plot beat. This record is deleted with its scene in Draft 3."
+      }
+    },
+    {
+      "id": "the-gates-beats",
+      "fields": {
+        "scene": "the-gates",
+        "driver": "dorothy",
+        "scene_objective": "to be admitted to the city",
+        "turning_point": "The Guardian says the spectacles don't come off and has never been asked what happens if they did",
+        "true_character": [
+          {
+            "character": "guardian-of-the-gates",
+            "dilemma": "enforce a regulation he cannot justify, or admit to five strangers that he does not know why it exists",
+            "choice_reveals": "'I have never been asked what happens if they did' — he answers the question honestly and keeps enforcing the rule anyway, which is the whole of institutional faith in one line"
+          }
+        ],
+        "changes": [
+          {
+            "entity": "dorothy",
+            "change": "is in the city and cannot take the spectacles off, and has stopped asking why"
+          },
+          {
+            "entity": "guardian-of-the-gates",
+            "change": "has said out loud that he does not know why the rule exists, to people who will not report it"
+          },
+          {
+            "entity": "the-wizard-guardian-of-the-gates",
+            "change": "the faith is now slightly examined, which is the most it will ever be"
+          }
+        ],
+        "beats": [
+          {
+            "action": {
+              "by": "guardian-of-the-gates",
+              "surface": "'Spectacles must be worn. City regulation.'",
+              "subtext": "performing a procedure he has performed a thousand times"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "'Why?'",
+              "subtext": "asking the question nobody asks"
+            },
+            "gap": "He expects compliance and receives an inquiry."
+          },
+          {
+            "action": {
+              "by": "guardian-of-the-gates",
+              "surface": "'For your protection.' — 'From what?' — 'The city is very bright.'",
+              "subtext": "assembling a justification from nothing while it is being listened to"
+            },
+            "reaction": {
+              "by": "scarecrow",
+              "surface": "lets it pass and asks about the Wizard instead",
+              "subtext": "accepting the non-answer because the destination matters more"
+            },
+            "gap": "The reason he gives is not a reason, and only one of the five notices."
+          },
+          {
+            "action": {
+              "by": "guardian-of-the-gates",
+              "surface": "fits the spectacles and the locks click",
+              "subtext": "closing the last exit while sounding helpful"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "'They don't come off?' — 'At all?'",
+              "subtext": "discovering she has been committed to something"
+            },
+            "gap": "She expected a condition of entry and has been given a permanent one."
+          },
+          {
+            "action": {
+              "by": "dorothy",
+              "surface": "asks whether the Wizard sees everyone",
+              "subtext": "checking whether the destination is real"
+            },
+            "reaction": {
+              "by": "guardian-of-the-gates",
+              "surface": "'He is always busy. That is what busy means.' and then offers his own opinion of the city",
+              "subtext": "defending an institution and then, once, speaking as himself"
+            },
+            "gap": "Every official answer is empty and the only true thing he says is the one he is not authorised to say."
+          }
+        ]
+      },
+      "sections": {
+        "Notes": "The demo's Cameo character carrying the scene's `true_character` moment, which is the point of separating `driver` from the choice. Also the case of a `changes` entry on a relationship where the change is only that something was noticed."
+      }
+    },
+    {
+      "id": "the-audience-beats",
+      "fields": {
+        "scene": "the-audience",
+        "driver": "the-wizard",
+        "scene_objective": "to get the witch dealt with by people who will not ask again",
+        "turning_point": "The Wizard sets a task instead of granting a wish, and the light shifts where a person is sitting",
+        "true_character": [
+          {
+            "character": "dorothy",
+            "dilemma": "refuse a task that means killing somebody, or accept it because it is the only route home that has been offered",
+            "choice_reveals": "'We'll go' — she accepts the price rather than argue it, because the want is fixed and the means are not hers to choose"
+          }
+        ],
+        "changes": [
+          {
+            "entity": "dorothy",
+            "change": "has accepted that getting home may cost somebody else's life, and has not decided how she feels about that"
+          },
+          {
+            "entity": "the-wizard",
+            "change": "has found four people willing to do what he cannot, which he did not expect and does not enjoy"
+          },
+          {
+            "entity": "dorothy-the-wizard",
+            "change": "has changed from a request into an errand, with a price attached"
+          },
+          {
+            "entity": "lion",
+            "change": "has been given a task he is certain he cannot do and has not refused it"
+          }
+        ],
+        "beats": [
+          {
+            "action": {
+              "by": "the-wizard",
+              "surface": "'I am Oz. Who are you.'",
+              "subtext": "establishing authority before any question can be asked of it"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "states her name and her want plainly",
+              "subtext": "answering the theatre as though it were a conversation"
+            },
+            "gap": "She expects to be heard and is being auditioned."
+          },
+          {
+            "action": {
+              "by": "the-wizard",
+              "surface": "'You ask for large things.'",
+              "subtext": "making the requests feel like an imposition before refusing them"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "'Then it isn't large' — you're the Wizard",
+              "subtext": "calling the bluff without knowing it is a bluff"
+            },
+            "gap": "She gives him the argument he cannot answer, and he changes the subject instead."
+          },
+          {
+            "action": {
+              "by": "the-wizard",
+              "surface": "the green light moves and somebody in the throne shifts like a person sitting",
+              "subtext": "failing to hold the performance for a second"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "does not notice, because she is watching where the voice is coming from",
+              "subtext": "missing the only clue she will be given"
+            },
+            "gap": "The truth is offered in the one register nobody in the room is looking at."
+          },
+          {
+            "action": {
+              "by": "the-wizard",
+              "surface": "'Bring me her broom and I will grant what you ask.'",
+              "subtext": "converting four wishes into one errand"
+            },
+            "reaction": {
+              "by": "scarecrow",
+              "surface": "'She's a witch.' — and is told it is an entrance examination",
+              "subtext": "naming the cost and being flattered out of it"
+            },
+            "gap": "They came for gifts and have been given homework with a death in it."
+          },
+          {
+            "action": {
+              "by": "dorothy",
+              "surface": "'We'll go.'",
+              "subtext": "buying the only route home on offer"
+            },
+            "reaction": {
+              "by": "the-wizard",
+              "surface": "'I thought you might.'",
+              "subtext": "relieved, and unable to say what he is relieved about"
+            },
+            "gap": "She agrees to a killing and is thanked for her enthusiasm."
+          }
+        ]
+      },
+      "sections": {
+        "Notes": "The demo's case of the DRIVER being the antagonist rather than the protagonist: the Wizard wants and the Wizard wins, and Dorothy is the one who changes. Four `changes` entries here, three of them on characters who each lose something different — and `the-wizard` never appears in the flesh, only as a voice and a shape in a chair."
+      }
+    },
+    {
+      "id": "the-monkeys-beats",
+      "fields": {
+        "scene": "the-monkeys",
+        "driver": "wicked-witch-of-the-west",
+        "scene_objective": "to take the girl and the shoes",
+        "turning_point": "The Tin Man stands up after being dropped, and Dorothy is already gone",
+        "true_character": [
+          {
+            "character": "lion",
+            "dilemma": "say he was overpowered, which is true and saves him, or say he was frightened, which is also true and costs him",
+            "choice_reveals": "'I was frightened. Those are not the same and I know which one it was' — he tells the truth against his own interest, which is the moment his courage plot actually turns"
+          }
+        ],
+        "changes": [
+          {
+            "entity": "dorothy",
+            "change": "is in the Witch's hands and off the road, with no way to walk home"
+          },
+          {
+            "entity": "scarecrow",
+            "change": "has been taken apart and put back together badly"
+          },
+          {
+            "entity": "lion",
+            "change": "has admitted his fear to the people he failed to protect"
+          },
+          {
+            "entity": "the-wizard",
+            "change": "his errand has stalled and he does not know it"
+          }
+        ],
+        "beats": [
+          {
+            "action": {
+              "by": "lion",
+              "surface": "talks quietly about how he is not frightened",
+              "subtext": "asking to be believed rather than to be right"
+            },
+            "reaction": {
+              "by": "scarecrow",
+              "surface": "lets him talk without correcting him",
+              "subtext": "protecting a friend's account of himself"
+            },
+            "gap": "Nobody believes him and nobody says so."
+          },
+          {
+            "action": {
+              "by": "wicked-witch-of-the-west",
+              "surface": "sends the monkeys down in numbers with no shape",
+              "subtext": "using force that cannot be argued with"
+            },
+            "reaction": {
+              "by": "scarecrow",
+              "surface": "is pulled apart in ten seconds",
+              "subtext": "discovering that cleverness is not a defence"
+            },
+            "gap": "The party has talked its way out of everything so far and there is nothing to talk to."
+          },
+          {
+            "action": {
+              "by": "wicked-witch-of-the-west",
+              "surface": "has Dorothy carried up and over the trees",
+              "subtext": "removing the protagonist from the plot rather than defeating her"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "sees the road going away beneath her in a straight yellow line",
+              "subtext": "losing the only route she has"
+            },
+            "gap": "She expects to be fought and is instead transported."
+          },
+          {
+            "action": {
+              "by": "tin-man",
+              "surface": "stands up, bent, after being dropped",
+              "subtext": "refusing to stay down"
+            },
+            "reaction": {
+              "by": "lion",
+              "surface": "'They took her and I did nothing.' — 'You were held.' — 'I was frightened.'",
+              "subtext": "refusing the excuse that is offered"
+            },
+            "gap": "He is given a way out and declines it, which is the first brave thing he does."
+          }
+        ]
+      },
+      "sections": {
+        "Notes": "The demo's case of the antagonist as `driver` with no dialogue of her own in the scene — she never speaks, only sends. The `true_character` moment is the Lion's and the driver is the Witch, which is the widest separation between driver and choice in the demo. Also the case of a `changes` entry on the Wizard, who is nowhere near the scene."
+      }
+    },
+    {
+      "id": "the-castle-beats",
+      "fields": {
+        "scene": "the-castle",
+        "driver": "wicked-witch-of-the-west",
+        "scene_objective": "to get the shoes off the girl",
+        "turning_point": "The shoe comes up with the foot still in it and the Witch lets go",
+        "true_character": [
+          {
+            "character": "wicked-witch-of-the-west",
+            "dilemma": "keep pulling, which will hurt the girl and still not free the shoes, or let go and admit there is a rule she cannot break",
+            "choice_reveals": "She lets go and names the rule — 'they never did come off a living wearer' — which is the moment the antagonist stops being able to win by force"
+          }
+        ],
+        "changes": [
+          {
+            "entity": "wicked-witch-of-the-west",
+            "change": "knows force will not work and has moved to a deadline instead"
+          },
+          {
+            "entity": "dorothy",
+            "change": "knows the shoes cannot be taken and that this does not help her leave"
+          },
+          {
+            "entity": "wicked-witch-of-the-west-dorothy",
+            "change": "has become a matter of grief rather than of property, which the Witch admits out loud"
+          }
+        ],
+        "beats": [
+          {
+            "action": {
+              "by": "wicked-witch-of-the-west",
+              "surface": "'Take them off.'",
+              "subtext": "starting with the assumption that this is a negotiation"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "'No.'",
+              "subtext": "refusing with the only word she has left"
+            },
+            "gap": "The Witch expects compliance from a prisoner and receives a refusal."
+          },
+          {
+            "action": {
+              "by": "wicked-witch-of-the-west",
+              "surface": "reaches for the shoes and pulls until the foot comes up with them on",
+              "subtext": "testing whether her power applies here"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "is pulled off balance and says nothing",
+              "subtext": "discovering she is defended by something she does not understand"
+            },
+            "gap": "The shoes do not come off, and the Witch is the one who learns it."
+          },
+          {
+            "action": {
+              "by": "wicked-witch-of-the-west",
+              "surface": "'I can have you. Those are not the same thing.'",
+              "subtext": "moving from the object to the person holding it"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "sits in the chair and puts a hand on the stone wall",
+              "subtext": "checking whether the room is as solid as it looks"
+            },
+            "gap": "She expected to be robbed and is instead being kept."
+          },
+          {
+            "action": {
+              "by": "wicked-witch-of-the-west",
+              "surface": "names her sister and says the accident is the part she cannot get past",
+              "subtext": "admitting a grievance to the person who caused it"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "'I didn't mean to.'",
+              "subtext": "offering the only defence she has, which is true and insufficient"
+            },
+            "gap": "The Witch is owed an apology and has been given one, and it does not help either of them."
+          },
+          {
+            "action": {
+              "by": "wicked-witch-of-the-west",
+              "surface": "leaves and locks an iron door with no window that opens",
+              "subtext": "converting the room into a deadline"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "tells the dog the shoes are supposed to be powerful",
+              "subtext": "repeating the promise because there is nobody else to ask"
+            },
+            "gap": "The one thing she was told would save her has just done nothing."
+          }
+        ]
+      },
+      "sections": {
+        "Notes": "The demo's only scene with a two-character cast and no third party, which is why it can carry five beats without feeling crowded. The `true_character` moment belongs to the ANTAGONIST, and the `changes` entry on the relationship is the story admitting the grievance is real."
+      }
+    },
+    {
+      "id": "the-melting-beats",
+      "fields": {
+        "scene": "the-melting",
+        "driver": "dorothy",
+        "scene_objective": "to put out the fire in the Scarecrow",
+        "turning_point": "The water hits the Witch and she stops and looks at her own hands",
+        "true_character": [
+          {
+            "character": "lion",
+            "dilemma": "go through the door first into the room where the Witch is, or hold back and let somebody else",
+            "choice_reveals": "He pushes the Tin Man through ahead of himself — he does not conquer the fear, he acts despite it and uses a friend to do it, which is the honest shape of courage"
+          }
+        ],
+        "changes": [
+          {
+            "entity": "wicked-witch-of-the-west",
+            "change": "is dead, and the country is free of her without anybody having planned it"
+          },
+          {
+            "entity": "scarecrow",
+            "change": "has been set alight and put out, and is missing part of an arm"
+          },
+          {
+            "entity": "dorothy",
+            "change": "has killed somebody by accident for the second time, and this time she watched"
+          },
+          {
+            "entity": "lion",
+            "change": "has acted while frightened, which is the thing he has been asking to be given"
+          },
+          {
+            "entity": "tin-man-queen-of-the-field-mice",
+            "change": "the debt is now unrepayable in the form she planned, since the danger is over"
+          }
+        ],
+        "beats": [
+          {
+            "action": {
+              "by": "wicked-witch-of-the-west",
+              "surface": "holds the hall with a torch, three feet from the shoes",
+              "subtext": "still trying to win by having what she cannot take"
+            },
+            "reaction": {
+              "by": "tin-man",
+              "surface": "comes through the door first, having been pushed",
+              "subtext": "arriving in front of somebody braver"
+            },
+            "gap": "She expects to be faced and is instead interrupted by an argument behind the door."
+          },
+          {
+            "action": {
+              "by": "wicked-witch-of-the-west",
+              "surface": "puts the torch into the Scarecrow's straw",
+              "subtext": "attacking the one who cannot be hurt by fire and can"
+            },
+            "reaction": {
+              "by": "scarecrow",
+              "surface": "catches alight and runs",
+              "subtext": "being destroyed by the thing he was made to stand in a field against"
+            },
+            "gap": "The party has arrived to win and is losing within a page."
+          },
+          {
+            "action": {
+              "by": "dorothy",
+              "surface": "takes the bucket and throws it at the fire",
+              "subtext": "saving her friend, with no thought for the Witch at all"
+            },
+            "reaction": {
+              "by": "wicked-witch-of-the-west",
+              "surface": "is hit, stops, and looks down at her own hands going",
+              "subtext": "understanding before anybody else does"
+            },
+            "gap": "The water was aimed at the fire and the Witch was standing in front of it."
+          },
+          {
+            "action": {
+              "by": "wicked-witch-of-the-west",
+              "surface": "'You did not know.' — then a puddle, a hat, and a hat",
+              "subtext": "absolving the girl at the moment of her own death"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "stands in the hall with a bucket, looking at a hat",
+              "subtext": "having won and feeling none of it"
+            },
+            "gap": "She expected a fight and has been given a death that forgives her."
+          },
+          {
+            "action": {
+              "by": "lion",
+              "surface": "comes through the door, sees the hat, and sits down",
+              "subtext": "arriving after the danger to find it gone"
+            },
+            "reaction": {
+              "by": "tin-man",
+              "surface": "picks up the hat and puts it down again, and says somebody should tell the country",
+              "subtext": "reaching for the ordinary administration of a death"
+            },
+            "gap": "Nobody in the room knows what to do with what has happened, and one of them suggests paperwork."
+          }
+        ]
+      },
+      "sections": {
+        "Notes": "The demo's case of a climax that is not a choice: Dorothy's `true_character` moment is absent because she saves a friend without deliberating, and the choice the scene records belongs to the Lion. Five `changes` entries, the densest in the demo, and one of them lands on a relationship that is not present — the field mice's debt, which the danger's ending has just made unpayable."
+      }
+    },
+    {
+      "id": "behind-the-curtain-beats",
+      "fields": {
+        "scene": "behind-the-curtain",
+        "driver": "the-wizard",
+        "scene_objective": "to survive being found out without losing the country's belief",
+        "turning_point": "The Tin Man pulls the curtain back and the voice is a man standing at a machine",
+        "true_character": [
+          {
+            "character": "the-wizard",
+            "dilemma": "keep performing, which can still work on four tired people, or admit the fraud and lose the only thing he has built",
+            "choice_reveals": "'I'm a man from Omaha. The rest was amplification' — he tells the truth the moment it is asked for, which is the one thing none of them expected and the reason nobody punishes him"
+          }
+        ],
+        "changes": [
+          {
+            "entity": "the-wizard",
+            "change": "is known to be a fraud and is still standing, which is a state he has not been in for thirty years"
+          },
+          {
+            "entity": "dorothy",
+            "change": "has no route home and no promise left to rely on"
+          },
+          {
+            "entity": "dorothy-the-wizard",
+            "change": "has become a relationship between two people rather than between a girl and an institution"
+          },
+          {
+            "entity": "emerald-city",
+            "change": "is an ordinary city with green paint on it, and the light is ordinary light"
+          }
+        ],
+        "beats": [
+          {
+            "action": {
+              "by": "the-wizard",
+              "surface": "'I am Oz, the great and terrible —'",
+              "subtext": "starting the performance out of habit"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "'We know.'",
+              "subtext": "refusing to let the theatre continue"
+            },
+            "gap": "He expects an audience and receives a fact."
+          },
+          {
+            "action": {
+              "by": "tin-man",
+              "surface": "pulls the curtain back",
+              "subtext": "checking the one thing nobody has checked"
+            },
+            "reaction": {
+              "by": "the-wizard",
+              "surface": "'Hello.'",
+              "subtext": "having no second performance ready"
+            },
+            "gap": "Thirty years of authority ends with a greeting."
+          },
+          {
+            "action": {
+              "by": "dorothy",
+              "surface": "'We want what you promised.'",
+              "subtext": "holding him to a contract he never intended to honour"
+            },
+            "reaction": {
+              "by": "the-wizard",
+              "surface": "'I can't give you those things. Nobody can.'",
+              "subtext": "refusing four requests by denying the category"
+            },
+            "gap": "She expects a broken promise and is told the promise was never possible."
+          },
+          {
+            "action": {
+              "by": "the-wizard",
+              "surface": "'I expected you to be eaten in the first week.'",
+              "subtext": "admitting he sent them to die"
+            },
+            "reaction": {
+              "by": "tin-man",
+              "surface": "'Then it was a lie.' — and the Wizard agrees",
+              "subtext": "naming the charge in the plainest terms available"
+            },
+            "gap": "The accusation lands and is accepted, and acceptance turns out to be a defence."
+          },
+          {
+            "action": {
+              "by": "the-wizard",
+              "surface": "'But you did come back. Nobody has ever come back before.'",
+              "subtext": "finding the one true thing he has to offer"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "says nothing, having been given admiration instead of a way home",
+              "subtext": "recognising that the honest answer is still no answer"
+            },
+            "gap": "She came for a solution and is given a compliment."
+          }
+        ]
+      },
+      "sections": {
+        "Notes": "The demo's case of the fraud being resolved by admission rather than punishment. The `changes` entry on `emerald-city` is a LOCATION changing state because of an event, which is the same mechanism as the `variant_of` transformation — this is the scene where the base and variant location differ as a consequence of what happens in it."
+      }
+    },
+    {
+      "id": "the-balloon-beats",
+      "fields": {
+        "scene": "the-balloon",
+        "driver": "the-wizard",
+        "scene_objective": "to leave before anybody thinks of a reason to keep him",
+        "turning_point": "A rope slips and the balloon lifts before the girl is in the basket",
+        "true_character": [
+          {
+            "character": "dorothy",
+            "dilemma": "run for the basket and take the only route home, or turn back for the dog",
+            "choice_reveals": "She stops, turns and picks up Toto — she gives up the ride home for the thing she would not leave behind, and does it without weighing it"
+          }
+        ],
+        "changes": [
+          {
+            "entity": "the-wizard",
+            "change": "is gone, in a balloon, and the country is left with his machines"
+          },
+          {
+            "entity": "dorothy",
+            "change": "has refused the only transport home she has been offered, for a dog"
+          },
+          {
+            "entity": "dorothy-toto",
+            "change": "has been demonstrated to be worth more to her than the way out, which neither of them will ever discuss"
+          }
+        ],
+        "beats": [
+          {
+            "action": {
+              "by": "the-wizard",
+              "surface": "'It's all arranged. The wind brought me here and it can take me back.'",
+              "subtext": "selling a plan that depends on luck"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "'How long?' — 'As long as the ropes hold.'",
+              "subtext": "asking the question that will be answered in a moment"
+            },
+            "gap": "She expects a method and is given a hope."
+          },
+          {
+            "action": {
+              "by": "the-wizard",
+              "surface": "a rope slips and the balloon lifts a foot",
+              "subtext": "the plan failing in the exact way it was described"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "runs for the basket",
+              "subtext": "taking the offer at the only moment it is available"
+            },
+            "gap": "The departure is early and nobody is ready."
+          },
+          {
+            "action": {
+              "by": "toto",
+              "surface": "runs the other way",
+              "subtext": "avoiding something loud and high, as he always does"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "stops, turns, and picks him up",
+              "subtext": "choosing the thing she belongs to over the place she belongs in"
+            },
+            "gap": "She is one step from home and the step is taken in the other direction."
+          },
+          {
+            "action": {
+              "by": "the-wizard",
+              "surface": "(shouting down) 'It'll come back! I'll come back!'",
+              "subtext": "making a promise he has no way to keep, because it is the only comfort available"
+            },
+            "reaction": {
+              "by": "lion",
+              "surface": "'He said a lot of things.'",
+              "subtext": "declining to be comforted"
+            },
+            "gap": "The last thing the fraud does is lie kindly, and nobody is fooled and nobody minds."
+          }
+        ]
+      },
+      "sections": {
+        "Notes": "The demo's case of a character acting as the `reaction` with no dialogue and no intention: `toto` runs the wrong way and that is the turning point. The `changes` entry lands on the relationship rather than on Dorothy alone, because what changed is between the two of them and neither will ever mention it."
+      }
+    },
+    {
+      "id": "the-goodbyes-beats",
+      "fields": {
+        "scene": "the-goodbyes",
+        "driver": "the-wizard",
+        "scene_objective": "to discharge three obligations with what is in the cupboard before the balloon",
+        "turning_point": "The Tin Man looks at the silk heart and begins to weep, and the weeping seizes his jaw",
+        "true_character": [
+          {
+            "character": "the-wizard",
+            "dilemma": "admit the gifts are worthless and leave three people with nothing, or give them symbols and let the symbols do the work",
+            "choice_reveals": "He chooses the symbols and defends them with complete sincerity, and they work — the gifts are chosen with real care by a man who has just called himself a fraud, which is the strongest evidence against his own account of himself"
+          }
+        ],
+        "changes": [
+          {
+            "entity": "scarecrow",
+            "change": "holds a diploma and considers himself answered, without having changed at all"
+          },
+          {
+            "entity": "tin-man",
+            "change": "weeps over a silk heart, which proves to him that the gift is real"
+          },
+          {
+            "entity": "lion",
+            "change": "wears a medal, is still frightened, and has decided that both can be true"
+          },
+          {
+            "entity": "scarecrow-tin-man",
+            "change": "the argument has been settled in neither direction and both of them are satisfied"
+          }
+        ],
+        "beats": [
+          {
+            "action": {
+              "by": "the-wizard",
+              "surface": "'I have decided to give you what I have.'",
+              "subtext": "lowering the promise to something he can meet"
+            },
+            "reaction": {
+              "by": "scarecrow",
+              "surface": "accepts a diploma",
+              "subtext": "taking the first thing offered that answers the shape of the request"
+            },
+            "gap": "He asked for a brain and has been handed a piece of paper."
+          },
+          {
+            "action": {
+              "by": "the-wizard",
+              "surface": "'Nobody who has one can be called a fool... that is the entire system and it has never once failed.'",
+              "subtext": "defending certification with complete sincerity"
+            },
+            "reaction": {
+              "by": "scarecrow",
+              "surface": "accepts the reasoning",
+              "subtext": "relieved to have the question closed by an authority"
+            },
+            "gap": "The justification is a joke at the expense of institutions and it is entirely true, and it works."
+          },
+          {
+            "action": {
+              "by": "the-wizard",
+              "surface": "gives the Tin Man a silk heart and says wear it and see whether you weep",
+              "subtext": "setting up a test he knows the man will pass"
+            },
+            "reaction": {
+              "by": "tin-man",
+              "surface": "weeps, which seizes his jaw, which makes him weep more",
+              "subtext": "proving the gift by being unable to stop proving it"
+            },
+            "gap": "He asked for the capacity and has been given a demonstration of it that he supplied himself."
+          },
+          {
+            "action": {
+              "by": "the-wizard",
+              "surface": "'Nothing makes anyone brave. It will remind you that somebody once thought you were.'",
+              "subtext": "telling the truth about the medal instead of selling it"
+            },
+            "reaction": {
+              "by": "lion",
+              "surface": "puts it on and stands up straighter and is still frightened",
+              "subtext": "accepting that both things are true at once"
+            },
+            "gap": "He has been given the honest answer, which is the only gift in the scene that is not a trick."
+          },
+          {
+            "action": {
+              "by": "the-wizard",
+              "surface": "'I have nothing for you. I'm sorry. I'm going to get in a balloon.'",
+              "subtext": "leaving before the one person he cannot satisfy can respond"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "is not given a scene of her own to react in",
+              "subtext": "being denied even the courtesy of a refusal"
+            },
+            "gap": "Three wishes are answered and the fourth is not, and the fourth is the one the story is about."
+          }
+        ]
+      },
+      "sections": {
+        "Notes": "The demo's case of a `true_character` moment for the fraud that is also his second-best action: he gives worthless things with real care. Four `changes` entries, three of them recording that nothing changed — which is the point, and the reason `changes` is only for what actually moved."
+      }
+    },
+    {
+      "id": "glinda-and-home-beats",
+      "fields": {
+        "scene": "glinda-and-home",
+        "driver": "dorothy",
+        "scene_objective": "to get home now that there is nobody left to ask",
+        "turning_point": "Glinda says it was all on the first day, and that she withheld it",
+        "true_character": [
+          {
+            "character": "dorothy",
+            "dilemma": "be angry that she could have gone home fourteen scenes ago, or accept the answer and use it",
+            "choice_reveals": "She asks nothing about the delay and knocks her heels together — she takes the answer and leaves the grievance, which is the one active move she makes in the whole story"
+          },
+          {
+            "character": "glinda",
+            "dilemma": "defend the withholding as wisdom, or admit she enjoyed watching",
+            "choice_reveals": "'I did not tell you then because you would not have believed me and you would have stayed' — she offers the justification and does not close the question, which is why the story can leave her ambiguous"
+          }
+        ],
+        "changes": [
+          {
+            "entity": "dorothy",
+            "change": "is going home by her own act, having been given nothing she did not already have"
+          },
+          {
+            "entity": "scarecrow",
+            "change": "is told he always had a brain, and has decided to believe it"
+          },
+          {
+            "entity": "tin-man",
+            "change": "is told he always had a heart, and has decided to believe it"
+          },
+          {
+            "entity": "lion",
+            "change": "is told he was brave throughout, and is not convinced, which is correct"
+          },
+          {
+            "entity": "dorothy-glinda",
+            "change": "has ended with the withholding named and not condemned"
+          }
+        ],
+        "beats": [
+          {
+            "action": {
+              "by": "dorothy",
+              "surface": "'I want to go home and there's nobody left to ask.'",
+              "subtext": "reporting that every agent has been exhausted"
+            },
+            "reaction": {
+              "by": "glinda",
+              "surface": "'There never was. The shoes.'",
+              "subtext": "answering a fourteen-scene problem in four words"
+            },
+            "gap": "She expects to be told there is no way and is told there always was."
+          },
+          {
+            "action": {
+              "by": "dorothy",
+              "surface": "'The shoes are powerful. You said that. They haven't done anything.'",
+              "subtext": "holding the earlier promise to account"
+            },
+            "reaction": {
+              "by": "glinda",
+              "surface": "'They haven't been asked.'",
+              "subtext": "making the failure of the object into the girl's oversight"
+            },
+            "gap": "The tool worked the whole time and nobody told her it needed using."
+          },
+          {
+            "action": {
+              "by": "glinda",
+              "surface": "'It was all on the first day. I did not tell you then because you would not have believed me and you would have stayed.'",
+              "subtext": "converting a withholding into a lesson after the fact"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "does not argue about the delay and asks about Aunt Em",
+              "subtext": "declining the grievance because the answer matters more"
+            },
+            "gap": "She is handed a justification and does not examine it, which is either grace or exhaustion."
+          },
+          {
+            "action": {
+              "by": "scarecrow",
+              "surface": "'You won't come back. That's all right. Knowing the way is the same as being able to come.'",
+              "subtext": "letting her go without asking her to promise"
+            },
+            "reaction": {
+              "by": "dorothy",
+              "surface": "knocks her heels together three times and says there is no place like home",
+              "subtext": "using the answer and leaving"
+            },
+            "gap": "She wanted a place and has been told she already had one, and she goes without confirming it."
+          }
+        ]
+      },
+      "sections": {
+        "Notes": "The demo's only scene with TWO `true_character` moments, one for the protagonist and one for the mentor, and the two are opposites: Dorothy declines a grievance, Glinda declines to fully defend herself. Five `changes` entries, four on characters and one on a relationship, which is the densest closing scene the demo has."
+      }
+    }
+  ]
+}
