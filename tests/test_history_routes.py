@@ -59,7 +59,8 @@ def client(fixture_path, tmp_path):
     # A neighbouring project whose slug shares a prefix: the fuzzy resolver would
     # happily answer for it, which is exactly what an exact slug must not do.
     shutil.copytree(str(fixture_path), str(root / "projects" / (SLUG + "-old")))
-    return TestClient(create_app(Config(root=root, port=8731)), base_url="http://127.0.0.1:8731"), project
+    tc = TestClient(create_app(Config(root=root, port=8731)), base_url="http://127.0.0.1:8731")
+    return tc, project
 
 
 def _history(tc, slug=SLUG, **params):
@@ -174,7 +175,9 @@ def test_saving_a_draft_returns_it_and_a_second_save_without_edits_is_refused(cl
     store.adopt(project)
     edit_entity(project, "character", "kael", {"name": "Kael Renamed"}, "probe")
 
-    first = tc.post(f"/api/projects/{SLUG}/history/snapshots", json={"label": "Draft 2"}, headers=HDR)
+    first = tc.post(
+        f"/api/projects/{SLUG}/history/snapshots", json={"label": "Draft 2"}, headers=HDR
+    )
     assert first.status_code == 200 and first.json()["label"] == "Draft 2"
 
     second = tc.post(f"/api/projects/{SLUG}/history/snapshots", json={}, headers=HDR)

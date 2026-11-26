@@ -82,7 +82,9 @@ def _base_fingerprint(project_path: Path, snapshot_id: str) -> str | None:
     """The saved draft's own fingerprint, read from the manifest."""
     conn = sqlite3.connect(f"file:{history_path(project_path)}?mode=ro", uri=True)
     try:
-        row = conn.execute("SELECT fingerprint FROM snapshots WHERE id=?", (snapshot_id,)).fetchone()
+        row = conn.execute(
+            "SELECT fingerprint FROM snapshots WHERE id=?", (snapshot_id,)
+        ).fetchone()
         return row[0] if row else None
     finally:
         conn.close()

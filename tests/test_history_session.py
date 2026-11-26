@@ -144,7 +144,11 @@ def test_a_decision_another_answer_would_raise_is_not_yet_asked(project):
         project,
         "scene",
         scene,
-        {"plot_roles": [{"plot": "the-resistance", "role": "inciting_incident", "description": "s"}]},
+        {
+            "plot_roles": [
+                {"plot": "the-resistance", "role": "inciting_incident", "description": "s"}
+            ]
+        },
         "side",
     )
     snapshot = store.save_snapshot(project, "Side role move")["id"]
