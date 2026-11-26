@@ -25,13 +25,8 @@ enforced in `core.trash.restore` itself, so neither caller can write it.
 from pathlib import Path
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 
-
-def _err(status: int, code: str, message: str, **extra):
-    return JSONResponse(
-        status_code=status, content={"error": {"code": code, "message": message, **extra}}
-    )
+from white_words.scriptwriting.app.routes.errors import _err
 
 
 def make_router(config, app):
