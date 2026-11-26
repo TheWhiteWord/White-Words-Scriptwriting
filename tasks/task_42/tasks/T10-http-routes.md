@@ -146,11 +146,11 @@ typo or a stale session.
       and planning it raised `KeyError` from `_resolve_change`. Test asserts the item is
       in the diff for `theirs` and absent from the plan, with one D9 and no ops.
       `126 passed` across plan/session/execute/diff.
-- [ ] **T10.1 — error envelope** (D-T10-B). One shared `_err` in the app layer;
-      `trash.py`, `entities.py`, `scripts.py` switched to it; no behaviour change.
-- [ ] **T10.2 — decision payload** (`plan._change_item`): `theirs`/`ours` on the D2
-      detail beside the unlabelled `a`/`b`, or replacing them. Existing plan tests read
-      `choice`/`options`/`code`, not `a`/`b` — confirm before changing.
+- [x] **T10.1 — error envelope** (`2f8d227`). `app/routes/errors.py`; the three
+      byte-identical copies (verified by md5) now import it. `35 passed` on the route
+      suites; app builds.
+- [x] **T10.2 — decision payload** (`85ed841`). `plan._change_item` emits `theirs`/`ours`
+      instead of unlabelled `a`/`b` — nothing read them, and D1/D7 already name sides.
 - [ ] **T10.3 — `app/routes/history.py`, reads**: `GET /` (branches + drafts + parents
       + per-branch tip + current), `GET /diff`, `GET /read/{ref}/entities/{type}/{id}`,
       `GET /read/{ref}/script`.
@@ -167,8 +167,9 @@ typo or a stale session.
       never `list_branches`.
 - [ ] **T10.7 — `tests/test_history_routes.py`**, and the listing tests for the four keys.
 - [ ] **T10.8 —** `server.py` router registration; `Notes.md` findings.
-- [ ] **T10.9 — the `set_decision` guards** (D-T10-C), in `session.py`, with the chained
-      case pinned by a test built from the D2→D4 scenario above.
+- [x] **T10.9 — the `set_decision` guards** (`4ef042d`). Two refusals, both raised from
+      `session.py` so T11 inherits them: malformed key, and a well-formed key this plan
+      does not hold ("is not asked (yet)"). The chained D2→D4 case is pinned.
 
 ## Notes carried in from earlier tasks
 

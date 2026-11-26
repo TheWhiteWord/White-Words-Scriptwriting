@@ -889,8 +889,14 @@ and what it changes. No narration.
 - **A decision's `a`/`b` are theirs/mine, in that order, unlabelled** (`plan._change_item`
   builds `D2`'s detail as `a=theirs, b=mine`), while the item beside it says
   `theirs`/`ours`. A route that returns decisions as they are makes the UI guess which
-  side is which. Add `theirs` and `ours` to the decision payload and keep `a`/`b` out of
-  the HTTP contract.
+  side is which. **Fixed in T10** (`85ed841`): the detail carries `theirs` and `ours`.
+- **`set_decision` accepted any key** and stored it: a typo returned success and left the
+  decision open, which reads to a caller as an answer that did nothing. **Fixed in T10**
+  (`4ef042d`): a malformed key and a well-formed key the fresh plan does not hold are
+  both refused, with different messages. The second is "is not asked (yet)", not a bad
+  key, because answering one decision can raise another — a `D2` chosen `theirs` on
+  `plot_roles` raises `entity:scene:<id>#D4`, verified by re-planning under every option.
+  `tests/test_history_session.py` pins both.
 - **`store.head_state` describes the current branch only.** The branch graph wants an
   "in progress, N changes" tip for every branch, and a parked head has no `changed`
   flag. T10 needs a function that compares a parked head's fingerprint with its base
