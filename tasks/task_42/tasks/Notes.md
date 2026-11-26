@@ -602,6 +602,21 @@ and what it changes. No narration.
   shared**, which is the shape a cross-project draft produces. The planner never calls it
   (it takes paths); refusing the pair is the caller's job.
 
+### Review finding (post-T9): a selected role move left the plot with no holder
+- Selecting both halves of a role move (the arriving scene and the old holder's
+  `plot_roles` edit) raised a false D4 and the default answer, `mine`, stripped the
+  arriving scene's role while the holder's edit stripped the other: the plot ended with
+  **no** inciting incident. Probed end to end on the fixture through `session.apply`
+  (`holders=[]`); `theirs`/`replace` were unaffected. The existing D4 tests only ever
+  selected one half.
+- Fixed in `plan._check_roles` through `_released_by_selection`: a holder whose own
+  `plot_roles` item is selected, and whose incoming value lacks the role, is released
+  (a `release` op, no decision). A holder whose release is not selected still raises D4.
+- Not covered, and a T10/T13 concern: unticking the arriving scene while keeping the
+  holder's edit also leaves the plot with no holder. Nothing refuses it (no validator
+  requires a role), so the workspace should warn ("`<plot>` will have no
+  `<role>`") rather than the planner block it.
+
 ---
 
 ## T8 — Executor
@@ -851,7 +866,30 @@ and what it changes. No narration.
 
 ## T10 — HTTP routes
 
-### Findings
+### Findings (from the post-T9 review; verified by running a merge on the fixture)
+- **A decision's `a`/`b` are theirs/mine, in that order, unlabelled** (`plan._change_item`
+  builds `D2`'s detail as `a=theirs, b=mine`), while the item beside it says
+  `theirs`/`ours`. A route that returns decisions as they are makes the UI guess which
+  side is which. Add `theirs` and `ours` to the decision payload and keep `a`/`b` out of
+  the HTTP contract.
+- **`store.head_state` describes the current branch only.** The branch graph wants an
+  "in progress, N changes" tip for every branch, and a parked head has no `changed`
+  flag. T10 needs a function that compares a parked head's fingerprint with its base
+  draft (the same comparison `head_state` makes for the live one), and a change count
+  from `diff.compare` between the base draft and the head.
+- **A scene row in `diff.compare()['script']` can be `status: unchanged` and still carry
+  items**: a role or field change moves no script text, but `items` lists it. The script
+  view must draw a marker from `items`, not from `status`.
+- **`list_branches` carries `counts` per draft, `parents` per draft and
+  `pending_merge_parents` per branch**, which is enough to draw the graph (solid parent
+  edges, a dashed edge for a pending parent). A "picked from" edge (§7.9 cherry-pick) is
+  stored nowhere: an applied session records its source in `merge_sessions.source_ref`
+  with `status='applied'`, so the dashed edge is derived from those rows.
+- **Cost on the fixture:** `session.show` ~16 ms, `session.preview` ~13 ms. Both
+  re-plan and the preview copies the target, so the §T8 rule stands: the preview is an
+  explicit action, never a form change.
+- `session.show` re-plans on every call, so a client holding a stale selection sees the
+  planner's answer, not its own: decisions are keyed by `<item>#<code>` and survive.
 - The trash routes are the shape to copy for a core refusal: the core returns a
   dict with `error` **plus** a `code` (`restore_needs_decision`) and its payload
   (`collisions`), and the route maps it to `409` with

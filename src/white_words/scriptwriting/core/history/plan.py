@@ -872,6 +872,10 @@ def _check_roles(ctx: _Context, scene_id: str, entity_type: str, entries) -> lis
         holder = _role_holder(ctx, plot, role, exclude=scene_id)
         if not holder or holder in {s for s, _, _ in ctx.released}:
             continue
+        if _released_by_selection(ctx, holder, plot, role):
+            ctx.released.add((holder, plot, role))
+            _emit_release(ctx, holder, plot, role)
+            continue
         _, choice = ctx.decide(
             "D4",
             f"entity:scene:{scene_id}",
@@ -889,6 +893,33 @@ def _check_roles(ctx: _Context, scene_id: str, entity_type: str, entries) -> lis
         elif choice == "mine":
             out = [e for e in out if not (e.get("plot") == plot and e.get("role") == role)]
     return out if out != list(entries) else None
+
+
+def _released_by_selection(ctx: _Context, holder: str, plot: str, role: str) -> bool:
+    """True when a selected item already takes `role` off `holder`.
+
+    A writer who moves a singular role from one scene to another has made two edits, and
+    selecting both is the move. Judged against the target as it stands, the arriving
+    scene collides with a holder the same selection is about to release, and the default
+    answer to that false collision (`mine`) would strip the arriving scene's role as well,
+    leaving the plot with no holder at all.
+    """
+    key = f"field:scene:{holder}:plot_roles"
+    if key not in ctx.wanted:
+        return False
+    item = next((i for i in ctx.items if i["key"] == key), None)
+    if item is None:
+        return False
+    if item["state"] == "take":
+        value = item.get("value")
+    elif item["state"] == "conflict" and _choice(ctx, item) in ("theirs", "custom"):
+        value = item["theirs"]
+    else:
+        return False
+    return not any(
+        isinstance(entry, dict) and entry.get("plot") == plot and entry.get("role") == role
+        for entry in value or []
+    )
 
 
 def _emit_release(ctx: _Context, holder: str, plot: str, role: str) -> None:

@@ -11,7 +11,7 @@ executor will do.
 
 import pytest
 
-from white_words.scriptwriting.core.history import plan
+from white_words.scriptwriting.core.history import logical, plan
 from white_words.scriptwriting.core.writes import (
     create_entity,
     delete_entity,
@@ -814,6 +814,44 @@ def test_a_release_edit_comes_before_the_create_that_needs_the_role(sides):
         if op["op"] == "edit" and op["entity_id"] == "central-room-day"
     ]
     assert releases and max(releases) < create_at
+
+
+def test_moving_a_role_by_selecting_both_scenes_is_not_a_collision(sides):
+    """Theirs moved the role from A to B and the selection holds both edits.
+
+    The holder is released by the same selection, so no decision is raised, and the plan
+    must not leave the plot without a holder (the default answer to a false collision
+    strips the arriving scene's role while the holder's edit strips the other one).
+    """
+    from white_words.scriptwriting.core.drafts import apply_op
+
+    base, ours, theirs = sides
+    _scene_with_role(theirs, "rival", "the-resistance", "inciting_incident")
+    selection = ["entity:scene:rival", "field:scene:central-room-day:plot_roles"]
+
+    result = plan.plan(base, ours, theirs, selection=selection)
+
+    assert [d for d in result["decisions"] if d["code"] == "D4"] == []
+    assert result["ready"] is True
+    for op in result["ops"]:
+        assert apply_op(ours, op).get("success"), op
+    holders = [
+        sid
+        for sid, shape in logical.of_project(ours).items()
+        if shape["type"] == "scene"
+        and any(
+            r["plot"] == "the-resistance" and r["role"] == "inciting_incident"
+            for r in shape["fields"].get("plot_roles") or []
+        )
+    ]
+    assert holders == ["rival"]
+
+
+def test_a_collision_is_still_raised_when_the_holders_release_is_not_selected(sides):
+    base, ours, theirs = sides
+    _scene_with_role(theirs, "rival", "the-resistance", "inciting_incident")
+    result = plan.plan(base, ours, theirs, selection=["entity:scene:rival"])
+    assert [d["code"] for d in result["decisions"]] == ["D4"]
 
 
 def test_the_role_release_and_create_apply_in_that_order(sides):
