@@ -596,3 +596,91 @@ def test_the_listing_carries_the_parents_the_graph_draws(project):
     graph = {s["id"]: s for s in store.list_branches(project)["snapshots"]}
     assert graph[third["id"]]["parents"] == [second["id"]]
     assert graph[second["id"]]["parents"] == [store.list_branches(project)["snapshots"][0]["id"]]
+
+
+# ─── the merge base ─────────────────────────────────────────────────────────
+
+
+def _renamed(project, label, name):
+    _rename(project, name)
+    return store.save_snapshot(project, label)
+
+
+def test_the_merge_base_of_a_draft_with_itself_is_itself(project):
+    first = _saved(project, "first")
+    assert store.merge_base(project, first["id"], first["id"]) == {
+        "base": first["id"],
+        "imprecise": False,
+    }
+
+
+def test_the_merge_base_of_a_draft_and_its_parent_is_the_parent(project):
+    first = _saved(project, "first")
+    second = _renamed(project, "second", "Kael Two")
+    assert store.merge_base(project, second["id"], first["id"])["base"] == first["id"]
+
+
+def test_the_merge_base_of_two_siblings_is_their_common_parent(project):
+    first = _saved(project, "first")
+    branch = store.branch_from(project, first["id"], "side")
+    store.switch(project, branch["id"])
+    side = _renamed(project, "side-draft", "Kael Side")
+    store.switch(project, store.list_branches(project)["branches"][0]["id"])
+    main = _renamed(project, "main-draft", "Kael Main")
+
+    assert store.merge_base(project, main["id"], side["id"]) == {
+        "base": first["id"],
+        "imprecise": False,
+    }
+
+
+def test_the_merge_base_prefers_the_nearest_shared_draft(project):
+    """A cherry-picked source cannot beat a later shared ancestor (§7.1)."""
+    first = _saved(project, "first")
+    second = _renamed(project, "second", "Kael Two")
+    third = _renamed(project, "third", "Kael Three")
+    # third reaches first through second, so first is shared but further away.
+    assert store.merge_base(project, third["id"], second["id"])["base"] == second["id"]
+    assert store.merge_base(project, third["id"], first["id"])["base"] == first["id"]
+
+
+def test_a_criss_cross_history_is_reported_imprecise(project):
+    """Two equally near shared drafts: one is taken, and the plan is told it is a guess.
+
+    Both merge drafts carry `left` and `right` as parents, so each is one step from
+    both and neither can win — the recursive-merge shape (§14-F) the flag exists for.
+    """
+    root = _saved(project, "root")
+    left = store.branch_from(project, root["id"], "left")
+    right = store.branch_from(project, root["id"], "right")
+    sides = {}
+    for branch, name in ((left, "Kael Left"), (right, "Kael Right")):
+        store.switch(project, branch["id"])
+        sides[branch["id"]] = _renamed(project, f"{name}-draft", name)["id"]
+
+    def merge_on(branch_id, label):
+        store.switch(project, branch_id)
+        conn = sqlite3.connect(str(store.history_path(project)))
+        try:
+            conn.execute(
+                "UPDATE branches SET pending_merge_parents=? WHERE id=?",
+                (json.dumps(list(sides.values())), branch_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return _renamed(project, label, f"Kael {label}")
+
+    first_merge = merge_on(left["id"], "merge-one")
+    second = store.branch_from(project, root["id"], "second")
+    second_merge = merge_on(second["id"], "merge-two")
+
+    result = store.merge_base(project, first_merge["id"], second_merge["id"])
+    assert result["base"] in sides.values()
+    assert result["imprecise"] is True
+
+
+def test_a_draft_from_another_project_is_refused(project):
+    _saved(project, "first")
+    with pytest.raises(ValueError, match="No such draft"):
+        store.merge_base(project, "s-19700101-000000", "s-19700101-000001")

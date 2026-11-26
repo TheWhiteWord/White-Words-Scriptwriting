@@ -550,7 +550,57 @@ and what it changes. No narration.
   not a change and yields no item, so a plan cannot offer to reorder a cast list.
 
 ### Deviations
+- **D9 was added to §7.5's catalogue** (owner decision, D-T7-B): an entity deleted on one
+  side and edited on the other has no row in §7.3's table and no decision in §7.5. Keep
+  mine (default: the deletion stands, incoming edits dropped), take theirs (restore then
+  edit — undoes a user's deletion), keep the deletion (same outcome, offered explicitly).
+  §7.5's list is D1–D9 from here on; T8 T9 T10 read the ninth.
+- **§7.5's D3 is a proposal, not a decision.** When the target can host the child, the
+  planner emits the placement it computed and registers nothing. D3 is only raised when
+  the container is genuinely absent from the target and cannot be brought. A proposal
+  never blocks Apply, so `decisions[]` is not "everything the plan chose".
+- **D5 and D8 are marked `optional`** and default to their non-destructive choice
+  (bring / keep). `open` is computed from non-optional decisions only, so neither can
+  hold Apply. They still appear in `decisions[]` for the UI to show.
+
 ### Issues
+- **`merge_base` takes one candidate on a criss-cross tie and sets `imprecise`.** T9 and
+  T10 must surface that flag to the user; the planner accepts whatever base it is given
+  and cannot tell a guess from a certain one. Verified:
+  `tests/test_history_store.py::test_a_criss_cross_history_is_reported_imprecise`.
+
+### Facts verified while implementing (probes on this branch)
+
+- **`create_entity` refuses an id that exists OR is in the trash.** D6 cannot be
+  "create the incoming entity"; a trashed id must go through `trash.restore` first.
+  Confirmed: `ValueError: Entity already exists: character/mira`.
+- **`_check_roles` must return the list to write, not mutate it.** `plot_roles` arrives
+  as a whole value (D-T7-C), so D4's `mine` has to strip the colliding entry from the
+  payload *before* the op is built. A function that only records the choice silently
+  ships the collision and `create_entity` then refuses it at apply time.
+- **D4's `theirs` needs a `release` edit before the create** (§7.7.2's "edits that
+  release roles" phase). `create_entity` validates singular roles against live scenes, so
+  a create that takes a role still held is refused: `PlotRoleError: Plot 'the-resistance'
+  already has its inciting_incident on scene 'central-room-day'`. `_emit_release` emits a
+  plain `edit` op stripping the entry; it is keyed `release` internally so the executor
+  can order it, and it is an ordinary `edit` in the public vocabulary.
+- **A plan can create the same id twice.** A dependency walk (`_resolve` → `_emit_create`)
+  and a directly selected item both reach the same entity when a new sequence's act is
+  also selected. `_emit_create` is idempotent through `ctx.planned_creates`; without the
+  guard the op list carries two creates and the second is refused at apply.
+- **`_settle_orders`' completeness assert is reachable and worth keeping.** A duplicate
+  sibling row (two entities sharing an order key) makes the emitted list longer than the
+  live set, and `reorder` would renumber the partial list silently (F13). The assert now
+  has a test that trips it deliberately; no well-formed plan reaches it.
+- **Placement needs both neighbours.** `_place` looks for the source predecessor first and
+  falls back to the successor. A scene that is first in its parent in `theirs` has no
+  predecessor, so only the successor branch places it — testing one half leaves the other
+  unverified.
+- **`diff.compare_states(a, b)`** exists so the planner compares each side once. It takes
+  already-loaded `State`s; `diff.compare(path_a, path_b)` remains the file-opening entry.
+- **`store.merge_base` returns `{"base": None, "imprecise": False}` when nothing is
+  shared**, which is the shape a cross-project draft produces. The planner never calls it
+  (it takes paths); refusing the pair is the caller's job.
 
 ---
 
@@ -604,6 +654,14 @@ and what it changes. No narration.
 - `refmap.rewrite` returns a NEW `fields` dict and never mutates the incoming
   items, so an executor can rewrite an item and still compare against what the
   plan was computed from.
+- **The plan's ops carry their own `op` kind, and `release` is an `edit`.** T7 emits
+  `op` strings `create`/`edit`/`delete`/`reorder` plus an internal `restore`, and a
+  D4 "take theirs" arrives as an ordinary `edit` stripping the role from the losing
+  scene. Ordering it before the create is the executor's job (§7.7.2); the plan emits
+  the ops in that order already, so preserve it rather than re-sorting by kind.
+- **`plan()` returns ops even when `ready` is False.** Defaults are already applied, so
+  `ops` is the default plan — the executor must gate on `ready` and refuse to apply an
+  unready plan, or it will silently drop content on an unanswered D1/D2/D4/D9.
 
 ### Deviations
 ### Issues

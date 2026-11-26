@@ -296,6 +296,59 @@ def head_state(project_path: Path) -> dict:
     }
 
 
+def merge_base(project_path: Path, target_snapshot_id: str, source_snapshot_id: str) -> dict:
+    """The most recent draft both sides descend from — a merge's base (§7.1).
+
+    Walks `snapshot_parents` from each side. The candidates are the source's reachable
+    ancestors that the target also reaches; the base is the one whose longest distance
+    from its own side is smallest, so a cherry-picked source can never beat a real
+    shared ancestor. Several candidates at the same distance means a criss-cross
+    history: one is taken and `imprecise` says so, rather than a recursive merge
+    (§14-F).
+
+    A missing ancestor is not an error: every project descends from its first draft, so
+    two drafts of one project always meet. `base is None` means only that a caller
+    passed a draft from another project, which the caller refuses.
+    """
+    conn = connect(project_path)
+    try:
+        known = {r[0] for r in conn.execute("SELECT id FROM snapshots")}
+        if target_snapshot_id not in known or source_snapshot_id not in known:
+            missing = [s for s in (target_snapshot_id, source_snapshot_id) if s not in known]
+            raise ValueError(f"No such draft: {', '.join(missing)}.")
+        distance = _ancestor_distances(conn)
+    finally:
+        conn.close()
+
+    def nearest(snapshot_id: str) -> dict:
+        found, frontier, depth = {}, [snapshot_id], 0
+        while frontier:
+            for sid in frontier:
+                found.setdefault(sid, depth)
+            frontier = [p for sid in frontier for p in distance.get(sid, ()) if p not in found]
+            depth += 1
+        return found
+
+    ours, theirs = nearest(target_snapshot_id), nearest(source_snapshot_id)
+    shared = set(ours) & set(theirs)
+    if not shared:
+        return {"base": None, "imprecise": False}
+    scored = sorted(shared, key=lambda s: (max(ours[s], theirs[s]), ours[s], s))
+    best = max(ours[scored[0]], theirs[scored[0]])
+    tied = [s for s in scored if max(ours[s], theirs[s]) == best]
+    return {"base": scored[0], "imprecise": len(tied) > 1}
+
+
+def _ancestor_distances(conn: sqlite3.Connection) -> dict[str, list[str]]:
+    """Every draft's direct parents, for the ancestor walk."""
+    out: dict[str, list[str]] = {}
+    for snapshot_id, parent_id in conn.execute(
+        "SELECT snapshot_id, parent_id FROM snapshot_parents"
+    ):
+        out.setdefault(snapshot_id, []).append(parent_id)
+    return out
+
+
 # ─── files ───
 
 

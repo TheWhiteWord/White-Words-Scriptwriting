@@ -60,8 +60,17 @@ def text_diff(a: str, b: str) -> list[str]:
 
 def compare(a: Path, b: Path) -> dict:
     """Everything that differs between the projects at `a` and `b`."""
-    entities_a, order_a = load(a)
-    entities_b, order_b = load(b)
+    return compare_states(load(a), load(b))
+
+
+def compare_states(a: State, b: State) -> dict:
+    """`compare` over two already-loaded states.
+
+    The planner holds all three states of a merge and compares two pairs, so it
+    must not materialize the base twice more to do it.
+    """
+    entities_a, order_a = a
+    entities_b, order_b = b
     entities = _entities(entities_a, entities_b)
     order = _order(order_a, order_b)
     return {
