@@ -148,7 +148,7 @@ def connect(project_path: Path) -> sqlite3.Connection:
 
 
 @contextmanager
-def _locked(project_path: Path):
+def locked(project_path: Path):
     """Yield a manifest connection holding the write lock for the whole block.
 
     ``BEGIN IMMEDIATE`` up front, not at the first write: these operations read,
@@ -487,11 +487,68 @@ def _adopt(project_path: Path, conn: sqlite3.Connection) -> dict:
 
 def adopt(project_path: Path) -> dict:
     """Ensure the project has a manifest with a current branch; return that branch."""
-    with _locked(project_path) as conn:
+    with locked(project_path) as conn:
         return _adopt(project_path, conn)
 
 
 # ─── operations ───
+
+
+def _save(project_path: Path, conn: sqlite3.Connection, label: str | None, note: str) -> dict:
+    """Freeze the head as a draft, on a manifest connection that already holds the lock."""
+    branch = _adopt(project_path, conn)
+    base = _snapshot(conn, branch["base_snapshot_id"])
+    assert base is not None, "a branch's saved draft is never deleted"
+    live = fingerprint.of_project(project_path)
+    if live == base["fingerprint"]:
+        raise ValueError(
+            f"Nothing has changed since {base['label']}. A draft has to be a different "
+            "state from the one before it."
+        )
+
+    snapshot_id = _new_snapshot_id(conn)
+    _freeze(project_path, snapshot_id)
+
+    project = get_db(project_path)
+    try:
+        version = project.execute("PRAGMA user_version").fetchone()[0]
+        counts = _counts(project)
+    finally:
+        project.close()
+
+    seq = conn.execute(
+        "SELECT COALESCE(MAX(seq), 0) + 1 FROM snapshots WHERE branch_id=?", (branch["id"],)
+    ).fetchone()[0]
+    conn.execute(
+        f"INSERT INTO snapshots ({_SNAPSHOT_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?)",
+        (
+            snapshot_id,
+            branch["id"],
+            seq,
+            (label or f"Draft {seq}").strip(),
+            note,
+            _now(),
+            version,
+            live,
+            json.dumps(counts),
+        ),
+    )
+    # Its parents: the draft it grew from, then any branch whose complete merge this
+    # save is the first draft after (§7.9).
+    parents = [base["id"]] + [p for p in branch["pending_merge_parents"] if p != base["id"]]
+    for order, parent in enumerate(parents):
+        conn.execute(
+            "INSERT OR IGNORE INTO snapshot_parents (snapshot_id, parent_id, ord) VALUES (?,?,?)",
+            (snapshot_id, parent, order),
+        )
+    conn.execute(
+        "UPDATE branches SET base_snapshot_id=?, pending_merge_parents=? WHERE id=?",
+        (snapshot_id, json.dumps([]), branch["id"]),
+    )
+    saved = _snapshot(conn, snapshot_id)
+    assert saved is not None
+    saved["parents"] = parents
+    return saved
 
 
 def save_snapshot(project_path: Path, label: str | None = None, note: str = "") -> dict:
@@ -500,66 +557,60 @@ def save_snapshot(project_path: Path, label: str | None = None, note: str = "") 
     The head is unchanged by a save — a draft is a copy of it — so nothing is
     copied back.
     """
-    with _locked(project_path) as conn:
-        branch = _adopt(project_path, conn)
-        base = _snapshot(conn, branch["base_snapshot_id"])
-        assert base is not None, "a branch's saved draft is never deleted"
-        live = fingerprint.of_project(project_path)
-        if live == base["fingerprint"]:
-            raise ValueError(
-                f"Nothing has changed since {base['label']}. A draft has to be a different "
-                "state from the one before it."
-            )
+    with locked(project_path) as conn:
+        return _save(project_path, conn, label, note)
 
-        snapshot_id = _new_snapshot_id(conn)
-        _freeze(project_path, snapshot_id)
 
-        project = get_db(project_path)
-        try:
-            version = project.execute("PRAGMA user_version").fetchone()[0]
-            counts = _counts(project)
-        finally:
-            project.close()
+def restore_point(project_path: Path, conn: sqlite3.Connection, label: str) -> dict:
+    """The draft a merge can be undone to, on a manifest lock the caller already holds.
 
-        seq = conn.execute(
-            "SELECT COALESCE(MAX(seq), 0) + 1 FROM snapshots WHERE branch_id=?", (branch["id"],)
-        ).fetchone()[0]
+    A head identical to its own saved draft has nothing to save — that draft IS this
+    state — so it is returned rather than duplicated, with ``created`` saying which
+    happened. A project this feature has never touched is adopted first: without a
+    branch there is no draft to be the restore point.
+    """
+    branch = _adopt(project_path, conn)
+    base = _snapshot(conn, branch["base_snapshot_id"])
+    assert base is not None, "a branch's saved draft is never deleted"
+    if fingerprint.of_project(project_path) == base["fingerprint"]:
+        return {**base, "created": False}
+    return {**_save(project_path, conn, label, ""), "created": True}
+
+
+def record_pending_parent(
+    project_path: Path, snapshot_id: str, *, conn: sqlite3.Connection | None = None
+) -> dict:
+    """Declare that a complete merge has accounted for `snapshot_id` (§7.9).
+
+    Only a complete merge calls this: a recorded parent means "everything in it is
+    already accounted for", so the next *Save draft* writes it as a second
+    `snapshot_parents` row and clears the column. A cherry-pick records nothing and
+    its unselected changes are offered again next time.
+
+    Writes to `branches` only — no parent row here, or `save_snapshot` would write the
+    same parent twice. `conn` is a manifest connection whose caller already holds the
+    lock; the executor applies a plan under that lock, so this has to run inside it
+    rather than take the manifest lock a second time and deadlock.
+    """
+    if conn is None:
+        with locked(project_path) as held:
+            return record_pending_parent(project_path, snapshot_id, conn=held)
+    branch = _adopt(project_path, conn)
+    if not _snapshot(conn, snapshot_id):
+        raise ValueError(f"No such draft: {snapshot_id}.")
+    pending = list(branch["pending_merge_parents"])
+    if snapshot_id not in pending:
+        pending.append(snapshot_id)
         conn.execute(
-            f"INSERT INTO snapshots ({_SNAPSHOT_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?)",
-            (
-                snapshot_id,
-                branch["id"],
-                seq,
-                (label or f"Draft {seq}").strip(),
-                note,
-                _now(),
-                version,
-                live,
-                json.dumps(counts),
-            ),
+            "UPDATE branches SET pending_merge_parents=? WHERE id=?",
+            (json.dumps(pending), branch["id"]),
         )
-        # Its parents: the draft it grew from, then any branch whose complete merge
-        # this save is the first draft after (§7.9).
-        parents = [base["id"]] + [p for p in branch["pending_merge_parents"] if p != base["id"]]
-        for order, parent in enumerate(parents):
-            conn.execute(
-                "INSERT OR IGNORE INTO snapshot_parents (snapshot_id, parent_id, ord) "
-                "VALUES (?,?,?)",
-                (snapshot_id, parent, order),
-            )
-        conn.execute(
-            "UPDATE branches SET base_snapshot_id=?, pending_merge_parents=? WHERE id=?",
-            (snapshot_id, json.dumps([]), branch["id"]),
-        )
-        saved = _snapshot(conn, snapshot_id)
-        assert saved is not None
-        saved["parents"] = parents
-        return saved
+    return _branch(conn, branch["id"])
 
 
 def branch_from(project_path: Path, snapshot_id: str, name: str) -> dict:
     """Start a branch at a draft; its head is parked, ready to switch to."""
-    with _locked(project_path) as conn:
+    with locked(project_path) as conn:
         _adopt(project_path, conn)
         if not _snapshot(conn, snapshot_id):
             raise ValueError(f"No such draft: {snapshot_id}.")
@@ -586,7 +637,7 @@ def switch(project_path: Path, branch_id: str) -> dict:
     Refused while the head has open staged drafts: those exist only in story.db
     and are deliberately not part of a draft, so the copy would destroy them.
     """
-    with _locked(project_path) as conn:
+    with locked(project_path) as conn:
         current = _adopt(project_path, conn)
         target = _branch(conn, branch_id)
         if target["is_current"]:
@@ -626,7 +677,7 @@ def switch(project_path: Path, branch_id: str) -> dict:
 
 def rename_branch(project_path: Path, branch_id: str, name: str) -> dict:
     """Change a branch's display name. Its id, files and history do not move."""
-    with _locked(project_path) as conn:
+    with locked(project_path) as conn:
         _adopt(project_path, conn)
         branch = _branch(conn, branch_id)
         clean = _branch_name(conn, name, skip_id=branch["id"])
@@ -636,7 +687,7 @@ def rename_branch(project_path: Path, branch_id: str, name: str) -> dict:
 
 def delete_branch(project_path: Path, branch_id: str) -> dict:
     """Delete a branch, its parked head, and every draft nothing else reaches."""
-    with _locked(project_path) as conn:
+    with locked(project_path) as conn:
         _adopt(project_path, conn)
         branch = _branch(conn, branch_id)
         if branch["is_current"]:
@@ -654,7 +705,7 @@ def delete_branch(project_path: Path, branch_id: str) -> dict:
 
 def delete_snapshot(project_path: Path, snapshot_id: str) -> dict:
     """Delete one draft, re-attaching its children to its own parents."""
-    with _locked(project_path) as conn:
+    with locked(project_path) as conn:
         _adopt(project_path, conn)
         snapshot = _snapshot(conn, snapshot_id)
         if not snapshot:

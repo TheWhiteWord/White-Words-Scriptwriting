@@ -91,6 +91,7 @@ def test_changed_in_theirs_only_is_taken(sides):
             "entity_id": "kael",
             "data": {"name": "Kael Renamed"},
             "summary": "Bring theirs' character name",
+            "source": "field:character:kael:name",
         }
     ]
 

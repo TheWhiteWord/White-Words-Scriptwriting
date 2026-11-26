@@ -24,12 +24,14 @@ survives a re-plan.
 
 from __future__ import annotations
 
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from ..constants import UNIQUE_PLOT_ROLES
 from ..db import get_db
 from ..trash import restore_check
-from . import diff, refmap
+from . import diff, refmap, fingerprint
 
 # §7.5's catalogue plus D9 (T7's addition: one side deleted what the other edited).
 # `options` is what a caller offers, in order, the default first.
@@ -125,7 +127,7 @@ def plan(
     decision key to a choice — `{"choice": …, "set_by": …}` or a bare string, which reads
     as a user's answer.
 
-    Returns ``{"items", "decisions", "open", "ops", "ready"}``:
+    Returns ``{"items", "decisions", "open", "ops", "ready", "fingerprint"}``:
 
       * ``items``     — every difference, classified, with both sides' values;
       * ``decisions`` — every decision the plan had to make, defaults included;
@@ -133,12 +135,19 @@ def plan(
       * ``ops``       — the ordered op list, with every default already applied, so a
         caller can preview exactly what Apply would do;
       * ``ready``     — False while a decision is unanswered. §7.7.3 disables Apply on
-        `ready`, not on `ops`: a preview of the default plan is the point of a preview.
+        `ready`, not on `ops`: a preview of the default plan is the point of a preview;
+      * ``fingerprint`` — the target's state at plan time. §7.7.4's stale-plan guard
+        compares it against the target before applying; carried on the plan so a caller
+        cannot forget to pass it.
     """
+    ours_state = diff.load(ours)
+    with closing(get_db(ours)) as conn:
+        trashed = _trashed(conn)
+        target_fingerprint = fingerprint.of_conn(conn)
     ctx = _Context(
-        states={"base": diff.load(base), "ours": diff.load(ours), "theirs": diff.load(theirs)},
+        states={"base": diff.load(base), "ours": ours_state, "theirs": diff.load(theirs)},
         target=ours,
-        trashed=_trashed(ours),
+        trashed=trashed,
         chosen=_answers(decisions),
         wanted=set(selection or ()),
     )
@@ -155,6 +164,7 @@ def plan(
         "open": open_keys,
         "ops": ctx.ops,
         "ready": not open_keys,
+        "fingerprint": target_fingerprint,
     }
 
 
@@ -179,6 +189,9 @@ class _Context:
         self.planned_creates: set[str] = set()  # ids this plan already emits a create for
         self.placement_checks: list[tuple[str, str, str]] = []  # deferred D3 checks
         self.released: set[tuple[str, str, str]] = set()  # (scene, plot, role) let go
+        # The item key whose expansion is emitting ops right now; an op's `source`
+        # defaults to it (§7.7.3's failure-to-decision mapping).
+        self.source: str | None = None
 
     # ── decisions ──
 
@@ -214,8 +227,17 @@ class _Context:
 
     # ── ops ──
 
-    def op(self, phase: str, **op) -> None:
+    def op(self, phase: str, source=None, **op) -> None:
+        """Record one op, tagged with the item or order key that produced it.
+
+        §7.7.3 maps a dry-run failure back to "the decision or item that produced
+        it", and a release op acts on the scene that *holds* a role while its
+        decision belongs to the scene *arriving* — the op's own type and id name
+        the wrong item. The tag is the item key, which is also a decision's
+        subject, so a caller can look it up in `items` or `decisions`.
+        """
         op["_phase"] = PHASE[phase]
+        op["source"] = source if source is not None else self.source
         self.ops.append(op)
 
     def shape(self, side: str, entity_id: str) -> dict:
@@ -237,14 +259,10 @@ def _answers(decisions) -> dict[str, tuple[str, str]]:
     return out
 
 
-def _trashed(ours: Path) -> dict[str, str]:
+def _trashed(conn: sqlite3.Connection) -> dict[str, str]:
     """The target's bin: id → type. `materialize` cannot see these (§6.1)."""
-    conn = get_db(ours)
-    try:
-        rows = conn.execute("SELECT id, type FROM entities WHERE is_deleted=1")
-        return {r[0]: r[1] for r in rows}
-    finally:
-        conn.close()
+    rows = conn.execute("SELECT id, type FROM entities WHERE is_deleted=1")
+    return {r[0]: r[1] for r in rows}
 
 
 # ─── classification (§7.3) ──────────────────────────────────────────────────
@@ -452,6 +470,7 @@ def _build(ctx: _Context) -> None:
         item = by_key.get(key)
         if item is None or item.get("state") in ("keep", "same"):
             continue
+        ctx.source = key
         if item["kind"] == "entity":
             _emit_entity(ctx, item)
         elif item["kind"] in ("field", "section"):
@@ -580,6 +599,7 @@ def _emit_create(
         fields["plot_roles"] = roles
     ctx.op(
         "create",
+        source=f"entity:{entity_type}:{target_id}",
         op="create",
         type=entity_type,
         id=target_id,
@@ -1055,6 +1075,7 @@ def _settle_orders(ctx: _Context) -> None:
         if result != current:
             ctx.op(
                 "reorder",
+                source=f"order:{key}",
                 op="reorder",
                 entity_type=entity_type,
                 ordered_ids=result,

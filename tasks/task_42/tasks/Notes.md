@@ -664,7 +664,62 @@ and what it changes. No narration.
   unready plan, or it will silently drop content on an unanswered D1/D2/D4/D9.
 
 ### Deviations
+- **§7.8's non-current-branch target is T9's** (owner decision, D-T8-A). `execute.apply`
+  takes a project path and covers the live database only. The parked-head target needs
+  a branch-addressed pre-merge draft, and `store.save_snapshot` only freezes the live
+  `story.db`; T9 owns `target_branch_id`, so it owns that too.
+- **Every plan op carries a `source` key**: the item key whose expansion emitted it
+  (`entity:<type>:<id>`, `field:…`, `order:<child_type>:<parent>`). §7.7.3 wants a
+  failure mapped to "the decision or item that produced it", and no other field can do
+  it — a D4 `theirs` release op edits the scene that HOLDS the role while the decision
+  belongs to the scene ARRIVING, so matching on the op's `(type, id)` names the wrong
+  item. `_explain` looks up `source` first, then the op's own entity key.
+- **`plan()` returns `fingerprint`**, the target's state at plan time. §7.7.4 says the
+  plan stores it; putting it on the return means a caller cannot pass the wrong one.
+- **`core.trash.restore(..., conn=None)`** — the `own_conn` shape `reorder` got in T2.
+  Without it an executor's single transaction is impossible (`database is locked`).
+  Every existing caller is unchanged.
+- **`apply` holds `store.locked` (the manifest `BEGIN IMMEDIATE`) for its whole body**
+  (§4.5), and the restore point + `record_pending_parent` run on that same connection.
+  `record_pending_parent` therefore takes an optional `conn`; calling it without one
+  from inside the lock deadlocks — mutation-verified.
+- **The restore point is a normal history draft** labelled "Before merge", taken after
+  the stale check and before the content transaction. When the head already equals its
+  base draft, that draft is reported as the restore point instead of writing a second
+  identical one (`created: False`).
+- **`record_pending_parent` writes only `branches.pending_merge_parents`.** Inserting a
+  `snapshot_parents` row there would make `save_snapshot` write the same parent twice.
+  Verified: after a complete merge, the next save's `parents` is
+  `[baseline, source]`.
+
 ### Issues
+- **A refused merge records no parent**, and that needed its own test: recording the
+  source before running the ops leaves a parent row for a merge that never landed, so
+  the source's changes would never be offered again. Mutation-verified.
+- `dry_run` copies the target per call (backup API into a temp project). That is the
+  same cost the drafts flow already pays (F6), and it is what makes the verdict exact,
+  but T10 must not call it on every keystroke in a decision form.
+- `_run` stops at the first failure. A plan with two independent bad ops therefore
+  reports one, and the second appears on the next dry run. Deliberate — later ops were
+  planned against a state where the failed one had landed — but a UI that says "N
+  problems" would be lying.
+- **`execute.apply` does not take a pre-merge draft when the head is clean and no
+  manifest exists**: it adopts first (`_adopt`), which freezes the current state as
+  Draft 1, and reports that as the baseline. Correct, but the label is "Draft 1", not
+  "Before merge" — a caller that shows the label must not imply a merge-specific draft
+  was taken.
+
+### Environment note (not a defect in this task)
+
+- **The suite cannot be run in one `pytest tests/` invocation on this host.** Past
+  roughly 30-40% the process enters `D` state with `wchan = jbd2_log_wait_commit` and
+  never returns. Proven to be the environment, not this change: `git stash -u` to the
+  clean T7 commit (`8ffe8b8`) hangs identically at the same point. The reported
+  count is therefore from two chunks over the same tree:
+  `1829 passed, 1 failed` (everything, with `test_manual_edits.py` and the three
+  history files excluded) plus `156 passed` (those four files) = **1985 passed,
+  1 failed**. The failure is the baseline's `test_no_hermes_imports`. A fresh
+  `TMPDIR` does not help, so it is not the scratch directory filling up.
 
 ---
 
@@ -689,6 +744,26 @@ and what it changes. No narration.
 - Timestamps in `history.db` come from `core.clock.now_iso()`, like every other
   stored stamp. A new `core/history/*.py` that calls `datetime.now` directly
   fails `tests/test_utc_stamps.py` until registered in `LOCAL_TIME_ALLOWED`.
+- **T8 put the executor's whole body under `store.locked`** (the manifest
+  `BEGIN IMMEDIATE`, §4.5), and `store.record_pending_parent` and
+  `store.restore_point` take a `conn` for that reason. A session operation that
+  writes the manifest while calling `apply` must not already hold that lock, and
+  must not take it a second time.
+- **`apply(project_path, planned, *, parent_source=None, label=…)` is the whole
+  interface T9 needs.** It returns `applied` / `refused` (`stale_plan`, or
+  `failures` with `item` + `decision`) / `blocked` (`open`), plus `baseline` and
+  `parents`. A session stores `planned["fingerprint"]` to re-derive the stale
+  check, and `status` is already the value for `merge_sessions.status`.
+- **§7.8's other target is T9's** (T8 decision D-T8-A): merging into a
+  NON-current branch needs the parked head copied into a scratch project,
+  applied, and written back — plus a pre-merge draft for THAT branch, which
+  `store.save_snapshot` cannot take because it freezes the live `story.db` only.
+  `store._park(project_path, src, dest)` and `store._freeze(..., source=…)` are
+  the copy primitives; a `save_head_snapshot(project_path, branch_id, label)`
+  built on them is what is missing.
+- `merge_sessions.target_fingerprint` should hold `planned["fingerprint"]`
+  verbatim — that is the value `execute.apply` compares, so a session that stores
+  anything else (a re-hash, a truncated hash) makes its own stale check wrong.
 
 ### Deviations
 ### Issues
@@ -729,6 +804,17 @@ and what it changes. No narration.
   project, on every landing-page call. `history.db` may not exist yet (a project
   never touched by this feature) — treat a missing manifest as "no history", and
   do **not** call `store.adopt` from a listing, which would write during a read.
+- **The merge routes have three result shapes to translate, not one.**
+  `execute.apply` returns `status` `applied` / `refused` / `blocked`;
+  `execute.dry_run` returns `clean` / `refused`. `blocked` carries `open` (the
+  unanswered decision keys) and `refused` carries either `code: "stale_plan"`
+  (§7.7.4 — the route should 409 and tell the client to re-plan) or `failures[]`
+  with `op`, `error`, `item` and `decision`. §10's error envelope has room for all
+  of it; the stale case is the one a client must handle differently from a bad op.
+- **`apply` blocks: it holds the manifest lock and copies the target for its
+  restore point.** A `POST /merges/{id}/apply` is not a cheap request, and
+  `POST /merges/{id}/preview` (a dry run) copies the whole target per call. The
+  preview must be triggered by an explicit action, never by a form change.
 
 ### Deviations
 ### Issues
@@ -758,6 +844,12 @@ and what it changes. No narration.
 - A `switch` refusal for open drafts carries the draft ids only inside the
   message. An agent tool must surface them verbatim — the fix is
   commit-or-discard, which the agent cannot do on the user's behalf.
+- **A merge tool call is `plan` then `apply`, two calls, not one.** The plan is
+  what §11's confirmation gate shows (its `ops`, `decisions`, `open`, and a
+  `dry_run` verdict); `apply` takes that same dict back plus the idempotency the
+  fingerprint gives. `apply` returns `status: "blocked"` with the `open` decision
+  keys when the user has not answered — the tool must relay those keys, not
+  paraphrase them, because `story_merge.suggest` is keyed on them.
 
 ### Deviations
 ### Issues

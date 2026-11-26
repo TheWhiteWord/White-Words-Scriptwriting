@@ -1012,12 +1012,13 @@ def _resolve(conn, entity_id: str, etype: str, collisions: list, resolutions) ->
 
 
 def restore(
-    project_path: Path,
+    project_path: Path | None,
     entity_type: str,
     entity_id: str,
     summary: str = "",
     *,
     resolutions=None,
+    conn=None,
 ) -> dict:
     """Undelete an entity by clearing is_deleted. The exact inverse of the delete.
 
@@ -1045,10 +1046,18 @@ def restore(
     Structural checks on the parent are not here: `restore_check` reports them
     and the dashboard refuses on it. `restore_many` applies that check, because
     a batch is one action.
+
+    `project_path` is read only when `conn` is None, so a caller already inside
+    its own transaction passes `None` and its `conn`.
     """
     from white_words.scriptwriting.core.db import get_db, transaction
 
-    conn = get_db(project_path)
+    own_conn = conn is None
+    if own_conn:
+        assert project_path is not None, (
+            "restore needs a project_path when it opens its own connection"
+        )
+        conn = get_db(project_path)
     try:
         # The parent and its children come back together or not at all.
         with transaction(conn):
@@ -1092,7 +1101,8 @@ def restore(
                     (placement["after"] or {}).get("id"),
                 )
     finally:
-        conn.close()
+        if own_conn:
+            conn.close()
 
     result = {
         "success": True,
