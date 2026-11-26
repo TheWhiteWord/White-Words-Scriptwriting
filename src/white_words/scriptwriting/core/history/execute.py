@@ -108,9 +108,9 @@ def apply(
         }
 
     with store.locked(project_path) as history:
-        stale = _stale(planned, fingerprint.of_project(project_path))
-        if stale:
-            return stale
+        refusal = stale(planned, fingerprint.of_project(project_path))
+        if refusal:
+            return refusal
 
         baseline = _restore_point(project_path, history, label)
         ops = planned.get("ops") or []
@@ -118,9 +118,9 @@ def apply(
         live = get_db(project_path)
         try:
             with transaction(live):
-                stale = _stale(planned, fingerprint.of_conn(live))
-                if stale:
-                    return stale
+                refusal = stale(planned, fingerprint.of_conn(live))
+                if refusal:
+                    return refusal
                 failures = _run(project_path, planned, conn=live, ops=ops)
                 if failures:
                     raise _Refused(failures)
@@ -155,7 +155,7 @@ class _Refused(Exception):
         self.failures = failures
 
 
-def _stale(planned: dict, current: str) -> dict | None:
+def stale(planned: dict, current: str) -> dict | None:
     """§7.7.4's stale-plan refusal, or None when the target is where the plan left it.
 
     A plan without a fingerprint has no guard to enforce; `plan()` always sets one.

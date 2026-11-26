@@ -776,8 +776,75 @@ and what it changes. No narration.
 - `merge_sessions.target_fingerprint` should hold `planned["fingerprint"]`
   verbatim — that is the value `execute.apply` compares, so a session that stores
   anything else (a re-hash, a truncated hash) makes its own stale check wrong.
+- **T9 implemented: the "missing" `save_head_snapshot` was not added.** The bullet
+  above proposed one; what landed is `store._save(..., branch_id=…, head=…)` and
+  `store.restore_point(..., branch_id=…, head=…)`, where `head` is a *project
+  directory* holding the copy at `.story/story.db`. Same capability, no second
+  function — and `restore_point` reuses its "head unchanged → the base draft IS the
+  restore point" rule, which a purpose-built saver would have had to repeat.
+- **T9 implemented: `_run` is called as `_run(scratch, planned)`, with no `conn`.**
+  The bullet above wrote `_run(scratch, planned, conn=…)`; passing a connection is for
+  a caller already inside a content transaction, and the parked-target path is not —
+  it runs on a throwaway copy, so each op opens its own connection there. The scratch
+  still gains no manifest, which is the assertion that test makes.
+
+- **`store._park` read its source `immutable=1`, which ignores an un-checkpointed
+  `-wal`.** A branch switch made while any other connection held `story.db` open
+  parked the database as of the last checkpoint, dropping the committed writes after
+  it. Probed: a second connection wrote and committed, the live database read the row,
+  the parked head did not. Fixed in T9's own commit: `_open_source(source, frozen=…)`
+  opens a live database `mode=ro` and a frozen draft `immutable`. **The distinction is
+  load-bearing in both directions** — `mode=ro` creates `-wal`/`-shm` beside a 0444
+  draft (probed), so a single reader for both would reintroduce T4's debris. Any new
+  copy-from-file path must say which kind of file it is reading.
+- **A parked-target merge must not use `execute.apply`.** Confirmed by probe on this
+  branch: `apply` on a scratch project holding only `.story/story.db` writes a fresh
+  `history.db` + `history/` inside it, adopts the copy (`baseline.created == False`,
+  label "Draft 1"), and leaves the real branch with no pre-merge draft. `session.py`
+  therefore takes the manifest lock once, calls `store.restore_point(...,
+  branch_id=…, head=scratch)`, runs `execute._run(scratch, planned)` and writes back
+  with `store._park`. `tests/test_history_session.py` asserts no scratch the merge
+  makes gains a `history.db` or `history/` tree.
+- **A session must not hold the manifest lock across `execute.apply`.** `execute.apply`
+  takes `store.locked` itself, so a caller already holding it deadlocks on
+  `BEGIN IMMEDIATE` — hit and fixed while building `session.apply`. The rule: session
+  reads use `store.connect`, the parked path takes `store.locked` and passes its `conn`
+  down (`restore_point`, `record_pending_parent`), the live path takes no lock at all,
+  and the row's status is written afterwards in its own short transaction.
+- **`session.py` stores inputs, never a plan.** `show`/`preview`/`apply` each re-plan
+  from the row, so nothing can go stale between them. Consequence for T10 and T11: a
+  route or tool that wants "the plan" calls `session.show` (or `preview`), and there is
+  no stored op list to read — do not add one.
+- **The session stamps every re-plan with its stored `target_fingerprint`, not a fresh
+  read.** Without it the stale check compares a plan against itself and can never
+  refuse; mutation-verified (two tests fail when the plan is stamped from a live read).
+- **A complete merge from an unsaved head is refused** (owner decision). `_source_draft`
+  returns a draft id only for `kind == "snapshot"`, and `apply(complete=True)` raises
+  "A complete merge needs a saved draft as its source" for a branch source. Cherry-pick
+  from a head works and records no parent.
+- **`store.get_branch` refuses before opening a manifest that does not exist**, so a
+  listing or a session on a project this feature has never touched writes nothing.
+  Anything that needs a branch to exist must call `store.adopt` first.
+- **`store._save` and `store.restore_point` grew `branch_id`/`head`**, matching the
+  `conn`-parameter pattern T2 established. `head` is a *project directory* holding the
+  copy at `.story/story.db`, which is why `restore_point` can freeze a non-current
+  branch's draft at all — `save_snapshot` only ever reads the live database.
+- **`execute._stale` is now `execute.stale`** (public), so a session asks the same
+  question `apply` asks rather than duplicating the comparison.
 
 ### Deviations
+
+- **The session's source ref stores a resolved `base_snapshot_id`** alongside `kind`
+  and `id`. §4.2 says `source_ref JSON`; the resolved draft is what `merge_base` walks
+  from, and resolving it once at `start` is what makes the base a property of the
+  session rather than of the current call.
+- **`apply` marks the row after the merge, not inside its transaction.** §7.7.4 asks
+  for the ops to be all-or-none; the status is bookkeeping about an operation that has
+  already committed, and nesting it would either deadlock (live) or hold the manifest
+  lock across a second `BEGIN IMMEDIATE` (parked).
+- **`discard` keeps the row** and sets `status='discarded'` rather than deleting it. A
+  deleted row cannot answer "was this merge ever attempted", and the table is small.
+
 ### Issues
 
 ---

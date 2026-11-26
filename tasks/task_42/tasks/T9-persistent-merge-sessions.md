@@ -87,32 +87,98 @@ Every row is a probe on this branch, not a reading of the spec.
 
 ## Tasks
 
-- [ ] `store.py`: `_open_live()` (`mode=ro`, no `immutable`) and `_park(..., frozen=False)`;
-      `_freeze(source=…)` through the same reader. Own commit, with the `-wal` test.
-- [ ] `store.py`: `_save(..., branch=None, head=None)` — freeze from `head` when given and
-      write `branch`; `restore_point(..., branch_id=None, head=None)` passing them through
-      (its "unchanged head reuses its base draft" rule is what a parked target needs).
-- [ ] `store.py`: `get_branch(project_path, branch_id=None)` (None: the current branch) and
+- [x] `store.py`: `_open_source(source, frozen=…)` — `mode=ro` for a live database,
+      `immutable` for a draft; `_park(..., frozen=False)` and `_freeze(source=…)` through
+      it. Own commit, with the `-wal` test.
+- [x] `store.py`: `_save(..., branch_id=None, head=None)` — freeze from `head` when given
+      and write `branch_id`; `restore_point(..., branch_id=None, head=None)` passing them
+      through (its "unchanged head reuses its base draft" rule is what a parked target
+      needs).
+- [x] `store.py`: `get_branch(project_path, branch_id=None)` (None: the current branch,
+      refusing a project with no manifest without creating one) and
       `record_pending_parent(..., branch_id=None)`.
-- [ ] `view.py`: `head_view(project_path, branch_id)` — a parked head as a project path,
-      refusing the current branch and a missing file.
-- [ ] `session.py`: `start`, `show`, `set_selection`, `set_decision`, `preview`, `apply`,
-      `discard`; source refs `{"kind": "snapshot"|"branch", "id", "imprecise"}`; `complete`
-      only for a draft source.
-- [ ] `session.apply` live target → `execute.apply` with the session's fingerprint.
-- [ ] `session.apply` parked target → one manifest lock: copy head → scratch, restore point
-      from that copy, `_run` there, write back with `_park`, record the parent.
-- [ ] `tests/test_history_session.py`: row round-trip, a decision set before planning,
-      selection narrowing, preview writes nothing, apply marks the row, twice refused,
-      blocked on an open decision, stale refused, draft source complete-merge parent,
-      head source (cherry-pick applies, complete refused), parked target end to end
-      (write-back, branch draft, **no `history.db` in the scratch**), discard.
-- [ ] `tests/test_history_store.py`: a committed write that is still in `story.db-wal`
+- [x] `view.py`: `head_view(project_path, branch_id)` — a parked head as a project path,
+      refusing the current branch and a missing file; the copy-out is shared with
+      `project_view`.
+- [x] `execute.py`: `_stale` → `stale`, so a session can ask the same question its `apply`
+      asks.
+- [x] `session.py`: `start`, `show`, `set_selection`, `set_decision`, `preview`, `apply`,
+      `discard`; source refs `{"kind": "snapshot"|"branch", "id", "base_snapshot_id"}`;
+      `complete` only for a draft source.
+- [x] `session.apply` live target → `execute.apply`; the row is marked after it returns,
+      in its own transaction.
+- [x] `session.apply` parked target → one manifest lock: copy head → scratch, restore
+      point from that copy, `_run` there, write back with `_park`, record the parent on
+      that branch.
+- [x] `tests/test_history_session.py` (25 tests): row round-trip, no plan stored, a
+      decision set before planning, an agent suggestion not answering, selection
+      narrowing, preview writes nothing, apply marks the row, twice refused, blocked on
+      an open decision, stale refused and re-startable, draft source complete-merge
+      parent, cherry-pick no parent, head source (cherry-pick applies, complete refused,
+      self-merge refused), parked target end to end (write-back, its own branch draft,
+      **no `history.db` in any scratch**), complete merge into a parked target recording
+      on that branch, discard.
+- [x] `tests/test_history_store.py`: a committed write that is still in `story.db-wal`
       survives a park (a second connection open across it).
-- [ ] `tests/test_utc_stamps.py`: register `core/history/session.py`.
-- [ ] Suite green against the `1953 passed, 1 failed` baseline; `ruff format --check`
+- [x] Register nothing in `test_utc_stamps.py`: `session.py` stamps through
+      `clock.now_iso` and calls no `datetime`/`isoformat` itself (verified by grep).
+- [x] Suite green against the `1953 passed, 1 failed` baseline; `ruff format --check`
       and `ruff check` clean on every touched file.
 
 ## Final Brief
 
-(filled at close-out)
+**What a session is.** A row in `merge_sessions` holding the *inputs* of a merge — the
+source ref, the resolved base, the selection, the decisions answered so far, and the
+target's fingerprint at the moment it opened — never the op list. `show`, `preview` and
+`apply` each re-plan from the row, so a session cannot describe a plan the code would no
+longer produce. The API is `start`, `show`, `set_selection`, `set_decision`, `preview`,
+`apply(complete=False)` and `discard`; a closed session refuses further work with
+"start a new one".
+
+**Two source kinds (§7.1).** A source is a draft (`{"kind": "snapshot"}`) or another
+branch's head (`{"kind": "branch"}`, read through `view.head_view`). A head's unsaved
+changes have no draft to be a parent, so a **complete** merge from one is refused with
+"save that branch's draft first" (owner decision); a cherry-pick from it works. A branch
+cannot be its own source.
+
+**Two target kinds (§7.8).** The live head delegates to `execute.apply`. A parked head
+takes the doc's steps directly — the pre-merge draft of *that* branch, the ops in one
+transaction on a copy, then the head file replaced — because `execute.apply` on a scratch
+copy adopts it as a new project (T8's trap). One test asserts none of the scratch
+projects the merge makes gains a `history.db`.
+
+**Staleness.** The fingerprint is stamped when the session opens, and every re-plan is
+stamped with it, so §7.7.4's check compares a plan against the state it was made from.
+A stale session is refused, not re-based; `show` returns the same selection and decisions
+to seed a new one, which a test exercises end to end.
+
+**The `_park` fix (own commit).** `_park` read its source `immutable=1`, which ignores an
+un-checkpointed `-wal`: a branch switch while any other connection held `story.db` open
+parked the database as of the last checkpoint and dropped the writes after it. Live
+sources now open `mode=ro`; frozen drafts keep `immutable`, since `mode=ro` creates
+`-wal`/`-shm` beside a file nothing may touch. Mutation-verified by restoring `immutable`
+for the live case — the new test fails.
+
+**Suite.** `1953 passed, 1 failed` before (`1744` outside the history files + `209`
+inside them), `1979 passed, 1 failed` after: 25 new session tests and 1 new store test. The
+failure is the baseline's `test_no_hermes_imports`. Run as two chunks, because one
+`pytest tests/` invocation wedges in the host's ext4 journal (T8's environment note).
+
+**Mutations that fail a test.** Stamping the plan with a freshly read fingerprint (2
+tests fail), adopting the scratch copy via `execute.apply`, recording the parent on the
+current branch instead of the target branch, and allowing a complete merge from a head
+source. Four, all killed.
+
+**Deliberate ceilings.**
+
+- `show` re-plans from three file copies on every call — the same cost the planner and
+  the dry run already pay. Text data; a cache belongs with T10's HTTP sessions.
+- A session cannot be re-based onto a moved target in place; the caller starts a new
+  session from the returned inputs. One extra row per re-plan, and no way to silently
+  drop an answer given against an older state.
+- `merge_sessions` has no `updated_by`: who set a decision is recorded per decision
+  (`set_by`), which is the granularity the UI and the agent both need.
+
+**Not in this task.** No route (T10), no agent tool (T11), no UI. §7.5's suggestion
+*writing* is T11's; this task stores what `set_decision` is told, including
+`set_by="agent-suggested"`.

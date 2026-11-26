@@ -256,6 +256,26 @@ def _current(conn: sqlite3.Connection) -> dict | None:
     return _branch_row(row) if row else None
 
 
+def get_branch(project_path: Path, branch_id: str | None = None) -> dict:
+    """One branch, or the current one when `branch_id` is None.
+
+    A read: it never adopts, and it refuses before opening a manifest that does not
+    exist yet, so asking about a project this feature has not touched writes nothing.
+    """
+    if not history_path(project_path).exists():
+        raise ValueError(f"{project_path.name} has no history yet.")
+    conn = connect(project_path)
+    try:
+        if branch_id is not None:
+            return _branch(conn, branch_id)
+        branch = _current(conn)
+        if branch is None:
+            raise ValueError(f"{project_path.name} has no history yet.")
+        return branch
+    finally:
+        conn.close()
+
+
 def list_branches(project_path: Path) -> dict:
     """Every branch and every draft, with parents — what the graph draws."""
     conn = connect(project_path)
@@ -510,12 +530,27 @@ def adopt(project_path: Path) -> dict:
 # ─── operations ───
 
 
-def _save(project_path: Path, conn: sqlite3.Connection, label: str | None, note: str) -> dict:
-    """Freeze the head as a draft, on a manifest connection that already holds the lock."""
-    branch = _adopt(project_path, conn)
+def _save(
+    project_path: Path,
+    conn: sqlite3.Connection,
+    label: str | None,
+    note: str,
+    *,
+    branch_id: str | None = None,
+    head: Path | None = None,
+) -> dict:
+    """Freeze a head as a draft, on a manifest connection that already holds the lock.
+
+    The head is the live database, unless `head` names a project directory holding a
+    copy of a non-current branch's parked head — the state a merge into that branch is
+    about to change, which no other caller can freeze. `branch_id` says which branch
+    the draft belongs to; the default is the current one.
+    """
+    branch = _adopt(project_path, conn) if branch_id is None else _branch(conn, branch_id)
+    where = project_path if head is None else head
     base = _snapshot(conn, branch["base_snapshot_id"])
     assert base is not None, "a branch's saved draft is never deleted"
-    live = fingerprint.of_project(project_path)
+    live = fingerprint.of_project(where)
     if live == base["fingerprint"]:
         raise ValueError(
             f"Nothing has changed since {base['label']}. A draft has to be a different "
@@ -523,9 +558,12 @@ def _save(project_path: Path, conn: sqlite3.Connection, label: str | None, note:
         )
 
     snapshot_id = _new_snapshot_id(conn)
-    _freeze(project_path, snapshot_id)
+    if head is None:
+        _freeze(project_path, snapshot_id)
+    else:
+        _freeze(project_path, snapshot_id, source=head / ".story" / "story.db")
 
-    project = get_db(project_path)
+    project = get_db(where)
     try:
         version = project.execute("PRAGMA user_version").fetchone()[0]
         counts = _counts(project)
@@ -577,24 +615,42 @@ def save_snapshot(project_path: Path, label: str | None = None, note: str = "") 
         return _save(project_path, conn, label, note)
 
 
-def restore_point(project_path: Path, conn: sqlite3.Connection, label: str) -> dict:
+def restore_point(
+    project_path: Path,
+    conn: sqlite3.Connection,
+    label: str,
+    *,
+    branch_id: str | None = None,
+    head: Path | None = None,
+) -> dict:
     """The draft a merge can be undone to, on a manifest lock the caller already holds.
 
     A head identical to its own saved draft has nothing to save — that draft IS this
     state — so it is returned rather than duplicated, with ``created`` saying which
     happened. A project this feature has never touched is adopted first: without a
     branch there is no draft to be the restore point.
+
+    `branch_id` and `head` name the branch being merged into when it is not the live
+    one; see `_save`.
     """
-    branch = _adopt(project_path, conn)
+    branch = _adopt(project_path, conn) if branch_id is None else _branch(conn, branch_id)
+    where = project_path if head is None else head
     base = _snapshot(conn, branch["base_snapshot_id"])
     assert base is not None, "a branch's saved draft is never deleted"
-    if fingerprint.of_project(project_path) == base["fingerprint"]:
+    if fingerprint.of_project(where) == base["fingerprint"]:
         return {**base, "created": False}
-    return {**_save(project_path, conn, label, ""), "created": True}
+    return {
+        **_save(project_path, conn, label, "", branch_id=branch["id"], head=head),
+        "created": True,
+    }
 
 
 def record_pending_parent(
-    project_path: Path, snapshot_id: str, *, conn: sqlite3.Connection | None = None
+    project_path: Path,
+    snapshot_id: str,
+    *,
+    conn: sqlite3.Connection | None = None,
+    branch_id: str | None = None,
 ) -> dict:
     """Declare that a complete merge has accounted for `snapshot_id` (§7.9).
 
@@ -606,12 +662,13 @@ def record_pending_parent(
     Writes to `branches` only — no parent row here, or `save_snapshot` would write the
     same parent twice. `conn` is a manifest connection whose caller already holds the
     lock; the executor applies a plan under that lock, so this has to run inside it
-    rather than take the manifest lock a second time and deadlock.
+    rather than take the manifest lock a second time and deadlock. `branch_id` names
+    the branch the merge landed on; the default is the current one.
     """
     if conn is None:
         with locked(project_path) as held:
-            return record_pending_parent(project_path, snapshot_id, conn=held)
-    branch = _adopt(project_path, conn)
+            return record_pending_parent(project_path, snapshot_id, conn=held, branch_id=branch_id)
+    branch = _adopt(project_path, conn) if branch_id is None else _branch(conn, branch_id)
     if not _snapshot(conn, snapshot_id):
         raise ValueError(f"No such draft: {snapshot_id}.")
     pending = list(branch["pending_merge_parents"])
