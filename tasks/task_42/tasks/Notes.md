@@ -761,6 +761,18 @@ and what it changes. No narration.
   `store._park(project_path, src, dest)` and `store._freeze(..., source=…)` are
   the copy primitives; a `save_head_snapshot(project_path, branch_id, label)`
   built on them is what is missing.
+- **`execute.apply` cannot simply be pointed at a scratch copy of a parked head.**
+  Verified: apply takes the manifest lock and calls `store.restore_point`, which
+  calls `_adopt`, so on a scratch project holding only `.story/story.db` it
+  **creates a fresh `history.db` and `history/` inside the scratch dir** and
+  adopts the copy as a brand-new project (`baseline.created == False`, a
+  throwaway "Draft 1" as the restore point). Data-wise harmless — the copy IS
+  the head — but the real branch gets no pre-merge draft and the scratch
+  manifest is discarded. T9 must take the branch's draft **before** copying
+  (`save_head_snapshot`), and needs a way to run the ops on the scratch copy
+  without `apply`'s restore-point/adopt step (`_run(scratch, planned, conn=…)`
+  is that path) — or pass an explicit "no restore point, caller has one" flag.
+  Whichever it picks, one test must assert the scratch dir gains no `history.db`.
 - `merge_sessions.target_fingerprint` should hold `planned["fingerprint"]`
   verbatim — that is the value `execute.apply` compares, so a session that stores
   anything else (a re-hash, a truncated hash) makes its own stale check wrong.
