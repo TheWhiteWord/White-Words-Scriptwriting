@@ -391,6 +391,33 @@ def test_a_branch_from_a_missing_draft_is_refused(project):
         store.branch_from(project, "s-nope", "x")
 
 
+def test_a_park_keeps_a_committed_write_that_is_still_in_the_wal(project):
+    """A writer holding `story.db` open leaves its commits in `-wal`, not in the file.
+
+    An `immutable` read of the source ignores that file and parks the database as it
+    was at the last checkpoint — the write disappears from the branch being left. The
+    live source is opened `mode=ro` instead. A second connection is kept open across
+    the switch because that is what keeps the frame out of the main file.
+    """
+    base = store.head_state(project)["base"]
+    store.branch_from(project, base["id"], "alternate")
+    live = store.get_db(project)
+    try:
+        live.execute("UPDATE entities SET name='Written While Open' WHERE id='kael'")
+        assert (project / ".story" / "story.db-wal").exists()
+        store.switch(project, "alternate")
+        parked = store.head_file(project, "main")
+        conn = sqlite3.connect(f"file:{parked}?mode=ro&immutable=1", uri=True)
+        try:
+            assert conn.execute("SELECT name FROM entities WHERE id='kael'").fetchone()[0] == (
+                "Written While Open"
+            )
+        finally:
+            conn.close()
+    finally:
+        live.close()
+
+
 # ─── switch ───
 
 

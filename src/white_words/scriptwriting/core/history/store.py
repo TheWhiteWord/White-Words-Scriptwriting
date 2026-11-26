@@ -352,9 +352,21 @@ def _ancestor_distances(conn: sqlite3.Connection) -> dict[str, list[str]]:
 # ─── files ───
 
 
-def _open_read(source: Path) -> sqlite3.Connection:
-    """Open an existing database read-only, leaving no -wal/-shm beside it."""
-    return sqlite3.connect(f"file:{source}?mode=ro&immutable=1", uri=True)
+def _open_source(source: Path, *, frozen: bool) -> sqlite3.Connection:
+    """Open a database to copy FROM, seeing every committed write.
+
+    A live database keeps its latest commits in ``-wal`` until a checkpoint, and an
+    ``immutable`` open ignores that file: it would copy the database as it was at the
+    last checkpoint and silently drop the rest. So a live source is opened ``mode=ro``,
+    which reads the ``-wal``.
+
+    A frozen draft is the opposite case: it has no ``-wal`` (see `_write_atomic`), and a
+    ``mode=ro`` open would create one beside a file nothing may touch. It is opened
+    ``immutable``, which leaves no sidecar.
+    """
+    if frozen:
+        return sqlite3.connect(f"file:{source}?mode=ro&immutable=1", uri=True)
+    return sqlite3.connect(f"file:{source}?mode=ro", uri=True)
 
 
 def _write_atomic(src: sqlite3.Connection, dest: Path, *, compact: bool) -> None:
@@ -388,11 +400,11 @@ def _write_atomic(src: sqlite3.Connection, dest: Path, *, compact: bool) -> None
 def _freeze(project_path: Path, snapshot_id: str, *, source: Path | None = None) -> Path:
     """Write a draft's frozen file.
 
-    From the live database by default (a save), or from an existing file (a
+    From the live database by default (a save), or from an existing frozen file (a
     branch's head: the branch starts as an exact copy of the draft it grew from).
     """
     dest = snapshot_file(project_path, snapshot_id)
-    src = get_db(project_path) if source is None else _open_read(source)
+    src = get_db(project_path) if source is None else _open_source(source, frozen=True)
     try:
         _write_atomic(src, dest, compact=source is None)
     finally:
@@ -417,9 +429,13 @@ def _drop_sidecars(path: Path) -> None:
         sidecar.unlink(missing_ok=True)
 
 
-def _park(project_path: Path, src: Path, dest: Path) -> None:
-    """Copy a database to a parked-head path, atomically."""
-    handle = _open_read(src)
+def _park(project_path: Path, src: Path, dest: Path, *, frozen: bool = False) -> None:
+    """Copy a database to a parked-head path, atomically.
+
+    `frozen` says whether `src` is a file written and closed by `_write_atomic` (a
+    draft) or a database still being written (the live head). See `_open_source`.
+    """
+    handle = _open_source(src, frozen=frozen)
     try:
         _write_atomic(handle, dest, compact=False)
     finally:
@@ -619,7 +635,7 @@ def branch_from(project_path: Path, snapshot_id: str, name: str) -> dict:
         source = snapshot_file(project_path, snapshot_id)
         if not source.exists():
             raise ValueError(f"Draft {snapshot_id} has no file on disk.")
-        _park(project_path, source, head_file(project_path, branch_id))
+        _park(project_path, source, head_file(project_path, branch_id), frozen=True)
         conn.execute(
             f"INSERT INTO branches ({_BRANCH_COLUMNS}) VALUES (?,?,?,0,?,?)",
             (branch_id, clean, snapshot_id, _now(), json.dumps([])),
