@@ -68,6 +68,25 @@ def head_view(project_path: Path, branch_id: str):
 
 
 @contextmanager
+def ref_view(project_path: Path, ref: dict):
+    """Yield a project path for any ref: a draft, another branch, or this project.
+
+    The branch graph and the diff both name a state the same way, so one function
+    answers for all three. The current branch yields the project itself — its head
+    IS `story.db`, and a copy of it could drift from the thing being edited.
+    """
+    if ref["kind"] == "branch" and store.get_branch(project_path, ref["id"])["is_current"]:
+        yield project_path
+        return
+    if ref["kind"] == "branch":
+        with head_view(project_path, ref["id"]) as path:
+            yield path
+        return
+    with project_view(project_path, ref["id"]) as path:
+        yield path
+
+
+@contextmanager
 def _copied(source: Path):
     """A throwaway project directory holding `source`'s bytes as `.story/story.db`."""
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:

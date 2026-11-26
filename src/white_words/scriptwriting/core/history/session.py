@@ -39,7 +39,25 @@ from .. import clock
 from ..db import get_db
 from . import execute, fingerprint, plan, store, view
 
-__all__ = ["start", "show", "set_selection", "set_decision", "preview", "apply", "discard"]
+
+class DecisionKeyError(ValueError):
+    """The key names no decision this session's plan holds.
+
+    A subclass so a boundary can tell a bad request (a key that will never be valid
+    as sent) from a core refusal (a valid request the rules declined), which are
+    different HTTP statuses.
+    """
+
+__all__ = [
+    "start",
+    "show",
+    "set_selection",
+    "set_decision",
+    "preview",
+    "apply",
+    "discard",
+    "DecisionKeyError",
+]
 
 OPEN, APPLIED, DISCARDED = "open", "applied", "discarded"
 
@@ -316,12 +334,12 @@ def set_decision(project_path: Path, session_id: str, key: str, choice, *, set_b
         if key not in valid:
             item, _, code = key.rpartition("#")
             if not item or code not in plan.CATALOGUE:
-                raise ValueError(
+                raise DecisionKeyError(
                     f"{key!r} is not a decision key. A decision's key is its item plus its "
                     f"code, like {next(iter(valid), '<item>#D2')!r}. Percent-encode it when "
                     "putting it in a URL."
                 )
-            raise ValueError(
+            raise DecisionKeyError(
                 f"Decision {key!r} is not asked (yet). Answering another decision can raise "
                 f"it — a D2 chosen `theirs` on `plot_roles` can raise a D4. Its decisions "
                 f"now are: {', '.join(sorted(valid)) or 'none'}."

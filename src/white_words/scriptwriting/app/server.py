@@ -22,6 +22,7 @@ from white_words.scriptwriting.app.routes import agent as agent_routes
 from white_words.scriptwriting.app.routes import chat as chat_routes
 from white_words.scriptwriting.app.routes import drafts as drafts_routes
 from white_words.scriptwriting.app.routes import entities as entities_routes
+from white_words.scriptwriting.app.routes import history as history_routes
 from white_words.scriptwriting.app.routes import projects as projects_routes
 from white_words.scriptwriting.app.routes import scripts as scripts_routes
 from white_words.scriptwriting.app.routes import trash as trash_routes
@@ -150,6 +151,7 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(scripts_routes.make_router(config, app))
     app.include_router(entities_routes.make_router(config, app))
     app.include_router(trash_routes.make_router(config, app))
+    app.include_router(history_routes.make_router(config, app))
 
     @app.get("/healthz")
     def healthz():
