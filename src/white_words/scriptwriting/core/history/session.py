@@ -301,15 +301,41 @@ def set_decision(project_path: Path, session_id: str, key: str, choice, *, set_b
 
     An agent's suggestion does not answer the decision: the planner keeps Apply disabled
     for it until a person chooses, which is the whole point of the distinction.
+
+    The key is checked against a fresh plan first. Without that, any key was stored and
+    ignored: a typo returned success and left the decision open, which reads as an
+    answer that did nothing. A decision can also appear only after another one is
+    answered — `D2` on `plot_roles` chosen `theirs` can raise a `D4` the default plan
+    never listed — so "your item is in this plan but not this decision" is reported as
+    *not yet asked*, not as a bad key.
     """
     with store.locked(project_path) as conn:
         session = _get(conn, session_id)
         _require_open(session)
+        valid = _decision_keys(project_path, session)
+        if key not in valid:
+            item, _, code = key.rpartition("#")
+            if not item or code not in plan.CATALOGUE:
+                raise ValueError(
+                    f"{key!r} is not a decision key. A decision's key is its item plus its "
+                    f"code, like {next(iter(valid), '<item>#D2')!r}. Percent-encode it when "
+                    "putting it in a URL."
+                )
+            raise ValueError(
+                f"Decision {key!r} is not asked (yet). Answering another decision can raise "
+                f"it — a D2 chosen `theirs` on `plot_roles` can raise a D4. Its decisions "
+                f"now are: {', '.join(sorted(valid)) or 'none'}."
+            )
         return _write(
             conn,
             session,
             decisions={**session["decisions"], key: {"choice": choice, "set_by": set_by}},
         )
+
+
+def _decision_keys(project_path: Path, session: dict) -> set[str]:
+    """The decision keys the session's plan holds right now."""
+    return {d["key"] for d in _plan(project_path, session)["decisions"]}
 
 
 def preview(project_path: Path, session_id: str) -> dict:

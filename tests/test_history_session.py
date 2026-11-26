@@ -109,6 +109,67 @@ def test_a_decision_survives_the_next_call(project):
     assert _name_of(project, "mira") == "Mira Theirs"
 
 
+def test_a_key_that_is_not_a_decision_is_refused(project):
+    """A typo used to be stored and ignored, so the answer silently did nothing."""
+    name = NAME  # `field:character:kael:name`
+    edit_entity(project, "character", "kael", {"name": "Kael Ours"}, "ours")
+    theirs = _copy_of_side_changed(project, "kael", "Kael Theirs")
+    started = session.start(project, "main", {"kind": "snapshot", "id": theirs}, selection=[name])
+    valid = session.show(project, started["id"])["plan"]["decisions"][0]["key"]
+    assert valid == f"{name}#D2"
+
+    with pytest.raises(ValueError, match="not a decision key"):
+        session.set_decision(project, started["id"], name, "theirs")
+
+    # A known code this plan does not hold: "not asked (yet)", naming the real keys.
+    with pytest.raises(ValueError, match="is not asked"):
+        session.set_decision(project, started["id"], f"{name}#D4", "theirs")
+
+    assert session.show(project, started["id"])["plan"]["open"] == [valid]
+
+
+def test_a_decision_another_answer_would_raise_is_not_yet_asked(project):
+    """A D2 chosen `theirs` on `plot_roles` can raise a D4 the default plan never had.
+
+    Answering the D4 in advance cannot work: it is not a decision until the D2's value
+    is known, so the refusal says "not yet asked" rather than naming a bad key.
+    """
+    scene = "central-room-night"
+    d2 = f"field:scene:{scene}:plot_roles"
+    d4 = f"entity:scene:{scene}#D4"
+
+    store.switch(project, "side")
+    edit_entity(project, "scene", "central-room-day", {"plot_roles": []}, "side")
+    edit_entity(
+        project,
+        "scene",
+        scene,
+        {"plot_roles": [{"plot": "the-resistance", "role": "inciting_incident", "description": "s"}]},
+        "side",
+    )
+    snapshot = store.save_snapshot(project, "Side role move")["id"]
+    store.switch(project, "main")
+    edit_entity(
+        project,
+        "scene",
+        scene,
+        {"plot_roles": [{"plot": "the-resistance", "role": "climax", "description": "o"}]},
+        "ours",
+    )
+
+    started = session.start(project, "main", {"kind": "snapshot", "id": snapshot}, selection=[d2])
+
+    assert [d["key"] for d in session.show(project, started["id"])["plan"]["decisions"]] == [
+        f"{d2}#D2"
+    ]
+    with pytest.raises(ValueError, match="is not asked"):
+        session.set_decision(project, started["id"], d4, "mine")
+
+    session.set_decision(project, started["id"], f"{d2}#D2", "theirs")
+    keys = [d["key"] for d in session.show(project, started["id"])["plan"]["decisions"]]
+    assert d4 in keys
+
+
 def test_an_agent_suggestion_does_not_answer_a_decision(project):
     edit_entity(project, "character", "mira", {"name": "Mira Ours"}, "ours")
     theirs = _copy_of_side_changed(project, "mira", "Mira Theirs")
