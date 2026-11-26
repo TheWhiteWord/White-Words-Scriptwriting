@@ -11,7 +11,7 @@ executor will do.
 
 import pytest
 
-from white_words.scriptwriting.core.history import logical, plan
+from white_words.scriptwriting.core.history import diff, logical, plan
 from white_words.scriptwriting.core.writes import (
     create_entity,
     delete_entity,
@@ -340,6 +340,25 @@ def test_d9_when_they_deleted_and_we_changed(sides):
     decision = _decision(result, item["decision"])
     assert decision["deleted_on"] == "theirs" and decision["changed_on"] == "ours"
     assert decision["choice"] == "keep-mine"  # our change stands
+
+
+def test_d9_a_deleted_entitys_changed_fields_are_not_items_of_their_own(sides):
+    """Our delete owns the entity; its field changes are that item's, not edits.
+
+    A selection built from every diff item reaches the field item, which has no `ours`
+    row to change — planning it raised KeyError before it was dropped here.
+    """
+    base, ours, theirs = sides
+    delete_entity(ours, "scene", "central-room-night", "ours", confirm=True)
+    edit_entity(theirs, "scene", "central-room-night", {"place": "YARD"}, "theirs")
+    field = "field:scene:central-room-night:place"
+
+    assert field in [i["key"] for i in diff.compare(base, theirs)["items"]]
+    for selection in ([field], [field, "entity:scene:central-room-night"]):
+        result = plan.plan(base, ours, theirs, selection=selection)
+        assert field not in [i["key"] for i in result["items"]]
+        assert [d["code"] for d in result["decisions"]] == ["D9"]
+        assert result["ops"] == []  # the default keeps our deletion
 
 
 # ─── D6: the id is in the target's trash ────────────────────────────────────

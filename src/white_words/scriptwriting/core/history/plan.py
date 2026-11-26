@@ -384,6 +384,10 @@ def _d9_detail(ctx: _Context, entity_id: str, deleted_on: str) -> dict:
 def _change_item(ctx: _Context, key: str) -> dict | None:
     """A changed field or section, resolved three ways (§7.3)."""
     kind, entity_type, entity_id, name = key.split(":", 3)
+    if entity_id not in ctx.o[0]:
+        # Ours deleted this entity. Its presence is already a `D9` item, and the
+        # cascade rows a delete produces are that item's, not separate edits (T6).
+        return None
     mine, theirs = _change(ctx.ours_view, key), _change(ctx.theirs_view, key)
     if mine is None and theirs is None:
         return None
