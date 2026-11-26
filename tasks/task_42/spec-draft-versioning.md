@@ -102,7 +102,7 @@ merge_sessions(id TEXT PK, target_branch_id TEXT, source_ref JSON, base_snapshot
 
 **Switch branch.** Under the history lock (§4.5): park the live DB as `heads/<current>.db` (backup API), then load `heads/<target>.db` into the live DB in place, then update `is_current`. The in-place load is the core of `restore_backup()` (F8) extracted into a function that takes any validated source file; `restore_backup` and switch both call it. A safety backup is taken first, as restore does today.
 
-**Open read-only.** Reading a frozen draft with the existing read functions needs a project-path-shaped directory (F10). `get_db` opens read-write and migrates, so pointing it at a snapshot file would create `-wal` files beside the snapshot and could modify it. Therefore a **`ProjectView`** context manager copies the snapshot with the backup API into a temp dir as `.story/story.db`, hands out that temp *project path*, and deletes it on exit. The data is text only and small, so the copy is cheap; views are cached per session. Nothing writes to `history/snapshots/`.
+**Open read-only.** Reading a frozen draft with the existing read functions needs a project-path-shaped directory (F10). `get_db` opens read-write and migrates, so pointing it at a snapshot file would create `-wal` files beside the snapshot and could modify it. Therefore a **`ProjectView`** context manager copies the snapshot with the backup API into a temp dir as `.story/story.db`, hands out that temp *project path*, and deletes it on exit. The data is text only and small (about 7 ms per copy, 18 ms for a diff of two views, measured in T10), so each request makes its own copy and nothing is cached: a cache would leave temp dirs outliving requests and need invalidation on save, switch and merge, and a stale view is the one failure this feature cannot afford. A cache can be added behind `project_view` later without changing a caller. Nothing writes to `history/snapshots/`.
 
 **Rename branch.** Label only.
 
@@ -256,7 +256,11 @@ Layering as in the repo: `core` raises exceptions with actionable messages; rout
 
 ## 10. HTTP surface (sketch)
 
-Under `/api/projects/{slug}/history/`. The existing error shape is used; **to verify** its exact form in T10.
+Under `/api/projects/{slug}/history/`.
+
+- **Project resolution is by exact slug.** A slug that names no project is a 404. These routes can switch the live database and delete branches and drafts, so the fuzzy match `resolve_project` offers the agent's tools is not used here.
+- **Error envelope:** `{"error": {code, message, …payload}}`, with the payload at the top level of `error` (as the trash routes do), built by one shared helper.
+- **Decision keys** are `<item>#<code>` and contain `#`, `:` and sometimes spaces. The client percent-encodes the key in the path; the route takes it as a `path` parameter. A key with no `#D<n>` suffix, or one that is not a decision of the session's current plan, is a 422 that lists the valid keys (the check lives in `session.set_decision`, so the agent tools get it too).
 
 - `GET /` → branches, snapshots with parents (the graph), head summaries ("N changes since Draft 3"), current branch.
 - `POST /snapshots` (save, `label`, `note`) · `POST /branches` (from snapshot) · `POST /switch` · `PATCH /branches/{id}` (rename) · `DELETE /branches/{id}` · `DELETE /snapshots/{id}`.

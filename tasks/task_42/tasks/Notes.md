@@ -617,6 +617,19 @@ and what it changes. No narration.
   requires a role), so the workspace should warn ("`<plot>` will have no
   `<role>`") rather than the planner block it.
 
+### Review finding (post-T9): planning a deleted entity's field item crashed
+
+- `plan` raised `KeyError` when ours deleted an entity, theirs edited it, and the
+  selection included that entity's `field:`/`section:` item. `_resolve_change` read
+  `ctx.o[0][entity_id]`, and the entity is absent from ours by definition.
+- Reachable from any caller that selects the diff's items wholesale: `diff.compare`
+  emits the field item for `theirs` regardless of the delete, so a UI "select all"
+  reaches it. T10's preview route would have turned it into a 500.
+- **Fixed in T10** (`2f54179`): `_change_item` returns None when the entity is absent
+  from ours. The `D9` entity item already owns the delete and its cascade rows (T6), so
+  the item was never meant to exist. Guarding `_resolve_change` instead stops the crash
+  but emits an `edit` against a deleted entity — rejected.
+
 ---
 
 ## T8 — Executor
@@ -865,6 +878,12 @@ and what it changes. No narration.
 ---
 
 ## T10 — HTTP routes
+
+### Decisions (owner, T10)
+- **No cache for read-only views.** Per-request copies (7 ms; diff 18 ms). §4.3 amended.
+- **One shared error helper** for the HTTP envelope, extracted before `history.py`, with the three existing copies switched and no behaviour change.
+- **Decision keys stay in the path**, percent-encoded by the client. `session.set_decision` rejects a key with no `#D<n>` and a key that is not in the current plan, listing the valid ones. Before this, any key was stored and ignored (a typo returned 200 and left the decision open).
+- **History routes resolve the project by exact slug (404).** `resolve_project` fuzzy-matches at 75/100 and stays for the agent's tools. Other destructive HTTP routes share the exposure; moving the whole HTTP layer to the strict resolver is a separate commit.
 
 ### Findings (from the post-T9 review; verified by running a merge on the fixture)
 - **A decision's `a`/`b` are theirs/mine, in that order, unlabelled** (`plan._change_item`
