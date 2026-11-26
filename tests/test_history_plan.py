@@ -131,6 +131,7 @@ def test_a_conflict_is_a_decision_and_carries_both_values(sides):
     assert decision["code"] == "D2" and decision["kind"] == "conflict"
     assert decision["options"] == ["mine", "theirs", "custom"]
     assert decision["choice"] == "mine" and decision["set_by"] == "default"
+    assert (decision["ours"], decision["theirs"]) == ("Mine", "Theirs")
     assert result["open"] == [decision["key"]]
     assert result["ready"] is False
     assert result["ops"] == []  # the default (mine) writes nothing

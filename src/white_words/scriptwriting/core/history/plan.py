@@ -400,8 +400,8 @@ def _change_item(ctx: _Context, key: str) -> dict | None:
             key,
             detail={
                 "message": f"“{name}” changed on both sides.",
-                "a": _value(theirs),
-                "b": _value(mine),
+                "theirs": _value(theirs),
+                "ours": _value(mine),
             },
         )
         return {
