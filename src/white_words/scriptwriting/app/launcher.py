@@ -21,6 +21,26 @@ def is_healthy(port: int) -> bool:
         return False
 
 
+def seed_demo(root, *, replace=False):
+    """Copy the bundled demo into `root`, returning where it landed.
+
+    WAL sidecars are per-process state: a stale -wal copied next to a fresh db is a
+    database that reads as corrupt. Copy the committed files only.
+    """
+    import shutil
+    from pathlib import Path
+
+    bundled = Path(__file__).resolve().parents[1] / "data" / "demo"
+    dest = Path(root) / "projects" / "demo"
+    if not bundled.exists():
+        raise FileNotFoundError(f"No bundled demo at {bundled}")
+    if replace and dest.exists():
+        shutil.rmtree(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(bundled, dest, ignore=shutil.ignore_patterns("*-wal", "*-shm", "__pycache__"))
+    return dest
+
+
 def main(argv=None):
     import sys
 
@@ -37,16 +57,22 @@ def main(argv=None):
     if argv and argv[0] == "seed-demo":
         parser = argparse.ArgumentParser(prog="white-words seed-demo")
         parser.add_argument("--root", default=None)
+        parser.add_argument(
+            "--restore",
+            action="store_true",
+            help="Replace an existing demo with a fresh copy from the bundle",
+        )
         a = parser.parse_args(argv[1:])
         config = load_config(cli_root=a.root)
-        from white_words.scriptwriting.core.writes import create_project
-
         dest = config.root / "projects" / "demo"
-        if dest.exists():
+        if dest.exists() and not a.restore:
             print(f"Demo already exists at {dest}")
+            print("Pass --restore to put it back the way it shipped.")
             return 0
-        create_project("demo", {"name": "Demo"}, config.root)
-        print(f"Seeded demo at {dest}")
+        print(
+            f"{'Restored' if a.restore else 'Seeded'} demo at "
+            f"{seed_demo(config.root, replace=a.restore)}"
+        )
         return 0
 
     parser = argparse.ArgumentParser(prog="white-words")
@@ -81,10 +107,17 @@ def main(argv=None):
 
     # No prompt: launched from a .desktop entry there is no controlling terminal,
     # so waiting on stdin would hang the app with no way to answer.
-    if not config.root.exists():
+    fresh_root = not config.root.exists()
+    if fresh_root:
         config.root.mkdir(parents=True, exist_ok=True)
         (config.root / "projects").mkdir(exist_ok=True)
         print(f"Created root {config.root}")
+        # The demo is what a new user has to look at, so a new root gets one. Only a new
+        # root: a demo the user deletes stays deleted, or every launch would undo it.
+        try:
+            print(f"Added the demo project at {seed_demo(config.root)}")
+        except FileNotFoundError:
+            pass  # source checkout without the bundle; the rest of the app works
 
     if is_healthy(config.port):
         url = f"http://127.0.0.1:{config.port}"

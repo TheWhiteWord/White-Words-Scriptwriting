@@ -6,3 +6,6 @@ __pycache__/
 *.db
 *.db-shm
 *.db-wal
+
+# The bundled demo ships as a database; every other .db is a build artefact.
+!src/white_words/scriptwriting/data/demo/**/*.db

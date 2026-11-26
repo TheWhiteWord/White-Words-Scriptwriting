@@ -31,9 +31,20 @@ own settings (port, token, response budget) stay in `~/.config/white-words`.
 The server stops on its own a few seconds after you close the last browser tab.
 `--no-idle-exit` keeps it running.
 
-## Demo data
+## The demo project
 
-white-words seed-demo --root /tmp/sa-demo
+The app ships with a demo: **The Wizard of Oz**, a complete project with a full draft
+history, two merged branches and one merge left open. The first time you open the app it
+is there, under `~/white-words-studio/projects/demo`, and it opens like any other
+project. Play with it, edit it, rename it, delete it — it is yours.
+
+```
+white-words seed-demo --restore
+```
+
+That puts it back the way it shipped: a demo you have changed, or one you have deleted.
+Your other projects are never touched, and a demo you delete stays deleted until you run
+this. `--root <dir>` uses a different projects root, the same flag the app takes.
 
 ## Tests
 
