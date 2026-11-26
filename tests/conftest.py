@@ -70,6 +70,25 @@ def _isolate_root(monkeypatch, tmp_path):
     )
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _tmpdir_per_run():
+    """Point `tempfile.mkdtemp()` at one directory this run deletes on exit.
+
+    Tests copy a project to compare two states (`_copy` in the history tests),
+    and `mkdtemp` has no cleanup of its own — a full suite left thousands of
+    directories and gigabytes behind. A per-run TMPDIR makes that leak die with
+    the run instead of accumulating on the machine.
+    """
+    root = tempfile.mkdtemp(prefix="ww-tests-")
+    previous = tempfile.tempdir
+    tempfile.tempdir = root
+    try:
+        yield Path(root)
+    finally:
+        tempfile.tempdir = previous
+        shutil.rmtree(root, ignore_errors=True)
+
+
 @pytest.fixture(autouse=True)
 def _isolate_budget(monkeypatch, tmp_path):
     """The response budget is a user setting (env var or config.toml), so a
