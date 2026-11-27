@@ -15,6 +15,10 @@ const path = require('path');
 global.window = global;
 const JS = path.join(__dirname, '..', 'src', 'white_words', 'scriptwriting', 'web', 'js');
 require(path.join(JS, 'history-graph.js'));
+require(path.join(JS, 'text-diff.js'));
+require(path.join(JS, 'drafts-common.js'));
+require(path.join(JS, 'reader.js'));
+require(path.join(JS, 'compare.js'));
 require(path.join(JS, 'projects.js'));
 require(path.join(JS, 'draft-chip.js'));
 
@@ -137,6 +141,98 @@ check('unsaved changes mark the chip and enable Save draft', /dc-chip changed/.t
 check('one change is singular', /· 1 change"/.test(C.render(status({ changes_since_save: 1 }))));
 check('the chip links to the projects page by data attribute, not a handler', /data-dc="projects"/.test(C.render(status())) && !/\bon[a-z]+\s*=/.test(C.render(status())));
 check('a hostile branch or draft name cannot open a tag', !/<img|<script/.test(C.render(status({ current_branch: '<img src=x>', current_draft: '"><script>' }))));
+
+// ─── links from the projects page ───
+const hrefs = (h) => (h.match(/href="([^"]+)"/g) || []).map((x) => decodeURIComponent(x.slice(6, -1)));
+const rows = open(history());
+check('a branch row links to reading its open draft', hrefs(rows).includes('#/drafts/save-the-children/read/branch:alt'));
+check('the current branch compares its last draft with its open draft', hrefs(rows).includes('#/drafts/save-the-children/compare/snapshot:d3/branch:alt'));
+check('another branch compares its open draft with the current branch', hrefs(rows).includes('#/drafts/save-the-children/compare/branch:main/branch:alt'));
+check('a draft compares with the current branch', hrefs(rows).includes('#/drafts/save-the-children/compare/snapshot:d1/branch:alt') && hrefs(rows).includes('#/drafts/save-the-children/read/snapshot:d1'));
+
+// ─── the line diff ───
+const T = global.DASH.textDiff;
+const tag = (ops) => ops.map((o) => o.op[0] + o.text).join('|');
+check('equal text is all unchanged lines', tag(T.lines('a\nb', 'a\nb')) === 'ea|eb');
+check('an edit in the middle is one deletion and one addition', tag(T.lines('a\nb\nc', 'a\nX\nc')) === 'ea|db|aX|ec');
+check('text added to an empty field is all additions', tag(T.lines('', 'x\ny')) === 'ax|ay');
+check('text removed entirely is all deletions', tag(T.lines('x\ny', null)) === 'dx|dy');
+const longText = Array.from({ length: 30 }, (_, i) => 'line ' + i).join('\n');
+const folded = T.collapse(T.lines(longText, longText.replace('line 15', 'LINE 15')), 2);
+check('a long unchanged run folds to a gap with its size and keeps two lines of context', folded.filter((o) => o.op === 'gap').map((o) => o.skipped).join() === '13,12' && folded.length === 8);
+const big = (tag) => Array.from({ length: 500 }, (_, i) => tag + i).join('\n');
+check('two huge unrelated texts diff without hanging, as delete-then-add', (() => { const t = Date.now(); const d = T.lines(big('a'), big('b')); return d.length === 1000 && d[0].op === 'del' && d[999].op === 'add' && Date.now() - t < 2000; })());
+
+// ─── routes, refs and values ───
+const K = global.DASH.draftsCommon;
+check('a project page hash is the list', K.parse('').kind === 'list' && K.parse('#/').kind === 'list' && K.parse('#/p/x').kind === 'list');
+check('a read route round-trips a slug with a space and a ref with a colon', (() => { const r = { kind: 'read', slug: 'my proj', ref: 'snapshot:s-1' }; const p = K.parse(K.href(r)); return p.kind === 'read' && p.slug === 'my proj' && p.ref === 'snapshot:s-1'; })());
+check('a compare route round-trips both refs', (() => { const p = K.parse(K.href({ kind: 'compare', slug: 'p', a: 'branch:main', b: 'snapshot:d' })); return p.kind === 'compare' && p.a === 'branch:main' && p.b === 'snapshot:d'; })());
+check('a compare route missing its second draft is the list', K.parse('#/drafts/p/compare/snapshot%3Aa').kind === 'list');
+check('a malformed escape does not throw', K.parse('#/drafts/%E0%A4%A/read/x').kind === 'read');
+const hist = history();
+check('a branch ref reads as its open draft and a draft ref as its label', K.refLabel('branch:alt', hist) === 'alt · open draft' && K.refLabel('snapshot:d1', hist) === 'Draft 1' && K.refLabel('snapshot:gone', hist) === 'snapshot:gone');
+const opts = K.refOptions(hist);
+check('the pickers list open drafts first and saved drafts newest first', opts[0].group === 'Open drafts' && opts[0].items.length === 2 && /\(current\)/.test(opts[0].items.find((i) => i.ref === 'branch:alt').label) && opts[1].items[0].ref === 'snapshot:d3');
+check('an empty value reads as empty, not as nothing', /dv-empty/.test(K.fmtValue('')) && /dv-empty/.test(K.fmtValue([])) && /dv-empty/.test(K.fmtValue(null)));
+check('an id inside a value is shown as the entity name, with the id as its tooltip', K.fmtValue(['kael'], (id) => (id === 'kael' ? 'Kael' : undefined)) === '<ul class="dv-list"><li><span title="kael">Kael</span></li></ul>');
+check('a value cannot open a tag', !/<img/.test(K.fmtValue('<img src=x>')) && !/<img/.test(K.fmtValue({ a: '<img src=x>' })));
+
+// ─── the reader ───
+const Rd = global.DASH.reader;
+const entities = [
+  { id: 's1', type: 'scene', name: 'The <b>farm</b>', one_sentence: '' },
+  { id: 'a1', type: 'act', name: 'Act I', one_sentence: '' },
+  { id: 'k', type: 'character', name: 'Kael', one_sentence: '' },
+];
+const rm = (extra) => Object.assign({ projectName: 'Oz', label: 'Draft 7', tab: 'entities', script: 'INT. FARM', entities, selected: null, detail: null }, extra || {});
+let rh = Rd.html(rm());
+check('the reader says it is read-only and names the draft', /read-only/.test(rh) && /Draft 7/.test(rh));
+check('entity types are listed in story order, not arrival order', rh.indexOf('Acts · 1') < rh.indexOf('Scenes · 1') && rh.indexOf('Scenes · 1') < rh.indexOf('Characters · 1'));
+check('an entity name cannot open a tag', !/<b>farm/.test(rh) && /The &lt;b&gt;farm&lt;\/b&gt;/.test(rh));
+check('nothing is selected until the reader picks', /Pick an entity to read it/.test(rh) && !/dr-item on/.test(rh));
+const detail = { id: 's1', type: 'scene', fields: { title: 'The farm', status: 'locked', characters: ['k'], one_sentence: '', location: null }, sections: { Content: 'KAEL stands.', Notes: '  ' } };
+rh = Rd.html(rm({ selected: { type: 'scene', id: 's1' }, detail }));
+check('the selected entity is marked and its populated fields and sections are shown', /dr-item on" data-rd="pick" data-type="scene" data-id="s1"/.test(rh) && /<dt>status<\/dt>/.test(rh) && /KAEL stands/.test(rh));
+check('empty fields and blank sections are left out', !/<dt>one sentence/.test(rh) && !/<dt>location/.test(rh) && !/>Notes</.test(rh));
+check('ids inside values read as names', /<span title="k">Kael<\/span>/.test(rh));
+check('the script tab shows the screenplay, or says there is none', /<pre class="dr-script">INT\. FARM/.test(Rd.html(rm({ tab: 'script' }))) && /no scenes yet/.test(Rd.html(rm({ tab: 'script', script: '' }))));
+check('the reader has no inline handlers', !/\bon[a-z]+\s*=\s*["']/.test(rh.replace(/data-[a-z]+="[^"]*"/g, '')));
+
+// ─── compare ───
+const Cp = global.DASH.compare;
+const cm = (diff, extra) => Object.assign({
+  projectName: 'Oz', a: 'snapshot:d1', b: 'branch:alt', hist: history(), labels: { a: 'Draft 1', b: 'alt · open draft' }, tab: 'entities', showSame: false,
+  names: { s1: { name: 'The <i>farm</i>', type: 'scene' }, k: { name: 'Kael', type: 'character' }, sq: { name: 'Road', type: 'sequence' }, s2: { name: 'Gate', type: 'scene' }, s3: { name: 'Poppy', type: 'scene' }, a1: { name: 'Act I', type: 'act' } },
+  diff: Object.assign({ entities: {}, order: {}, script: [] }, diff),
+}, extra || {});
+const changed = (id, f, sec) => ({ id, type: 'scene', status: 'changed', fields: f || {}, sections: sec || {} });
+check('two identical drafts say so and offer no tabs', (() => { const h = Cp.html(cm({ entities: { s1: { id: 's1', type: 'scene', status: 'unchanged', fields: {}, sections: {} } } })); return /identical/.test(h) && !/role="tablist"/.test(h); })());
+check('the summary is singular for one difference', Cp.summary(cm({ entities: { s1: changed('s1', { status: { a: 'x', b: 'y' } }) } })).text === '1 entity differs (1 changed)');
+check('the summary counts kinds, order changes and scenes', Cp.summary(cm({ entities: { s1: changed('s1'), s2: { id: 's2', type: 'scene', status: 'added' }, s3: { id: 's3', type: 'scene', status: 'removed' } }, order: { 'scene:sq': { a: ['s1'], b: ['s2'] } }, script: [{ id: 's1', status: 'edited', placement: {}, text: {} }, { id: 's2', status: 'added', placement: {}, text: {} }] })).text === '3 entities differ (1 changed, 1 added, 1 removed) · 1 order change · 2 scenes differ in the script');
+let ch = Cp.html(cm({ entities: { s1: changed('s1', { status: { a: 'planned', b: 'locked' }, characters: { a: ['k'], b: [] } }, { Content: { a: 'one', b: 'two' } }) } }));
+check('a changed entity shows both values and a line diff', /cp-val a">planned/.test(ch) && /cp-val b">locked/.test(ch) && /ln del/.test(ch) && /ln add/.test(ch));
+check('ids in a changed value read as names', /<span title="k">Kael<\/span>/.test(ch));
+check('an entity name from the data cannot open a tag', !/<i>farm/.test(ch) && /The &lt;i&gt;farm&lt;\/i&gt;/.test(ch));
+check('the first three changed entities open and the rest stay folded', (() => { const e = {}; ['s1', 's2', 's3', 'k'].forEach((id) => { e[id] = changed(id, { status: { a: '1', b: '2' } }); }); return (Cp.html(cm({ entities: e })).match(/<details class="cp-ent" open>/g) || []).length === 3; })());
+ch = Cp.html(cm({ entities: { s2: { id: 's2', type: 'scene', status: 'added' }, s3: { id: 's3', type: 'scene', status: 'removed' } } }));
+check('an added or removed entity says which draft holds it', /only in alt · open draft/.test(ch) && /only in Draft 1/.test(ch));
+ch = Cp.html(cm({ order: { 'scene:sq': { a: ['s1', 's3'], b: ['s1', 's2'] } }, entities: { s1: changed('s1', { status: { a: 'a', b: 'b' } }) } }));
+check('an order change marks what left and what arrived, under the parent name', /Order of scenes in Road/.test(ch) && /<li class="del">Poppy/.test(ch) && /<li class="add">Gate/.test(ch));
+const script = [
+  { id: 's1', status: 'edited', placement: { a: { act: 'a1', sequence: 'sq', position: 1 }, b: { act: 'a1', sequence: 'sq', position: 1 } }, text: { a: 'one', b: 'two' } },
+  { id: 's2', status: 'moved', placement: { a: { act: 'a1', sequence: 'sq', position: 2 }, b: { act: 'a1', sequence: 'sq', position: 1 } }, text: { a: 'same', b: 'same' } },
+  { id: 's3', status: 'unchanged', placement: { a: { act: 'a1', sequence: 'sq', position: 3 }, b: { act: 'a1', sequence: 'sq', position: 3 } }, text: { a: 'x', b: 'x' } },
+];
+let sh = Cp.html(cm({ script }, { tab: 'script' }));
+check('the script tab hides unchanged scenes behind a toggle that counts them', !/Poppy/.test(sh) && /Show 1 unchanged scene</.test(sh));
+check('ticking the toggle shows them', /Poppy/.test(Cp.html(cm({ script }, { tab: 'script', showSame: true }))));
+check('a moved scene says where it was and where it is, and shows no text diff', /was Act I · Road · #2 → now Act I · Road · #1/.test(sh) && !/cp-diff/.test(Cp.html(cm({ script: [script[1]] }, { tab: 'script' }))));
+const bigScene = Array.from({ length: 40 }, (_, i) => 'LINE ' + i).join('\n');
+sh = Cp.html(cm({ script: [{ id: 's2', status: 'added', placement: { b: { act: 'a1', sequence: 'sq', position: 1 } }, text: { a: '', b: bigScene } }] }, { tab: 'script' }));
+check('a long new scene folds after a screenful and says how much is hidden', /Show 16 more lines/.test(sh) && (sh.match(/class="ln add"/g) || []).length === 40);
+check('each picker offers every draft and marks the selected one', (() => { const h = Cp.html(cm({ entities: { s1: changed('s1') } })); return /<option value="snapshot:d1" selected>/.test(h) && /<option value="branch:alt" selected>/.test(h) && /Open drafts/.test(h) && /Saved drafts/.test(h); })());
+check('compare has no inline handlers', !/\bon[a-z]+\s*=\s*["']/.test(ch.replace(/data-[a-z]+="[^"]*"/g, '')));
 
 console.log(failures.length ? '\n' + failures.length + ' FAILED' : '\nall checks passed (' + ran + ' checks)');
 process.exit(failures.length ? 1 : 0);

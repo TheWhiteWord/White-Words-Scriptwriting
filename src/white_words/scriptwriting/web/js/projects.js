@@ -33,10 +33,12 @@ window.DASH = window.DASH || {};
       : '<span class="pj-chip">up to date</span>';
   }
 
+  const link = (r, label) => '<a class="btn" href="' + esc(D.draftsCommon.href(r)) + '">' + esc(label) + '</a>';
   const btn = (act, label, attrs, cls) => '<button class="btn ' + (cls || '') + '" data-act="' + act + '"' + (attrs || '') + '>' + esc(label) + '</button>';
   const attr = (k, v) => ' data-' + k + '="' + esc(v) + '"';
 
   function branchRows(slug, s) {
+    const cur = s.branches.find((b) => b.is_current);
     const baseLabel = {};
     s.snapshots.forEach((d) => { baseLabel[d.id] = d.label; });
     return s.branches.map((b) => {
@@ -48,6 +50,8 @@ window.DASH = window.DASH || {};
         + '<div class="pj-row-sub' + (h.changed ? ' changed' : '') + '">Open draft: ' + esc(state) + '</div></div>'
         + '<div class="pj-row-actions">'
         + (b.is_current ? btn('open', 'Open', attr('slug', slug), 'btn-primary') : btn('switch', 'Switch and open', attr('slug', slug) + attr('id', b.id), 'btn-primary'))
+        + link({ kind: 'read', slug, ref: 'branch:' + b.id }, 'Read')
+        + link(b.is_current ? { kind: 'compare', slug, a: 'snapshot:' + b.base_snapshot_id, b: 'branch:' + b.id } : { kind: 'compare', slug, a: 'branch:' + b.id, b: 'branch:' + (cur ? cur.id : b.id) }, 'Compare')
         + btn('rename', 'Rename', attr('slug', slug) + attr('id', b.id) + attr('name', b.name))
         + btn('delete-branch', 'Delete', attr('slug', slug) + attr('id', b.id) + attr('name', b.name) + (b.is_current ? ' disabled title="Switch to another branch first."' : ''))
         + '</div></div>';
@@ -55,6 +59,7 @@ window.DASH = window.DASH || {};
   }
 
   function draftRows(slug, s, now) {
+    const cur = s.branches.find((b) => b.is_current);
     const branchName = {};
     const baseOf = {};
     s.branches.forEach((b) => { branchName[b.id] = b.name; baseOf[b.base_snapshot_id] = b.name; });
@@ -64,6 +69,8 @@ window.DASH = window.DASH || {};
         + '<div class="pj-row-main"><span class="pj-row-name">' + esc(d.label) + '</span> <span class="pj-chip">' + esc(branchName[d.branch_id] || 'deleted branch') + '</span>'
         + '<div class="pj-row-sub">' + esc(ago(d.created_at, now)) + (d.note ? ' · ' + esc(d.note) : '') + '</div></div>'
         + '<div class="pj-row-actions">'
+        + link({ kind: 'read', slug, ref: 'snapshot:' + d.id }, 'Read')
+        + link({ kind: 'compare', slug, a: 'snapshot:' + d.id, b: 'branch:' + (cur ? cur.id : '') }, 'Compare')
         + btn('branch', 'Branch from here', attr('slug', slug) + attr('id', d.id) + attr('name', d.label))
         + btn('delete-draft', 'Delete', attr('slug', slug) + attr('id', d.id) + attr('name', d.label) + (pinned ? ' disabled title="' + esc('Where the open draft of ' + pinned + ' starts.') + '"' : ''))
         + '</div></div>';
@@ -122,6 +129,24 @@ window.DASH = window.DASH || {};
   const pageEl = () => document.getElementById('projects-page');
   const stateOf = (slug) => (S.state[slug] = S.state[slug] || { open: false, hist: null });
   const toast = (m, kind) => (D.efToast ? D.efToast(m, kind) : console.warn(m));
+
+  const ctx = { projectName: (slug) => (S.projects.find((p) => p.slug === slug) || {}).name || slug };
+
+  // The projects page has three faces, chosen by the hash: the list, a draft to read, and
+  // two drafts to compare. Leaving a sub-page re-reads the list, since drafts may have
+  // been saved or switched in between.
+  async function route() {
+    const el = pageEl();
+    if (!el) return;
+    const r = D.draftsCommon.parse(location.hash);
+    if (r.kind === 'read') { D.reader.show(el, r, ctx); return; }
+    if (r.kind === 'compare') { D.compare.show(el, r, ctx); return; }
+    el.onclick = null;
+    el.onchange = null;
+    try { await loadList(); } catch (e) { /* the cards keep what they had */ }
+    render();
+    S.projects.filter((p) => stateOf(p.slug).open).forEach((p) => loadHistory(p.slug));
+  }
 
   function render() {
     const el = pageEl();
@@ -264,7 +289,8 @@ window.DASH = window.DASH || {};
         const card = e.target.closest && e.target.closest('.pj-card');
         if (card && e.target.classList.contains('hg-scroll')) stateOf(card.dataset.slug).graphX = e.target.scrollLeft;
       }, true);
-      render();
+      window.addEventListener('hashchange', route);
+      await route();
       // The draft chip in the writing view sends you here with its project's history open.
       let ask = null;
       try { ask = sessionStorage.getItem('ww:expand'); sessionStorage.removeItem('ww:expand'); } catch (e) { /* private mode */ }

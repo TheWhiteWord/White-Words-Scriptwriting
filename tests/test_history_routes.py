@@ -399,7 +399,9 @@ def test_a_states_entity_index_names_every_entity(client):
     edit_entity(project, "character", "kael", {"name": "Kael Renamed"}, "probe")
 
     live = tc.get(f"/api/projects/{SLUG}/history/read/branch:main/entities", headers=HDR).json()
-    saved = tc.get(f"/api/projects/{SLUG}/history/read/snapshot:{base}/entities", headers=HDR).json()
+    saved = tc.get(
+        f"/api/projects/{SLUG}/history/read/snapshot:{base}/entities", headers=HDR
+    ).json()
 
     def names(body):
         return {e["id"]: e["name"] for e in body["entities"]}
