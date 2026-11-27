@@ -1122,5 +1122,34 @@ Manual checks (a real browser; none of these can be run by pytest):
 - Not covered by pytest, checked in Chromium on the Oz demo: the chip in the Script and
   Trash headers at 1000px, save from the chip, the chip after a write from the page.
 
+### UI patch 3 — read a draft, compare two drafts
+Scope: `GET /history/read/{ref}/entities` (new, `logical.index`), `web/js/text-diff.js`,
+`drafts-common.js`, `reader.js`, `compare.js`, the Read and Compare links on the projects
+page, and 44 more harness checks (96).
+
+- **Routes are hashes on the projects page:** `#/drafts/<slug>/read/<ref>` and
+  `#/drafts/<slug>/compare/<a>/<b>`, refs as `snapshot:<id>` / `branch:<id>`, each part
+  URI-encoded. Boot already sends any hash that is not `#/p/…` to the projects page, so a
+  reload on a compare URL works. `hashchange` re-routes; leaving a sub-page re-reads the
+  list, because drafts may have been saved in between.
+- **Why a new route:** the diff names an added or removed entity by id only, and a reader
+  needs a list. The index is id, type, name, one sentence; a scene's beats borrow their
+  scene's title.
+- **Reading is a reader page, not the whole app read-only.** The writing views are all
+  built on the dashboard payload; a read-only mode would need a dashboard for a ref and a
+  flag through ten views. The reader shows the screenplay and every entity.
+- **The diff the server returns is whole values, not word diffs.** Sections get a line
+  diff in the browser (`text-diff.js`: common head and tail trimmed, LCS between, a
+  delete-then-add fallback past 160,000 cells, unchanged runs folded to two lines of
+  context). The server's own unified `diff` on script rows is not used, so both tabs
+  render alike.
+- **Ids inside values are shown as names** (a cast list, a plot role's plot) with the id in
+  the tooltip. It matches any string equal to an entity id; an unlucky free-text value
+  equal to an id would be shown as that entity's name. None in the demo; ids are slugs.
+- **Selection is not here yet.** The merge workspace (next patch) adds ticks to the same
+  rows and a Review merge button; until then there is nothing to tick.
+- Not covered by pytest, checked in Chromium on the Oz demo: pickers, swap, the unchanged
+  scenes toggle, back to the list with history still open, Read from a draft row.
+
 ### Deviations
 ### Issues
