@@ -201,3 +201,26 @@ def rebuild_copy(entities: dict[str, dict], order: dict[str, list[str]], dest: P
             dict(entity["fields"]),
             dict(entity["sections"]),
         )
+
+
+def index(shape: dict[str, dict]) -> list[dict]:
+    """One row per entity, in the order `materialize` gives them: what a list needs.
+
+    A scene's beats carry no name of their own, so they borrow their scene's title.
+    """
+    rows = []
+    for entity in shape.values():
+        fields = entity["fields"]
+        name = fields.get("name") or fields.get("title") or entity["id"]
+        if entity["type"] == "scene_beats":
+            scene = shape.get(fields.get("scene") or "")
+            name = f"{scene['fields'].get('title') or scene['id']} (beats)" if scene else name
+        rows.append(
+            {
+                "id": entity["id"],
+                "type": entity["type"],
+                "name": name,
+                "one_sentence": fields.get("one_sentence") or "",
+            }
+        )
+    return rows

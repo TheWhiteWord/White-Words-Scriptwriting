@@ -390,3 +390,41 @@ def test_the_status_needs_the_exact_slug(client):
 
     assert tc.get(f"/api/projects/{SLUG}/history/status", headers=HDR).status_code == 200
     assert tc.get("/api/projects/save-the-child/history/status", headers=HDR).status_code == 404
+
+
+def test_a_states_entity_index_names_every_entity(client):
+    tc, project = client
+    store.adopt(project)
+    base = store.head_state(project)["branch"]["base_snapshot_id"]
+    edit_entity(project, "character", "kael", {"name": "Kael Renamed"}, "probe")
+
+    live = tc.get(f"/api/projects/{SLUG}/history/read/branch:main/entities", headers=HDR).json()
+    saved = tc.get(f"/api/projects/{SLUG}/history/read/snapshot:{base}/entities", headers=HDR).json()
+
+    def names(body):
+        return {e["id"]: e["name"] for e in body["entities"]}
+
+    assert names(live)["kael"] == "Kael Renamed"
+    assert names(saved)["kael"] != "Kael Renamed"
+    assert {e["type"] for e in live["entities"]} >= {"scene", "character", "act"}
+    assert all(e["name"] for e in live["entities"])
+
+
+def test_a_scenes_beats_borrow_its_title_in_the_index(client):
+    tc, project = client
+    store.adopt(project)
+
+    body = tc.get(f"/api/projects/{SLUG}/history/read/branch:main/entities", headers=HDR).json()
+
+    beats = [e for e in body["entities"] if e["type"] == "scene_beats"]
+    assert beats and all(e["name"].endswith("(beats)") for e in beats)
+
+
+def test_the_entity_index_rejects_a_malformed_ref(client):
+    tc, project = client
+    store.adopt(project)
+
+    resp = tc.get(f"/api/projects/{SLUG}/history/read/oops:x/entities", headers=HDR)
+
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "invalid"

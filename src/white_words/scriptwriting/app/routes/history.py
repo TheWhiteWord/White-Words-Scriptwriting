@@ -110,6 +110,28 @@ def make_router(config, app):
 
         return _run(slug, go)
 
+    @router.get("/api/projects/{slug}/history/read/{ref}/entities")
+    def history_read_index(slug: str, ref: str):
+        """Every entity of a state, by id, type and name: the reader's list."""
+        from white_words.scriptwriting.core.db import get_db
+        from white_words.scriptwriting.core.history import logical, view as views
+
+        try:
+            parsed = _ref(ref)
+        except ValueError as e:
+            return _err(422, "invalid", str(e))
+
+        def go(project):
+            with views.ref_view(project, parsed) as path:
+                conn = get_db(path)
+                try:
+                    shape = logical.materialize(conn)
+                finally:
+                    conn.close()
+            return {"ref": ref, "entities": logical.index(shape)}
+
+        return _run(slug, go)
+
     @router.get("/api/projects/{slug}/history/read/{ref}/entities/{etype}/{eid}")
     def history_read_entity(slug: str, ref: str, etype: str, eid: str):
         """One entity as it exists in that state."""
